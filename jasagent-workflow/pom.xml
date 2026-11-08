@@ -10,7 +10,10 @@
   </parent>
   <artifactId>jasagent-workflow</artifactId>
   <name>jasagent-workflow</name>
-
+  <properties>
+    <langgraph4j.version>1.9.9</langgraph4j.version>
+    <jackson.version>2.21.2</jackson.version>
+  </properties>
   <dependencies>
     <dependency>
       <groupId>dev.jasagent</groupId>
@@ -19,22 +22,37 @@
     <dependency>
       <groupId>org.bsc.langgraph4j</groupId>
       <artifactId>langgraph4j-core</artifactId>
+      <version>${langgraph4j.version}</version>
     </dependency>
     <dependency>
       <groupId>org.bsc.langgraph4j</groupId>
       <artifactId>langgraph4j-dsl</artifactId>
+      <version>${langgraph4j.version}</version>
     </dependency>
     <dependency>
       <groupId>org.bsc.langgraph4j</groupId>
       <artifactId>langgraph4j-sqlite-saver</artifactId>
+      <version>${langgraph4j.version}</version>
     </dependency>
     <dependency>
       <groupId>org.bsc.langgraph4j</groupId>
       <artifactId>langgraph4j-postgres-saver</artifactId>
+      <version>${langgraph4j.version}</version>
     </dependency>
     <dependency>
       <groupId>org.bsc.langgraph4j</groupId>
       <artifactId>langgraph4j-opentelemetry</artifactId>
+      <version>${langgraph4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>
