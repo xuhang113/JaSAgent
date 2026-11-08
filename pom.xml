@@ -12,6 +12,7 @@
   <modules>
     <module>jasagent-api</module>
     <module>jasagent-auth</module>
+    <module>jasagent-llm</module>
   </modules>
 
   <properties>
@@ -32,6 +33,11 @@
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter</artifactId>
         <version>${junit.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>2.18.2</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
