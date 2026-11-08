@@ -5,7 +5,11 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 
 public interface AuthService {
-    CompletionStage<String> addUser(String login, char[] password, String callerToken, boolean localCli);
+    CompletionStage<UserAccount> addUser(AddUser request);
+
+    default CompletionStage<String> addUser(String login, char[] password, String callerToken, boolean localCli) {
+        return addUser(new AddUser(login, password, callerToken, localCli)).thenApply(account -> account.login());
+    }
 
     CompletionStage<Session> login(String login, char[] password);
 
