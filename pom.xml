@@ -24,6 +24,7 @@
     <module>jasagent-core</module>
     <module>jasagent-interrupt</module>
     <module>jasagent-rag</module>
+    <module>jasagent-mcp</module>
     <module>jasagent-app</module>
   </modules>
 
