@@ -296,11 +296,26 @@ class InterruptResumeTest {
     }
 
     @Test
+    void checkpointsOpenWhenJasagentIsAFile() throws Exception {
+        Files.writeString(temp.resolve("jasagent"), "#!/bin/sh\n");
+        String executionId = id();
+        try (CheckpointRunControl control = open(temp, List.of(node("only", ignored -> CompletableFuture.completedFuture("done"))))) {
+            join(control.start(executionId, USER, executionId, workspace()));
+            Path sqlite = temp.resolve(".jasagent").resolve("data").resolve("checkpoints.db");
+            assertEquals(sqlite.toAbsolutePath(), control.sqliteFile());
+            assertTrue(Files.isRegularFile(sqlite));
+            assertTrue(checkpointRows(sqlite, executionId) > 0);
+        }
+        assertTrue(Files.isRegularFile(temp.resolve("jasagent")));
+        assertFalse(Files.isDirectory(temp.resolve("jasagent")));
+    }
+
+    @Test
     void checkpointsStayOnLanggraphSaver() throws Exception {
         String executionId = id();
         try (CheckpointRunControl control = open(temp, List.of(node("only", ignored -> CompletableFuture.completedFuture("done"))))) {
             join(control.start(executionId, USER, executionId, workspace()));
-            Path sqlite = temp.resolve("jasagent").resolve("data").resolve("checkpoints.db");
+            Path sqlite = temp.resolve(".jasagent").resolve("data").resolve("checkpoints.db");
             assertInstanceOf(SQLiteSaverV2.class, control.saver());
             assertEquals(sqlite.toAbsolutePath(), control.sqliteFile());
             assertTrue(checkpointRows(sqlite, executionId) > 0);
@@ -318,7 +333,7 @@ class InterruptResumeTest {
                 Map.of("JASAGENT_JDBC_URL", "jdbc:postgresql://127.0.0.1:1/jasagent")));
         assertEquals(ErrorCode.PERSIST, error.code());
         assertTrue(stackOf(error).contains("org.bsc.langgraph4j.checkpoint.PostgresSaverV2"), stackOf(error));
-        assertFalse(Files.exists(temp.resolve("jasagent").resolve("data").resolve("checkpoints.db")));
+        assertFalse(Files.exists(temp.resolve(".jasagent").resolve("data").resolve("checkpoints.db")));
     }
 
     @Test

@@ -304,6 +304,11 @@ h3 {
   color: #667085;
 }
 
+.execution-error {
+  color: #c45656;
+  font-weight: 600;
+}
+
 .messages {
   display: flex;
   flex-direction: column;

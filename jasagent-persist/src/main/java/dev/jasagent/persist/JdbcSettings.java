@@ -1,5 +1,7 @@
 package dev.jasagent.persist;
 
+import dev.jasagent.api.persist.DataDirectory;
+
 import java.nio.file.Path;
 import java.util.Map;
 
@@ -33,7 +35,7 @@ public final class JdbcSettings {
     }
 
     public static Path defaultH2File(Path workspace) {
-        return workspace.toAbsolutePath().resolve("jasagent").resolve("data").resolve("jasagent");
+        return DataDirectory.of(workspace).resolve("jasagent");
     }
 
     public static String defaultH2Url(Path workspace) {

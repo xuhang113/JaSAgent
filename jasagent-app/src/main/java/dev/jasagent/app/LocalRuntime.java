@@ -19,6 +19,7 @@ import dev.jasagent.api.llm.ChatResponse;
 import dev.jasagent.api.llm.Embedding;
 import dev.jasagent.api.llm.TokenUsage;
 import dev.jasagent.api.pass.PassDecision;
+import dev.jasagent.api.persist.DataDirectory;
 import dev.jasagent.api.pass.PassGate;
 import dev.jasagent.api.pass.PassRequest;
 import dev.jasagent.api.plugin.CallStats;
@@ -31,6 +32,7 @@ import dev.jasagent.api.task.WorkItem;
 import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.auth.LocalCatalogLoader;
 import dev.jasagent.core.ContextInput;
+import dev.jasagent.core.ContextPrepared;
 import dev.jasagent.core.ContextWindow;
 import dev.jasagent.core.QueueAgentScheduler;
 import dev.jasagent.interrupt.CheckpointRunControl;
@@ -59,6 +61,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -225,13 +228,31 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             if (!"SUSPENDED".equals(exec.status)) {
                 return view(exec);
             }
-            exec.append("resume");
-            exec.suspended = false;
-            exec.status = "RUNNING";
-            save(exec, true);
         }
-        ExecutionSnapshot snapshot = controlFor(exec).resume(exec.executionId, exec.userId).toCompletableFuture().join();
-        applySnapshot(exec, snapshot);
+        try {
+            CheckpointRunControl control = controlFor(exec);
+            synchronized (exec) {
+                if (!"SUSPENDED".equals(exec.status)) {
+                    return view(exec);
+                }
+                exec.resuming = true;
+                exec.suspended = false;
+                exec.status = "RUNNING";
+                exec.errorCode = "";
+                exec.append("resume");
+                save(exec, true);
+            }
+            ExecutionSnapshot snapshot = control.resume(exec.executionId, exec.userId).toCompletableFuture().join();
+            applySnapshot(exec, snapshot);
+        } catch (RuntimeException ex) {
+            synchronized (exec) {
+                exec.suspended = true;
+                exec.status = "SUSPENDED";
+                exec.errorCode = offlineCode(ex);
+                exec.append("resume failed " + exec.errorCode);
+                save(exec, true);
+            }
+        }
         return view(owned(userId, executionId));
     }
 
@@ -250,53 +271,57 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             applySnapshot(exec, snapshot);
         } catch (RuntimeException ex) {
             synchronized (exec) {
-                if (exec.suspended || pending(exec)) {
-                    finishSuspended(exec, exec.output);
-                } else {
-                    exec.status = "FAILED";
-                    exec.errorCode = offlineCode(ex);
-                    recordAi(exec, "OFFLINE".equals(exec.errorCode) ? "模型未配置" : exec.output);
-                    exec.append("terminal FAILED " + exec.errorCode);
-                }
+                recordFailure(exec, ex);
                 save(exec, true);
             }
         }
     }
 
     private CompletionStage<String> runNode(String executionId) {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        workers.execute(() -> runWorkflow(executionId, future));
+        return future;
+    }
+
+    private void runWorkflow(String executionId, CompletableFuture<String> future) {
         Exec exec = requireExec(executionId);
         try {
             executeWorkflow(exec);
         } catch (RuntimeException ex) {
             synchronized (exec) {
-                if (exec.suspended || pending(exec)) {
-                    finishSuspended(exec, exec.output);
-                } else {
-                    exec.status = "FAILED";
-                    exec.errorCode = offlineCode(ex);
-                    recordAi(exec, "OFFLINE".equals(exec.errorCode) ? "模型未配置" : exec.output);
-                    exec.append("terminal FAILED " + exec.errorCode);
-                }
-                save(exec, false);
+                recordFailure(exec, ex);
+                save(exec, true);
             }
+        }
+        if (future.isDone()) {
+            return;
         }
         synchronized (exec) {
             save(exec, false);
-            if (exec.suspended || pending(exec)) {
-                return hang(exec);
+            boolean hold = exec.suspended || pending(exec);
+            if (exec.resuming && !exec.modelNode && !exec.suspended) {
+                hold = false;
+            }
+            if (!"FAILED".equals(exec.status) && hold) {
+                future.completeExceptionally(new CancellationException("suspended"));
+                hang(exec);
+                return;
             }
             if (!"SUCCEEDED".equals(exec.status)) {
-                throw failure(exec);
+                future.completeExceptionally(failure(exec));
+                return;
             }
-            return CompletableFuture.completedFuture(exec.output == null ? "" : exec.output);
+            future.complete(exec.output == null ? "" : exec.output);
         }
     }
 
     private void executeWorkflow(Exec exec) {
+        Path database = checkpoint(exec);
         synchronized (exec) {
             exec.pendingWorkflow = exec.pendingWorkflow == null ? "" : exec.pendingWorkflow;
             exec.status = "RUNNING";
             exec.suspended = false;
+            save(exec, true);
         }
         WorkflowDefinition definition = loadDefinition(exec.workspace, exec.pendingWorkflow);
         boolean usesModel = false;
@@ -331,7 +356,6 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 recordOpening(exec, rules, skills, exec.pendingInput);
             }
         }
-        Path database = checkpoint(exec);
         LangGraphWorkflowEngine engine = new LangGraphWorkflowEngine(
                 workflowChat,
                 (id, name, arguments) -> callTool(exec, name, arguments),
@@ -359,7 +383,11 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 jdbc == null || jdbc.isBlank() ? null : jdbc);
         WorkflowRun result = engine.execute(request).toCompletableFuture().join();
         synchronized (exec) {
-            if (exec.suspended || pending(exec)) {
+            boolean hold = exec.suspended || pending(exec);
+            if (exec.resuming && !exec.modelNode && !exec.suspended) {
+                hold = false;
+            }
+            if (hold) {
                 if (result.output() != null && !result.output().isBlank()) {
                     exec.output = result.output();
                 }
@@ -437,13 +465,26 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
 
     private static Path checkpoint(Exec exec) {
         try {
-            Path directory = Path.of(exec.workspace).resolve("jasagent").resolve("data");
+            Path directory = DataDirectory.of(Path.of(exec.workspace));
             Files.createDirectories(directory);
             exec.runs += 1;
             return directory.resolve(exec.executionId + "-" + exec.runs + ".db");
         } catch (Exception ex) {
             throw new AgentException(ErrorCode.PERSIST, "检查点存储器无法打开", exec.executionId, ex);
         }
+    }
+
+    private void recordFailure(Exec exec, RuntimeException ex) {
+        String code = offlineCode(ex);
+        if (exec.suspended && !"PERSIST".equals(code) && !"OFFLINE".equals(code)) {
+            finishSuspended(exec, exec.output);
+            return;
+        }
+        exec.suspended = false;
+        exec.status = "FAILED";
+        exec.errorCode = code;
+        recordAi(exec, "OFFLINE".equals(code) ? "模型未配置" : exec.output);
+        exec.append("terminal FAILED " + exec.errorCode);
     }
 
     private void finishSuspended(Exec exec, String output) {
@@ -488,7 +529,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             }
             exec.append("pass " + name + " " + recorded.get("decision"));
             String decision = String.valueOf(recorded.get("decision"));
-            if (PassDecision.PENDING.name().equals(decision)) {
+            if (PassDecision.PENDING.name().equals(decision) && !(exec.resuming && !exec.modelNode)) {
                 exec.suspended = true;
                 exec.status = "SUSPENDED";
                 recordTool(exec, name, "approval-required");
@@ -766,19 +807,32 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             row.put("description", rule.description());
             rules.add(row);
         }
-        try {
-            new ContextWindow(new OfflineChatModel(), compressAt).prepare(new ContextInput(
+        List<dev.jasagent.api.llm.ChatMessage> turns = new ArrayList<>();
+        for (Map<String, Object> message : messages(stored)) {
+            String text = message.get("text") == null ? "" : String.valueOf(message.get("text"));
+            String role = "assistant".equals(message.get("role")) ? "assistant" : "user";
+            turns.add(dev.jasagent.api.llm.ChatMessage.text(role, text));
+        }
+        ContextWindow window = new ContextWindow(new OfflineChatModel(), compressAt);
+        ContextInput input = new ContextInput(
                 sessionId,
                 "assistant",
                 "",
                 List.of(),
                 "",
                 List.of(),
-                List.of(),
+                turns,
                 "",
-                ContextWindow.DEFAULT_BUDGET_TOKENS)).toCompletableFuture().join();
+                ContextWindow.DEFAULT_BUDGET_TOKENS);
+        try {
+            window.prepare(input).toCompletableFuture().join();
         } catch (RuntimeException ignored) {
             // 压缩没完成时不把半截摘要当成上下文。
+        }
+        String summary = "";
+        ContextPrepared published = window.published();
+        if (published != null && published.summary() != null) {
+            summary = published.summary();
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("sessionId", stored.get("sessionId"));
@@ -789,6 +843,9 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         body.put("messages", messages(stored));
         body.put("budgetTokens", ContextWindow.DEFAULT_BUDGET_TOKENS);
         body.put("compressAt", compressAt);
+        body.put("occupancy", ContextWindow.estimatedTokens(input) / (double) ContextWindow.DEFAULT_BUDGET_TOKENS);
+        body.put("summary", summary);
+        body.put("compressing", window.compressing());
         return body;
     }
 
@@ -842,8 +899,6 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 pass.put("reason", "ALLOW".equals(decision) ? "approved" : "denied");
                 boolean resume = "ALLOW".equals(decision) && exec.pendingWorkflow != null && (exec.suspended || "SUSPENDED".equals(exec.status));
                 if (resume) {
-                    exec.suspended = false;
-                    exec.status = "RUNNING";
                     exec.append("resume");
                 }
                 save(exec, true);
@@ -1066,13 +1121,21 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
 
     private void continueRun(Exec exec) {
         try {
-            ExecutionSnapshot snapshot = controlFor(exec).resume(exec.executionId, exec.userId).toCompletableFuture().join();
+            CheckpointRunControl control = controlFor(exec);
+            synchronized (exec) {
+                exec.suspended = false;
+                exec.status = "RUNNING";
+                exec.errorCode = "";
+                save(exec, true);
+            }
+            ExecutionSnapshot snapshot = control.resume(exec.executionId, exec.userId).toCompletableFuture().join();
             applySnapshot(exec, snapshot);
         } catch (RuntimeException ex) {
             synchronized (exec) {
-                exec.status = "FAILED";
+                exec.suspended = true;
+                exec.status = "SUSPENDED";
                 exec.errorCode = offlineCode(ex);
-                exec.append("terminal FAILED " + exec.errorCode);
+                exec.append("resume failed " + exec.errorCode);
                 save(exec, true);
             }
         }
@@ -1290,6 +1353,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         private volatile String pendingWorkflow;
         private volatile String pendingInput;
         private boolean modelNode;
+        private boolean resuming;
         private int runs;
 
         private Exec(String executionId, String userId, String workspace, String token) {

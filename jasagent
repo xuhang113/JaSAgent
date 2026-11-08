@@ -29,4 +29,5 @@ fi
 
 jasagent_require_java
 jasagent_ensure_jar
+jasagent_load_model_env
 exec "$JASAGENT_JAVA" -jar "$JASAGENT_JAR" "$@"

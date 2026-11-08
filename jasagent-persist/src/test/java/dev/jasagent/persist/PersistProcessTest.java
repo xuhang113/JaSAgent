@@ -70,10 +70,30 @@ class PersistProcessTest {
     Path temp;
 
     @Test
+    void hiddenDataDirectoryWhenJasagentIsAFile() throws Exception {
+        Path workspace = temp.resolve("repo");
+        Files.createDirectories(workspace);
+        Files.writeString(workspace.resolve("jasagent"), "#!/bin/sh\n");
+        Path database = workspace.resolve(".jasagent").resolve("data").resolve("jasagent");
+        assertEquals(database.toAbsolutePath(), JdbcSettings.defaultH2File(workspace));
+        try (ExecutionDatabase opened = ExecutionDatabase.open(workspace, Map.of())) {
+            assertTrue(opened.settings().url().startsWith("jdbc:h2:file:" + database.toAbsolutePath()));
+            assertTrue(Files.isRegularFile(Path.of(database.toAbsolutePath() + ".mv.db")));
+        }
+        assertTrue(Files.isRegularFile(workspace.resolve("jasagent")));
+        assertFalse(Files.isDirectory(workspace.resolve("jasagent")));
+        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, Map.of())) {
+            Path sqlite = workspace.resolve(".jasagent").resolve("data").resolve("checkpoints.db");
+            assertEquals(sqlite.toAbsolutePath(), checkpoints.sqliteFile());
+            assertTrue(Files.isRegularFile(sqlite));
+        }
+    }
+
+    @Test
     void defaultH2FileUnderWorkspaceData() throws Exception {
         Path workspace = temp.resolve("workspace");
         try (ExecutionDatabase database = ExecutionDatabase.open(workspace, Map.of())) {
-            Path file = workspace.resolve("jasagent").resolve("data").resolve("jasagent");
+            Path file = workspace.resolve(".jasagent").resolve("data").resolve("jasagent");
             assertTrue(database.settings().url().startsWith("jdbc:h2:file:" + file.toAbsolutePath()));
             assertTrue(Files.isRegularFile(Path.of(file.toAbsolutePath() + ".mv.db")));
         }
@@ -88,7 +108,7 @@ class PersistProcessTest {
             assertEquals(url, database.settings().url());
         }
         assertTrue(Files.isRegularFile(Path.of(custom.toAbsolutePath() + ".mv.db")));
-        assertFalse(Files.exists(workspace.resolve("jasagent").resolve("data").resolve("jasagent.mv.db")));
+        assertFalse(Files.exists(workspace.resolve(".jasagent").resolve("data").resolve("jasagent.mv.db")));
     }
 
     @Test
@@ -173,7 +193,7 @@ class PersistProcessTest {
         try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, Map.of())) {
             assertEquals(CheckpointBackend.SQLITE, checkpoints.backend());
             assertInstanceOf(SQLiteSaverV2.class, checkpoints.saver());
-            Path sqlite = workspace.resolve("jasagent").resolve("data").resolve("checkpoints.db");
+            Path sqlite = workspace.resolve(".jasagent").resolve("data").resolve("checkpoints.db");
             assertEquals(sqlite.toAbsolutePath(), checkpoints.sqliteFile());
             join(checkpoints.commitBeforeNextNode(executionId, "find", "act", Map.<String, Object>of("step", "find"), () -> {
             }));
@@ -243,7 +263,7 @@ class PersistProcessTest {
                 Map.of("JASAGENT_JDBC_URL", "jdbc:postgresql://127.0.0.1:1/jasagent")));
         assertEquals(ErrorCode.PERSIST, error.code());
         assertTrue(stackOf(error).contains("org.bsc.langgraph4j.checkpoint.PostgresSaverV2"), stackOf(error));
-        assertFalse(Files.exists(workspace.resolve("jasagent").resolve("data").resolve("checkpoints.db")));
+        assertFalse(Files.exists(workspace.resolve(".jasagent").resolve("data").resolve("checkpoints.db")));
     }
 
     @Test

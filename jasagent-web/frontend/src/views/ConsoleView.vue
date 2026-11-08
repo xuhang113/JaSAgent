@@ -66,6 +66,7 @@
               <strong>{{ message.role === 'assistant' ? '执行输出' : '用户' }}</strong>
               <div>{{ message.text }}</div>
               <small v-if="message.executionId" class="muted">{{ message.executionId }} {{ message.status }}</small>
+              <small v-if="message.errorCode" class="execution-error">{{ message.errorCode }}</small>
               <div v-if="message.output">{{ message.output }}</div>
             </div>
           </div>
@@ -113,6 +114,7 @@
             </div>
             <el-input v-model="executionId" placeholder="executionId" />
             <p class="muted">{{ detail.status || '未选择' }}</p>
+            <p v-if="detail.errorCode" class="execution-error">{{ detail.errorCode }}</p>
             <h3>日志</h3>
             <pre class="log-box">{{ logs || '还没有日志' }}</pre>
             <h3>工具</h3>
@@ -521,8 +523,16 @@ async function resumeExecution() {
   if (!executionId.value) {
     return
   }
-  detail.value = await api('/api/executions/' + executionId.value + '/resume', { method: 'POST', body: {} })
-  watchExecution(executionId.value)
+  try {
+    detail.value = await api('/api/executions/' + executionId.value + '/resume', { method: 'POST', body: {} })
+    if (detail.value && detail.value.errorCode) {
+      ElMessage.error(String(detail.value.errorCode))
+    }
+    watchExecution(executionId.value)
+  } catch (error) {
+    ElMessage.error(error.message || '恢复失败')
+    await queryExecution().catch(() => {})
+  }
 }
 
 async function decide(row, decision) {
@@ -565,6 +575,7 @@ async function refreshMessageOutputs() {
     try {
       const row = await api('/api/executions/' + message.executionId)
       message.status = row.status
+      message.errorCode = row.errorCode || ''
       message.output = row.output
     } catch {
       // 执行可能还不属于这次登录。

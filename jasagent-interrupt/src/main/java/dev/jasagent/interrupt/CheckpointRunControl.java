@@ -1,6 +1,7 @@
 package dev.jasagent.interrupt;
 
 import dev.jasagent.api.concurrent.VirtualIo;
+import dev.jasagent.api.persist.DataDirectory;
 import dev.jasagent.api.event.TraceEvent;
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
@@ -94,7 +95,7 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
                         .build();
                 return new CheckpointRunControl(postgres, null, plan, tracer, trace);
             }
-            Path sqlite = workspace.toAbsolutePath().resolve("jasagent").resolve("data").resolve("checkpoints.db");
+            Path sqlite = DataDirectory.of(workspace).resolve("checkpoints.db");
             Files.createDirectories(sqlite.getParent());
             BaseCheckpointSaver sqliteSaver = SQLiteSaverV2.builder()
                     .databasePath(sqlite.toString())

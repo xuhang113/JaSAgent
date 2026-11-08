@@ -26,6 +26,7 @@ chmod 600 "$JASAGENT_ADDRESS_FILE"
 : > "$JASAGENT_LOG_FILE"
 chmod 600 "$JASAGENT_LOG_FILE"
 
+jasagent_load_model_env
 nohup "$JASAGENT_JAVA" -jar "$JASAGENT_JAR" server --server.address="$host" --server.port="$port" >>"$JASAGENT_LOG_FILE" 2>&1 &
 pid="$!"
 printf '%s\n' "$pid" > "$JASAGENT_PID_FILE"

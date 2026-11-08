@@ -43,6 +43,13 @@ public final class ContextWindow {
         this.compressAt = compressAt;
     }
 
+    public static int estimatedTokens(ContextInput input) {
+        if (input == null) {
+            return 0;
+        }
+        return estimate(render(input, new ArrayList<>(input.turns()), new ArrayList<>(input.skills()), ""));
+    }
+
     public static double compressAt(Map<String, String> configuration) {
         if (configuration == null || !configuration.containsKey(COMPRESS_AT)) {
             return DEFAULT_COMPRESS_AT;

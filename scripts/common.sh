@@ -206,6 +206,75 @@ jasagent_ensure_jar() {
   JASAGENT_JAR="$jar"
 }
 
+jasagent_section_is_gateway() {
+  local name
+  name="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -s '[:space:]' ' ')"
+  name="${name# }"
+  name="${name% }"
+  [[ "$name" == "gateway" || "$name" == "ai gateway" || "$name" == "ai-gateway" ]]
+}
+
+jasagent_load_model_env() {
+  local file section line key value
+  local gw_base="" gw_model="" gw_key="" ds_key="" in_gateway=0 first="" last=""
+  file="${JASAGENT_LLGRAPH_ENV:-${HOME:-}/.config/llgraph/llgraph.env}"
+  [[ -n "$file" && -f "$file" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
+    if [[ "$line" == export[[:space:]]* ]]; then
+      line="${line#export}"
+      line="${line#"${line%%[![:space:]]*}"}"
+    fi
+    if [[ "$line" != *=* ]]; then
+      section="$line"
+      if jasagent_section_is_gateway "$section"; then
+        in_gateway=1
+      else
+        in_gateway=0
+      fi
+      continue
+    fi
+    key="${line%%=*}"
+    key="${key%"${key##*[![:space:]]}"}"
+    value="${line#*=}"
+    if [[ ${#value} -ge 2 ]]; then
+      first="${value:0:1}"
+      last="${value:$((${#value} - 1)):1}"
+      if [[ "$first" == "$last" && ( "$first" == '"' || "$first" == "'" ) ]]; then
+        value="${value:1:$((${#value} - 2))}"
+      fi
+    fi
+    if [[ "$in_gateway" -eq 1 ]]; then
+      case "$key" in
+        LLGRAPH_API_BASE_URL) gw_base="$value" ;;
+        LLGRAPH_MODEL) gw_model="$value" ;;
+        LLGRAPH_API_KEY) gw_key="$value" ;;
+      esac
+    fi
+    if [[ "$key" == "LLGRAPH_API_KEY" && -n "$value" ]]; then
+      ds_key="$value"
+    fi
+  done < "$file"
+  if [[ -z "${JASAGENT_DEEPSEEK_API_KEY:-}" && -n "$ds_key" ]]; then
+    export JASAGENT_DEEPSEEK_API_KEY="$ds_key"
+  fi
+  if [[ -n "$gw_base" && -n "$gw_model" && -n "$gw_key" ]]; then
+    if [[ -z "${JASAGENT_GATEWAY_BASE_URL:-}" ]]; then
+      export JASAGENT_GATEWAY_BASE_URL="$gw_base"
+    fi
+    if [[ -z "${JASAGENT_GATEWAY_MODEL:-}" ]]; then
+      export JASAGENT_GATEWAY_MODEL="$gw_model"
+    fi
+    if [[ -z "${JASAGENT_GATEWAY_API_KEY:-}" ]]; then
+      export JASAGENT_GATEWAY_API_KEY="$gw_key"
+    fi
+  fi
+  return 0
+}
+
 jasagent_stop_pid() {
   local pid="$1"
   local _
