@@ -77,8 +77,14 @@ class ConsoleSessionPageTest {
     }
 
     @Test
-    void panelsHiddenByDefault() {
-        assertTrue(consoleScript().contains("data-default-panels\":\"hidden\""));
+    void rightRailStaysOpen() {
+        String script = consoleScript();
+        assertTrue(script.contains("data-panels-open\":\"true\""), scriptSnippet(script, "data-panels-open"));
+        assertTrue(script.contains("console-layout"), script);
+        assertTrue(script.contains("right-rail"), script);
+        assertTrue(script.contains("turn-trace"), script);
+        assertFalse(script.contains("data-default-panels\":\"hidden\""), script);
+        assertFalse(script.contains("data-panels-open\":\"false\""), script);
     }
 
     @Test
