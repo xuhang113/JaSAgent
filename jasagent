@@ -21,7 +21,7 @@ if [[ $# -eq 0 || "$1" == "-h" || "$1" == "--help" || "$1" == "help" ]]; then
   ./jasagent pass deny --execution <executionId> --pass <passId>
   ./jasagent server
 
-后台启停用 ./scripts/start.sh 和 ./scripts/stop.sh。默认地址是 http://127.0.0.1:8090。
+后台启停用 ./scripts/start.sh 和 ./scripts/stop.sh。默认地址是 http://127.0.0.1:18721。
 <口令> 是占位符，不要把真实口令写进仓库。
 EOF
   exit 0

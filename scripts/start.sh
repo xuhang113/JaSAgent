@@ -4,7 +4,7 @@ set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
 host="${JASAGENT_HOST:-127.0.0.1}"
-port="${JASAGENT_PORT:-8090}"
+port="${JASAGENT_PORT:-18721}"
 if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
   echo "端口必须是 1 到 65535 的数字。" >&2
   exit 1

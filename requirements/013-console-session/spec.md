@@ -50,7 +50,7 @@
 
 ## 中间件
 
-HTTP 仍只绑定 `127.0.0.1:8090`。不新增消息队列或缓存。调度仍用现有的 `QueueAgentScheduler`。压缩仍通过已有的 `ChatModel.complete` 发出任务 `compress`，不新增远程通道。默认测试不访问外网，也不调用真实模型。
+HTTP 仍只绑定 `127.0.0.1:18721`。不新增消息队列或缓存。调度仍用现有的 `QueueAgentScheduler`。压缩仍通过已有的 `ChatModel.complete` 发出任务 `compress`，不新增远程通道。默认测试不访问外网，也不调用真实模型。
 
 ## 测试要求
 

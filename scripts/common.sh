@@ -51,7 +51,7 @@ jasagent_print_address() {
     line="$(head -n 1 "$JASAGENT_ADDRESS_FILE" | tr -d '\r')"
   fi
   if [[ -z "$line" ]]; then
-    line="http://127.0.0.1:8090"
+    line="http://127.0.0.1:18721"
   fi
   printf '%s\n' "$line"
 }

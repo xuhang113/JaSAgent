@@ -7,10 +7,10 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8090' },
-      '/login': { target: 'http://127.0.0.1:8090' },
-      '/logout': { target: 'http://127.0.0.1:8090' },
-      '/health': { target: 'http://127.0.0.1:8090' }
+      '/api': { target: 'http://127.0.0.1:18721' },
+      '/login': { target: 'http://127.0.0.1:18721' },
+      '/logout': { target: 'http://127.0.0.1:18721' },
+      '/health': { target: 'http://127.0.0.1:18721' }
     }
   },
   build: {

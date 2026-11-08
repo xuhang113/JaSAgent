@@ -24,7 +24,7 @@ public class JasagentApplication {
             System.exit(code);
         }
         SpringApplication application = new SpringApplication(JasagentApplication.class);
-        application.setDefaultProperties(Map.of("server.address", "127.0.0.1", "server.port", "8090"));
+        application.setDefaultProperties(Map.of("server.address", "127.0.0.1", "server.port", "18721"));
         application.run(serverArgs(args));
     }
 

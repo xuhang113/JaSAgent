@@ -108,7 +108,7 @@ public final class CliCommands {
                 return stripSlash(line);
             }
         }
-        return "http://127.0.0.1:8090";
+        return "http://127.0.0.1:18721";
     }
 
     private static Path runtimeDir(Path home) {
