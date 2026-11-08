@@ -100,6 +100,13 @@ class ConsolePageTest {
     }
 
     @Test
+    void consoleScriptShowsExecutionError() {
+        String script = consoleScript();
+        assertTrue(script.contains("execution-error"), "页面没有显示执行错误");
+        assertTrue(script.contains("errorCode"), script);
+    }
+
+    @Test
     void consoleScriptUsesLiveEndpoints() {
         String script = consoleScript();
         assertTrue(script.contains("EventSource"), "控制台脚本没有 EventSource");

@@ -3,6 +3,7 @@ package dev.jasagent.persist;
 import dev.jasagent.api.concurrent.VirtualIo;
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
+import dev.jasagent.api.persist.DataDirectory;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.checkpoint.BaseCheckpointSaver;
 import org.bsc.langgraph4j.checkpoint.Checkpoint;
@@ -48,7 +49,7 @@ public final class NodeCheckpoints implements AutoCloseable {
                         .build();
                 return new NodeCheckpoints(CheckpointBackend.POSTGRES, saver, null);
             }
-            Path sqlite = workspace.toAbsolutePath().resolve("jasagent").resolve("data").resolve("checkpoints.db");
+            Path sqlite = DataDirectory.of(workspace).resolve("checkpoints.db");
             Files.createDirectories(sqlite.getParent());
             BaseCheckpointSaver saver = SQLiteSaverV2.builder()
                     .databasePath(sqlite.toString())
