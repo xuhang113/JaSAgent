@@ -53,7 +53,6 @@ body:has(.console-layout) {
   min-height: 0;
   overflow: hidden;
   background: #ecece8;
-  border-right: 1px solid #ddddd8;
 }
 
 .session-main {
@@ -72,26 +71,62 @@ body:has(.console-layout) {
   height: 100%;
   min-width: 0;
   min-height: 0;
+  position: relative;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
   background: #fff;
-  border-left: 1px solid #ddddd8;
 }
 
 .split-handle {
   height: 100%;
   cursor: col-resize;
-  background: #e4e4df;
+  background-color: transparent;
+  background-image: linear-gradient(#e4e4df, #e4e4df);
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 .split-handle:hover {
   background: #c8c8c3;
 }
 
-.sidebar-top,
 .workspace-block {
-  padding: 10px 12px;
-  border-bottom: 1px solid #ddddd8;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e4e4df;
+}
+
+.chrome-bar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-bottom: 1px solid #e4e4df;
+  background: #fff;
+}
+
+.sidebar-top .sidebar-user {
+  flex: 1;
+  min-width: 0;
+}
+
+.chrome-bar .eyebrow {
+  display: inline;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.chrome-bar h2 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-user,
@@ -161,20 +196,13 @@ body:has(.console-layout) {
   flex: none;
   max-height: 42%;
   overflow: auto;
-  border-top: 1px solid #ddddd8;
+  border-top: 1px solid #e4e4df;
   padding: 8px 12px 12px;
 }
 
-.session-column h2,
-.chat-head h2,
-.rail-block h2 {
+.session-column h2 {
   margin: 0;
-  font-size: 15px;
-}
-
-.rail-block h2 {
-  padding: 8px 10px 4px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 h3 {
@@ -244,10 +272,9 @@ h3 {
 
 .chat-head {
   flex: none;
-  justify-content: space-between;
-  padding: 10px 16px;
+  gap: 8px;
+  justify-content: flex-start;
   background: #fff;
-  border-bottom: 1px solid #e4e4df;
 }
 
 .messages {
@@ -306,9 +333,9 @@ h3 {
 
 .composer-dock {
   flex: none;
-  border-top: 1px solid #ddddd8;
+  border-top: 1px solid #e4e4df;
   background: #f7f7f4;
-  padding: 10px 20px 14px;
+  padding: 8px 16px 12px;
 }
 
 .composer-inner {
@@ -316,49 +343,162 @@ h3 {
   margin: 0 auto;
 }
 
-.rail-block {
+.rail-chrome {
+  flex: none;
+  background: #fff;
+}
+
+.rail-tabs {
+  gap: 0;
+  align-items: stretch;
+  padding: 0 4px;
+}
+
+.rail-tab {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rail-tab:hover {
+  color: #1b1b18;
+  background: #f2f4f7;
+}
+
+.rail-tab[aria-selected="true"] {
+  color: #1b1b18;
+  font-weight: 600;
+  background: #f4f4f0;
+  box-shadow: inset 0 -2px 0 #1b1b18;
+}
+
+.rail-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #e4e4df;
+}
+
+.rail-tool {
+  border: 1px solid #c8c8c3;
+  background: transparent;
+  color: #1b1b18;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.rail-tool:hover {
+  background: #e3e3de;
+}
+
+.rail-tool[aria-pressed="true"] {
+  background: #1b1b18;
+  color: #fff;
+  border-color: #1b1b18;
+}
+
+.rail-tool[aria-pressed="true"]:hover {
+  background: #333;
+  color: #fff;
+}
+
+.rail-stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.rail-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px 10px;
+}
+
+.pane-block + .pane-block {
+  border-top: 1px solid #e4e4df;
+  margin-top: 0;
+  padding-top: 8px;
+}
+
+.pane-kicker {
+  display: block;
+  margin: 0 0 4px;
+  color: #667085;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.empty-line {
+  margin: 0;
+  font-size: 12px;
+}
+
+.context-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: baseline;
+  margin: 0;
+  font-size: 12px;
+}
+
+.mono-num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.console-drawer {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  border-bottom: 1px solid #e6e6e1;
+  background: #fbfbf9;
+  border-top: 1px solid #e4e4df;
+  animation: jas-msg-in 0.15s ease;
 }
 
-.rail-trace {
-  flex: 1.4 1 0;
-  min-height: 9rem;
-}
-
-.rail-tools {
-  flex: 0 0 auto;
-}
-
-.rail-tools .rail-body {
+.drawer-head {
+  display: flex;
   flex: none;
-  overflow: visible;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 10px;
+  border-bottom: 1px solid #e4e4df;
+  background: #fff;
 }
 
-.rail-context,
-.rail-logs {
-  flex: 1 1 0;
-  min-height: 6.5rem;
+.drawer-head h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.rail-passes {
-  flex: 0 0 auto;
-}
-
-.rail-body {
+.drawer-body {
   flex: 1;
   min-height: 0;
-  min-width: 0;
   overflow: auto;
-  overflow-x: hidden;
-  padding: 0 10px 8px;
-}
-
-.rail-passes .rail-body {
-  max-height: 12rem;
+  padding: 8px 10px 10px;
 }
 
 .pass-card,
@@ -384,15 +524,6 @@ h3 {
 .pass-actions .el-button,
 .pass-actions .el-button + .el-button {
   margin-left: 0;
-}
-
-.lg-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 6px;
-  font-size: 12px;
-  color: #667085;
 }
 
 .lg-timeline {
@@ -430,8 +561,7 @@ h3 {
 }
 
 .tool-result pre,
-.lg-content,
-.log-box {
+.lg-content {
   margin: 4px 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -441,11 +571,19 @@ h3 {
 }
 
 .log-box {
-  background: #0f1720;
-  color: #d6deeb;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: #f4f4f0;
+  color: #1b1b18;
+  border: 1px solid #e4e4df;
   border-radius: 8px;
   padding: 6px;
-  max-height: 9rem;
+  flex: 1;
+  min-height: 4rem;
   overflow: auto;
 }
 
@@ -566,29 +704,6 @@ h3 {
   transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
-.rail-summary {
-  display: block;
-  list-style: none;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.rail-summary::-webkit-details-marker {
-  display: none;
-}
-
-.rail-summary::marker {
-  content: none;
-}
-
-.rail-summary:hover {
-  background-color: #f2f4f7;
-}
-
 .turn-trace summary {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
@@ -597,8 +712,7 @@ h3 {
   background-color: #f2f4f7;
 }
 
-.turn-trace,
-.rail-block {
+.turn-trace {
   interpolate-size: allow-keywords;
 }
 
@@ -616,27 +730,7 @@ h3 {
   opacity: 1;
 }
 
-.rail-block::details-content {
-  height: 0;
-  overflow: clip;
-  opacity: 0;
-  content-visibility: visible;
-  interpolate-size: allow-keywords;
-  transition: height 0.2s ease, opacity 0.2s ease;
-}
-
-.rail-block[open]::details-content {
-  height: auto;
-  opacity: 1;
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-
-.turn-trace.is-closing::details-content,
-.rail-block.is-closing::details-content {
+.turn-trace.is-closing::details-content {
   height: 0;
   opacity: 0;
 }
@@ -662,14 +756,14 @@ h3 {
   .agent-row,
   .skill-pop button,
   .console-layout .el-button,
-  .rail-summary,
+  .rail-tab,
+  .rail-tool,
+  .console-drawer,
   .turn-trace summary,
   .turn,
   .lg-timeline,
   .turn-trace::details-content,
-  .turn-trace[open]::details-content,
-  .rail-block::details-content,
-  .rail-block[open]::details-content {
+  .turn-trace[open]::details-content {
     transition: none;
     animation: none;
   }

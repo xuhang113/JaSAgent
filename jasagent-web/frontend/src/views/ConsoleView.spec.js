@@ -170,6 +170,11 @@ async function openSession(wrapper) {
   await flushPromises()
 }
 
+async function openDrawer(wrapper, name) {
+  await wrapper.get(`.rail-toolbar [data-open="${name}"]`).trigger('click')
+  await flushPromises()
+}
+
 describe('会话页三列布局', () => {
   it('左栏放工作区和会话，中间是消息，右栏默认展开', async () => {
     const wrapper = await mountConsole()
@@ -188,9 +193,83 @@ describe('会话页三列布局', () => {
     expect(wrapper.get('.session-main .composer-dock').exists()).toBe(true)
 
     const rail = wrapper.get('.right-rail')
-    for (const label of ['Trace', '工具', '上下文', '日志', '通行证']) {
-      expect(rail.text()).toContain(label)
+    expect(wrapper.get('.chat-head').classes()).toContain('chrome-bar')
+    expect(wrapper.get('.sidebar-top').classes()).toContain('chrome-bar')
+    expect(rail.findAll('[role="tab"]').map((tab) => tab.text())).toEqual(['Trace', '工具', '上下文', '日志'])
+    expect(rail.get('[role="tab"][aria-selected="true"]').text()).toBe('Trace')
+    expect(rail.find('.rail-summary').exists()).toBe(false)
+    expect(rail.find('details.rail-block').exists()).toBe(false)
+    expect(rail.find('h2').exists()).toBe(false)
+    expect(rail.find('.console-drawer').exists()).toBe(false)
+    const toolbar = rail.get('.rail-toolbar')
+    for (const label of ['溯源', '评估', '通行证', 'CLI']) {
+      expect(toolbar.text()).toContain(label)
     }
+    wrapper.unmount()
+  })
+
+  it('右栏 tab 一次只显示一栏，抽屉从工具条打开', async () => {
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    const rail = wrapper.get('.right-rail')
+    expect(rail.get('[role="tabpanel"]').attributes('data-pane')).toBe('trace')
+    expect(rail.get('[data-pane="trace"]').text()).toContain('2026-11-08T00:00:00Z')
+    expect(rail.get('[data-pane="trace"]').text()).not.toContain('溯源')
+    expect(rail.get('[data-pane="trace"]').text()).not.toContain('评估')
+
+    await rail.get('[data-tab="tools"]').trigger('click')
+    expect(rail.get('[role="tab"][aria-selected="true"]').text()).toBe('工具')
+    expect(rail.find('[data-pane="trace"]').exists()).toBe(false)
+    const tools = rail.get('[data-pane="tools"]')
+    expect(tools.text()).toContain('clock')
+    expect(tools.text()).toContain('插件')
+    expect(tools.text()).not.toContain('提交执行')
+    expect(tools.find('h2').exists()).toBe(false)
+
+    await rail.get('[data-tab="context"]').trigger('click')
+    const context = rail.get('[data-pane="context"]')
+    expect(context.get('.mono-num').text()).toContain('8000')
+    expect(context.text()).toContain('0.85')
+
+    await rail.get('[data-tab="logs"]').trigger('click')
+    const logs = rail.get('[data-pane="logs"]')
+    expect(logs.text()).toContain('SSE')
+    expect(logs.text()).toContain('pass rag.search PENDING')
+    expect(logs.text()).not.toContain('CLI')
+    expect(logs.text()).not.toContain('提交执行')
+
+    await openDrawer(wrapper, 'retrieval')
+    expect(rail.get('[data-open="retrieval"]').attributes('aria-pressed')).toBe('true')
+    expect(rail.get('.console-drawer[data-drawer="retrieval"]').text()).toContain('还没有溯源')
+    await openDrawer(wrapper, 'evaluation')
+    expect(rail.get('.console-drawer[data-drawer="evaluation"]').text()).toContain('还没有评估')
+    expect(rail.find('.console-drawer[data-drawer="retrieval"]').exists()).toBe(false)
+    await openDrawer(wrapper, 'cli')
+    expect(rail.get('.console-drawer[data-drawer="cli"]').text()).toContain('提交执行')
+    await rail.get('.console-drawer [data-close]').trigger('click')
+    expect(rail.find('.console-drawer').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('空状态是短句', async () => {
+    state.timeline = { executionId: 'exec-1', messages: [] }
+    state.execution = {
+      status: '',
+      output: '',
+      logs: '',
+      tools: [],
+      plugins: [],
+      passes: [],
+      retrievals: [],
+      evaluations: []
+    }
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    expect(wrapper.get('[data-pane="trace"] .empty-line').text()).toBe('还没有消息。')
+    await wrapper.get('[data-tab="tools"]').trigger('click')
+    expect(wrapper.get('[data-pane="tools"] .empty-line').text()).toBe('还没有工具。')
+    await openDrawer(wrapper, 'passes')
+    expect(wrapper.get('.console-drawer .empty-line').text()).toBe('还没有通行证。')
     wrapper.unmount()
   })
 
@@ -235,10 +314,12 @@ describe('会话页三列布局', () => {
     wrapper.unmount()
   })
 
-  it('通行证的允许和拒绝在右栏里，不靠横向表格', async () => {
+  it('通行证的允许和拒绝在抽屉里，不靠横向表格', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
-    const card = wrapper.get('.right-rail .pass-card')
+    expect(wrapper.find('.right-rail .pass-card').exists()).toBe(false)
+    await openDrawer(wrapper, 'passes')
+    const card = wrapper.get('.console-drawer[data-drawer="passes"] .pass-card')
     expect(card.text()).toContain('rag.search')
     expect(card.text()).toContain('ALLOW')
     expect(card.text()).toContain('DENY')
@@ -276,11 +357,15 @@ describe('会话页按钮对齐 llgraph', () => {
   it('主操作使用 cursor-btn-primary 的颜色、字号、圆角和内边距', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
-    for (const label of ['选定工作区', '新建', '发送', '提交执行', 'ALLOW']) {
+    for (const label of ['选定工作区', '新建', '发送']) {
       const button = buttonByText(wrapper, label)
       expect(button.classes()).toContain('cursor-btn-primary')
       expect(button.classes()).toContain('el-button')
     }
+    await openDrawer(wrapper, 'cli')
+    expect(buttonByText(wrapper, '提交执行').classes()).toContain('cursor-btn-primary')
+    await openDrawer(wrapper, 'passes')
+    expect(buttonByText(wrapper, 'ALLOW').classes()).toContain('cursor-btn-primary')
     const primary = rule(css, '.console-layout .el-button.cursor-btn-primary')
     expect(primary).toMatch(/background:\s*#1b1b18/)
     expect(primary).toMatch(/color:\s*#fff/)
@@ -296,7 +381,11 @@ describe('会话页按钮对齐 llgraph', () => {
   it('次操作使用 cursor-btn-ghost', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
-    for (const label of ['退出', '追加纠正', '恢复', '刷新列表', '查询']) {
+    for (const label of ['退出', '追加纠正', '恢复']) {
+      expect(buttonByText(wrapper, label).classes()).toContain('cursor-btn-ghost')
+    }
+    await openDrawer(wrapper, 'cli')
+    for (const label of ['刷新列表', '查询']) {
       expect(buttonByText(wrapper, label).classes()).toContain('cursor-btn-ghost')
     }
     const ghost = rule(css, '.console-layout .el-button.cursor-btn-ghost')
@@ -313,6 +402,7 @@ describe('会话页按钮对齐 llgraph', () => {
   it('危险操作使用 cursor-btn-danger，中止使用 composer stop', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
+    await openDrawer(wrapper, 'passes')
     expect(buttonByText(wrapper, 'DENY').classes()).toContain('cursor-btn-danger')
     expect(buttonByText(wrapper, '中止').classes()).toContain('cursor-composer-stop')
     const danger = rule(css, '.console-layout .el-button.cursor-btn-danger')
@@ -394,6 +484,7 @@ describe('会话页按钮对齐 llgraph', () => {
   it('通行证决定和中止仍走原来的接口', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
+    await openDrawer(wrapper, 'passes')
     await buttonByText(wrapper, 'DENY').trigger('click')
     await buttonByText(wrapper, '中止').trigger('click')
     await flushPromises()
@@ -446,18 +537,31 @@ describe('会话页交互动效', () => {
     expect(blocks(css, '.console-layout.is-resizing').join('\n')).toMatch(/transition:\s*none/)
   })
 
-  it('折叠面板和 Trace 用 0.2s 展开', () => {
+  it('折叠的 Trace 用 0.2s 展开，右栏改用 tab 指示', () => {
     const fold = blocks(css, '.turn-trace::details-content').join('\n')
     expect(fold).toMatch(/height 0\.2s ease/)
     expect(fold).toMatch(/opacity 0\.2s ease/)
     expect(blocks(css, '.turn-trace[open]::details-content').join('\n')).toMatch(/height:\s*auto/)
     expect(blocks(css, '.turn-trace[open]::details-content').join('\n')).toMatch(/opacity:\s*1/)
-    const rail = blocks(css, '.rail-block::details-content').join('\n')
-    expect(rail).toMatch(/height 0\.2s ease/)
-    expect(rail).toMatch(/opacity 0\.2s ease/)
-    expect(blocks(css, '.rail-block[open]::details-content').join('\n')).toMatch(/opacity:\s*1/)
-    expect(blocks(css, '.rail-summary').join('\n')).toMatch(/background-color 0\.15s ease/)
-    expect(blocks(css, '.rail-summary').join('\n')).not.toMatch(/font-size|padding|margin|border-radius/)
+    expect(css).not.toMatch(/\.rail-block::details-content/)
+    expect(blocks(css, '.rail-tab').join('\n')).toMatch(/0\.15s ease/)
+    expect(blocks(css, '.rail-tab[aria-selected="true"]').join('\n')).toMatch(/#1b1b18/)
+  })
+
+  it('紧凑顶栏、细分割线、等宽数字，浅色上仍能读', () => {
+    const bar = rule(css, '.chrome-bar')
+    expect(bar).toMatch(/height:\s*36px/)
+    expect(bar).toMatch(/border-bottom:\s*1px solid #e4e4df/)
+    const selected = rule(css, '.rail-tab[aria-selected="true"]')
+    expect(selected).toMatch(/#1b1b18/)
+    expect(selected).toMatch(/inset 0 -2px 0 #1b1b18/)
+    const mono = rule(css, '.mono-num')
+    expect(mono).toMatch(/monospace/)
+    expect(mono).toMatch(/tabular-nums/)
+    expect(rule(css, '.log-box')).toMatch(/background:\s*#f4f4f0/)
+    expect(rule(css, '.log-box')).not.toMatch(/#000\b|#0f1720/)
+    expect(rule(css, '.right-rail')).not.toMatch(/background:\s*#000/)
+    expect(css).not.toMatch(/scanline|particle/)
   })
 
   it('切换会话和消息进入只做 0.15s 透明度', () => {
@@ -471,21 +575,14 @@ describe('会话页交互动效', () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)/)
   })
 
-  it('右栏栏目默认展开，拖动分隔时标记按压', async () => {
+  it('右栏默认停在 Trace，抽屉收起，拖动分隔时标记按压', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
-    const folds = wrapper.findAll('.right-rail details.rail-block')
-    expect(folds).toHaveLength(5)
-    for (const fold of folds) {
-      expect(fold.element.hasAttribute('open')).toBe(true)
-      expect(fold.find('.rail-summary h2').exists()).toBe(true)
-    }
+    expect(wrapper.findAll('.right-rail details.rail-block')).toHaveLength(0)
+    expect(wrapper.get('.right-rail [role="tab"][aria-selected="true"]').attributes('data-tab')).toBe('trace')
+    expect(wrapper.find('.console-drawer').exists()).toBe(false)
     expect(wrapper.get('.turn-trace').element.tagName).toBe('DETAILS')
     expect(wrapper.get('.turn-trace').element.hasAttribute('open')).toBe(false)
-    const passes = wrapper.get('.rail-passes')
-    await passes.get('summary').trigger('click')
-    expect(passes.classes()).toContain('is-closing')
-    expect(passes.element.hasAttribute('open')).toBe(true)
     expect(wrapper.get('.thread').attributes('data-thread')).toBe('s1')
 
     const handle = wrapper.get('[data-resize="session"]')

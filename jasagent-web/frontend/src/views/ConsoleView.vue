@@ -1,7 +1,7 @@
 <template>
   <div class="console-layout" :class="{ 'is-resizing': resizing }" data-layout="three-column" data-panels-open="true" :style="layoutStyle">
     <aside class="session-column">
-      <div class="sidebar-top">
+      <div class="sidebar-top chrome-bar">
         <div class="sidebar-user">
           <span class="brand">JaSAgent</span>
           <span class="who">{{ loginName }}</span>
@@ -28,7 +28,7 @@
         <div v-for="item in sessions" :key="item.sessionId" class="session-row" :class="{ active: item.sessionId === activeSessionId }">
           <button type="button" class="session-switch" @click="switchSession(item.sessionId)">
             <strong>{{ item.title }}</strong>
-            <small>{{ item.sessionId.slice(0, 8) }}</small>
+            <small class="mono-num">{{ item.sessionId.slice(0, 8) }}</small>
           </button>
           <el-button size="small" text type="danger" class="cursor-session-delete" @click="removeSession(item.sessionId)">删除</el-button>
         </div>
@@ -53,11 +53,9 @@
     <div class="split-handle" :class="{ 'is-active': resizing === 'session' }" data-resize="session" @mousedown.prevent="startResize($event, 'session')"></div>
 
     <section class="session-main">
-      <header class="chat-head">
-        <div>
-          <p class="eyebrow">对话</p>
-          <h2>{{ activeTitle || '会话' }}</h2>
-        </div>
+      <header class="chat-head chrome-bar">
+        <span class="eyebrow">对话</span>
+        <h2>{{ activeTitle || '会话' }}</h2>
       </header>
       <div class="messages">
         <div class="thread" :key="activeSessionId || 'none'" :data-thread="activeSessionId || 'none'">
@@ -78,7 +76,7 @@
             <div v-if="turnReply(message) || message.status || message.errorCode" class="bubble assistant">
               <strong>执行输出</strong>
               <div v-if="turnReply(message)">{{ turnReply(message) }}</div>
-              <small v-if="message.executionId" class="muted">{{ message.executionId }} {{ message.status }}</small>
+              <small v-if="message.executionId" class="muted mono-num">{{ message.executionId }} {{ message.status }}</small>
               <small v-if="message.errorCode" class="execution-error">{{ message.errorCode }}</small>
             </div>
           </article>
@@ -106,14 +104,35 @@
     <div class="split-handle" :class="{ 'is-active': resizing === 'rail' }" data-resize="rail" @mousedown.prevent="startResize($event, 'rail')"></div>
 
     <aside class="right-rail">
-      <details class="rail-block rail-trace" open>
-        <summary class="rail-summary" @click="foldDetails"><h2>Trace</h2></summary>
-        <div class="rail-body">
-          <p class="lg-legend">
-            <span v-for="kind in langGraphTypes" :key="kind">{{ kind }}</span>
-          </p>
-          <p v-if="timeline.length === 0" class="muted">还没有这次执行的消息。</p>
-          <ol class="lg-timeline" :key="executionId || 'none'" data-timeline="langgraph">
+      <div class="rail-chrome">
+        <div class="rail-tabs chrome-bar" role="tablist" aria-label="执行">
+          <button
+            v-for="tab in railTabs"
+            :key="tab.id"
+            type="button"
+            class="rail-tab"
+            role="tab"
+            :data-tab="tab.id"
+            :aria-selected="railTab === tab.id ? 'true' : 'false'"
+            @click="selectRailTab(tab.id)"
+          >{{ tab.label }}</button>
+        </div>
+        <div class="rail-toolbar" role="toolbar" aria-label="次要面板">
+          <button
+            v-for="item in railDrawers"
+            :key="item.id"
+            type="button"
+            class="rail-tool"
+            :data-open="item.id"
+            :aria-pressed="drawer === item.id ? 'true' : 'false'"
+            @click="toggleDrawer(item.id)"
+          >{{ item.label }}</button>
+        </div>
+      </div>
+      <div class="rail-stage">
+        <div v-if="railTab === 'trace'" class="rail-pane" role="tabpanel" data-pane="trace">
+          <p v-if="timeline.length === 0" class="muted empty-line">还没有消息。</p>
+          <ol v-else class="lg-timeline" :key="executionId || 'none'" data-timeline="langgraph">
             <li v-for="(message, index) in timeline" :key="index" :data-type="message.type">
               <div class="lg-type">{{ message.type }}</div>
               <div v-if="message.type === 'system'" class="lg-meta">
@@ -122,87 +141,97 @@
               </div>
               <pre class="lg-content">{{ message.content }}</pre>
               <p v-for="call in message.tool_calls || []" :key="call.id || call.name" class="muted">{{ call.name }} {{ call.args || call.arguments }}</p>
-              <small v-if="message.name" class="muted">{{ message.name }} {{ message.tool_call_id }}</small>
+              <small v-if="message.name" class="muted mono-num">{{ message.name }} {{ message.tool_call_id }}</small>
             </li>
           </ol>
-          <h3>溯源</h3>
-          <p v-if="retrievalRows.length === 0" class="muted">还没有溯源</p>
-          <article v-for="(row, index) in retrievalRows" :key="index" class="trace-card">
-            <p>{{ row.sourceScope }} {{ row.uri }}</p>
-            <p class="muted">{{ row.docId }} {{ row.chunkId }} {{ row.contentHash }}</p>
-            <p class="muted">fusion {{ row.fusionScore }} rerank {{ row.rerankScore }}</p>
-          </article>
-          <h3>评估</h3>
-          <p v-if="!(detail.evaluations || []).length" class="muted">还没有评估</p>
-          <div class="tags">
-            <el-tag v-for="item in detail.evaluations || []" :key="item">{{ item }}</el-tag>
-          </div>
         </div>
-      </details>
-      <details class="rail-block rail-passes" open>
-        <summary class="rail-summary" @click="foldDetails"><h2>通行证</h2></summary>
-        <div class="rail-body pass-list">
-          <p v-if="!(detail.passes || []).length" class="muted">还没有通行证</p>
-          <article v-for="row in detail.passes || []" :key="row.passId" class="pass-card">
-            <div class="pass-card-head">
-              <strong>{{ row.name }}</strong>
-              <span>{{ row.kind }}</span>
-              <span>{{ row.decision }}</span>
+        <div v-else-if="railTab === 'tools'" class="rail-pane" role="tabpanel" data-pane="tools">
+          <div class="pane-block">
+            <p v-if="!(detail.tools || []).length" class="muted empty-line">还没有工具。</p>
+            <div v-else class="tags">
+              <el-tag v-for="name in detail.tools" :key="name">{{ name }}</el-tag>
             </div>
-            <p class="muted">{{ row.reason }}</p>
-            <div class="pass-actions">
-              <el-button size="small" type="primary" class="cursor-btn-primary" @click="decide(row, 'ALLOW')">ALLOW</el-button>
-              <el-button size="small" type="danger" class="cursor-btn-danger" @click="decide(row, 'DENY')">DENY</el-button>
+          </div>
+          <div class="pane-block">
+            <span class="pane-kicker">插件</span>
+            <p v-if="!(detail.plugins || []).length" class="muted empty-line">还没有插件。</p>
+            <div v-else class="tags">
+              <el-tag v-for="name in detail.plugins" :key="name">{{ name }}</el-tag>
             </div>
-          </article>
-        </div>
-      </details>
-      <details class="rail-block rail-tools" open>
-        <summary class="rail-summary" @click="foldDetails"><h2>工具</h2></summary>
-        <div class="rail-body">
-          <p class="muted">可用工具</p>
-          <div v-if="(detail.tools || []).length" class="tags">
-            <el-tag v-for="name in detail.tools" :key="name">{{ name }}</el-tag>
           </div>
-          <p v-else class="muted">这次执行还没有工具</p>
-          <p class="muted">插件</p>
-          <div v-if="(detail.plugins || []).length" class="tags">
-            <el-tag v-for="name in detail.plugins" :key="name">{{ name }}</el-tag>
-          </div>
-          <p v-else class="muted">这次执行还没有插件</p>
         </div>
-      </details>
-      <details class="rail-block rail-context" open>
-        <summary class="rail-summary" @click="foldDetails"><h2>上下文</h2></summary>
-        <div class="rail-body">
-          <p class="muted">预算 {{ context.budgetTokens || 8000 }}，压缩阈值 {{ context.compressAt ?? 0.85 }}</p>
+        <div v-else-if="railTab === 'context'" class="rail-pane" role="tabpanel" data-pane="context">
+          <p class="context-metrics">
+            <span>预算</span>
+            <span class="mono-num">{{ context.budgetTokens || 8000 }}</span>
+            <span>阈值</span>
+            <span class="mono-num">{{ context.compressAt ?? 0.85 }}</span>
+          </p>
+          <p v-if="!(context.rules || []).length && !(context.skills || []).length" class="muted empty-line">还没有规则。</p>
           <p v-for="rule in context.rules || []" :key="rule.id">{{ rule.id }} {{ rule.description }}</p>
           <p v-for="skill in context.skills || []" :key="skill.name">{{ skill.name }} {{ skill.description }}</p>
         </div>
-      </details>
-      <details class="rail-block rail-logs" open>
-        <summary class="rail-summary" @click="foldDetails"><h2>日志</h2></summary>
-        <div class="rail-body">
-          <pre class="log-box">{{ logs || '还没有日志' }}</pre>
-          <h3>SSE</h3>
-          <pre class="log-box">{{ sseText || '等待事件' }}</pre>
-          <h3>CLI</h3>
-          <div class="row">
-            <el-select v-model="workflowId" class="grow" placeholder="workflow">
-              <el-option v-for="item in workflows" :key="item.id" :label="item.id" :value="item.id" />
-            </el-select>
-            <el-button size="small" class="cursor-btn-ghost" @click="loadWorkflows">刷新列表</el-button>
+        <div v-else class="rail-pane" role="tabpanel" data-pane="logs">
+          <pre class="log-box">{{ logs || '还没有日志。' }}</pre>
+          <div class="pane-block">
+            <span class="pane-kicker">SSE</span>
+            <pre class="log-box">{{ sseText || '等待事件。' }}</pre>
           </div>
-          <el-input v-model="cliInput" type="textarea" :rows="2" placeholder="执行输入" />
-          <div class="row">
-            <el-button type="primary" size="small" class="cursor-btn-primary" @click="submitExecution">提交执行</el-button>
-            <el-button size="small" class="cursor-btn-ghost" @click="queryExecution">查询</el-button>
-          </div>
-          <el-input v-model="executionId" placeholder="executionId" />
-          <p class="muted">{{ detail.status || '未选择' }}</p>
-          <p v-if="detail.errorCode" class="execution-error">{{ detail.errorCode }}</p>
         </div>
-      </details>
+        <aside v-if="drawer" class="console-drawer" :data-drawer="drawer" role="dialog" :aria-label="drawerTitle">
+          <header class="drawer-head">
+            <h2>{{ drawerTitle }}</h2>
+            <button type="button" class="rail-tool" data-close @click="closeDrawer">关闭</button>
+          </header>
+          <div class="drawer-body">
+            <template v-if="drawer === 'retrieval'">
+              <p v-if="retrievalRows.length === 0" class="muted empty-line">还没有溯源。</p>
+              <article v-for="(row, index) in retrievalRows" :key="index" class="trace-card">
+                <p>{{ row.sourceScope }} {{ row.uri }}</p>
+                <p class="muted mono-num">{{ row.docId }} {{ row.chunkId }} {{ row.contentHash }}</p>
+                <p class="muted">fusion <span class="mono-num">{{ row.fusionScore }}</span> rerank <span class="mono-num">{{ row.rerankScore }}</span></p>
+              </article>
+            </template>
+            <template v-else-if="drawer === 'evaluation'">
+              <p v-if="!(detail.evaluations || []).length" class="muted empty-line">还没有评估。</p>
+              <div class="tags">
+                <el-tag v-for="item in detail.evaluations || []" :key="item">{{ item }}</el-tag>
+              </div>
+            </template>
+            <div v-else-if="drawer === 'passes'" class="pass-list">
+              <p v-if="!(detail.passes || []).length" class="muted empty-line">还没有通行证。</p>
+              <article v-for="row in detail.passes || []" :key="row.passId" class="pass-card">
+                <div class="pass-card-head">
+                  <strong>{{ row.name }}</strong>
+                  <span>{{ row.kind }}</span>
+                  <span class="mono-num">{{ row.decision }}</span>
+                </div>
+                <p class="muted">{{ row.reason }}</p>
+                <div class="pass-actions">
+                  <el-button size="small" type="primary" class="cursor-btn-primary" @click="decide(row, 'ALLOW')">ALLOW</el-button>
+                  <el-button size="small" type="danger" class="cursor-btn-danger" @click="decide(row, 'DENY')">DENY</el-button>
+                </div>
+              </article>
+            </div>
+            <template v-else>
+              <div class="row">
+                <el-select v-model="workflowId" class="grow" placeholder="workflow">
+                  <el-option v-for="item in workflows" :key="item.id" :label="item.id" :value="item.id" />
+                </el-select>
+                <el-button size="small" class="cursor-btn-ghost" @click="loadWorkflows">刷新列表</el-button>
+              </div>
+              <el-input v-model="cliInput" type="textarea" :rows="2" placeholder="执行输入" />
+              <div class="row">
+                <el-button type="primary" size="small" class="cursor-btn-primary" @click="submitExecution">提交执行</el-button>
+                <el-button size="small" class="cursor-btn-ghost" @click="queryExecution">查询</el-button>
+              </div>
+              <el-input v-model="executionId" placeholder="executionId" />
+              <p class="muted mono-num">{{ detail.status || '未选择' }}</p>
+              <p v-if="detail.errorCode" class="execution-error">{{ detail.errorCode }}</p>
+            </template>
+          </div>
+        </aside>
+      </div>
     </aside>
   </div>
 </template>
@@ -213,7 +242,18 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '../api'
 
-const langGraphTypes = ['system', 'human', 'ai', 'tool']
+const railTabs = [
+  { id: 'trace', label: 'Trace' },
+  { id: 'tools', label: '工具' },
+  { id: 'context', label: '上下文' },
+  { id: 'logs', label: '日志' }
+]
+const railDrawers = [
+  { id: 'retrieval', label: '溯源' },
+  { id: 'evaluation', label: '评估' },
+  { id: 'passes', label: '通行证' },
+  { id: 'cli', label: 'CLI' }
+]
 const router = useRouter()
 const route = useRoute()
 const loginName = ref('')
@@ -242,6 +282,8 @@ const workspaceReady = ref(false)
 const sessionWidth = ref(260)
 const railWidth = ref(320)
 const resizing = ref('')
+const railTab = ref('trace')
+const drawer = ref('')
 const foldTimers = []
 let source = null
 let poll = 0
@@ -264,6 +306,10 @@ const filteredSkills = computed(() => {
     const description = String(skill.description || '').toLowerCase()
     return name.includes(query) || description.includes(query)
   })
+})
+const drawerTitle = computed(() => {
+  const found = railDrawers.find((item) => item.id === drawer.value)
+  return found ? found.label : ''
 })
 const retrievalRows = computed(() => {
   const rows = []
@@ -304,6 +350,18 @@ onBeforeUnmount(() => {
     window.clearTimeout(timer)
   }
 })
+
+function selectRailTab(id) {
+  railTab.value = id
+}
+
+function toggleDrawer(name) {
+  drawer.value = drawer.value === name ? '' : name
+}
+
+function closeDrawer() {
+  drawer.value = ''
+}
 
 function foldDetails(event) {
   const details = event.currentTarget && event.currentTarget.parentElement
