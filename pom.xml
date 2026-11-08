@@ -13,6 +13,7 @@
     <module>jasagent-api</module>
     <module>jasagent-auth</module>
     <module>jasagent-llm</module>
+    <module>jasagent-evaluation</module>
   </modules>
 
   <properties>
