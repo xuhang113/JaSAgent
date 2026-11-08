@@ -16,5 +16,9 @@
       <groupId>dev.jasagent</groupId>
       <artifactId>jasagent-api</artifactId>
     </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-open-ai</artifactId>
+    </dependency>
   </dependencies>
 </project>

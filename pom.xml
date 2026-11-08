@@ -37,6 +37,7 @@
     <junit.version>5.11.4</junit.version>
     <spring-boot.version>3.4.5</spring-boot.version>
     <langgraph4j.version>1.9.9</langgraph4j.version>
+    <langchain4j.version>1.23.0</langchain4j.version>
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -79,6 +80,11 @@
         <groupId>org.bsc.langgraph4j</groupId>
         <artifactId>langgraph4j-opentelemetry</artifactId>
         <version>${langgraph4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-open-ai</artifactId>
+        <version>${langchain4j.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
