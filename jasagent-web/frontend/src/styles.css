@@ -495,11 +495,190 @@ h3 {
   font-weight: 600;
 }
 
+.console-layout {
+  transition: grid-template-columns 0.2s ease;
+}
+
+.console-layout.is-resizing {
+  transition: none;
+  cursor: col-resize;
+  user-select: none;
+}
+
+.console-layout.is-resizing * {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.split-handle {
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.split-handle.is-active {
+  background: #c8c8c3;
+}
+
+.session-row {
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.session-row:hover:not(.active) {
+  background-color: #f2f4f7;
+}
+
+.session-switch {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+
+.session-switch:hover {
+  transform: translateY(-1px);
+}
+
+.session-switch:active {
+  transform: translateY(0);
+}
+
+.agent-row {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+
+.agent-row:hover {
+  transform: translateY(-1px);
+}
+
+.agent-row:active {
+  transform: translateY(0);
+}
+
+.skill-pop button {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+
+.skill-pop button:hover {
+  transform: translateY(-1px);
+}
+
+.skill-pop button:active {
+  transform: translateY(0);
+}
+
+.console-layout .el-button {
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.rail-summary {
+  display: block;
+  list-style: none;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.rail-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rail-summary::marker {
+  content: none;
+}
+
+.rail-summary:hover {
+  background-color: #f2f4f7;
+}
+
+.turn-trace summary {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.turn-trace summary:hover {
+  background-color: #f2f4f7;
+}
+
+.turn-trace,
+.rail-block {
+  interpolate-size: allow-keywords;
+}
+
+.turn-trace::details-content {
+  height: 0;
+  overflow: clip;
+  opacity: 0;
+  content-visibility: visible;
+  interpolate-size: allow-keywords;
+  transition: height 0.2s ease, opacity 0.2s ease;
+}
+
+.turn-trace[open]::details-content {
+  height: auto;
+  opacity: 1;
+}
+
+.rail-block::details-content {
+  height: 0;
+  overflow: clip;
+  opacity: 0;
+  content-visibility: visible;
+  interpolate-size: allow-keywords;
+  transition: height 0.2s ease, opacity 0.2s ease;
+}
+
+.rail-block[open]::details-content {
+  height: auto;
+  opacity: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.turn-trace.is-closing::details-content,
+.rail-block.is-closing::details-content {
+  height: 0;
+  opacity: 0;
+}
+
+.turn {
+  animation: jas-msg-in 0.15s ease;
+}
+
+.lg-timeline {
+  animation: jas-msg-in 0.15s ease;
+}
+
+@keyframes jas-msg-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .console-layout,
+  .split-handle,
+  .session-row,
+  .session-switch,
+  .agent-row,
+  .skill-pop button,
+  .console-layout .el-button,
+  .rail-summary,
+  .turn-trace summary,
+  .turn,
+  .lg-timeline,
+  .turn-trace::details-content,
+  .turn-trace[open]::details-content,
+  .rail-block::details-content,
+  .rail-block[open]::details-content {
+    transition: none;
+    animation: none;
+  }
+}
+
 /* llgraph-buttons */
 .console-layout .el-button {
   height: auto;
   min-height: 0;
-  border-radius: 8px;
   font-family: inherit;
   line-height: 1.2;
 }
@@ -508,6 +687,10 @@ h3 {
   height: auto;
   border-radius: 8px;
   font-size: 12px;
+}
+
+.console-layout button.el-button {
+  border-radius: 8px;
 }
 
 .console-layout .el-button + .el-button {

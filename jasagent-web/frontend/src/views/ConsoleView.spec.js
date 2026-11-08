@@ -37,6 +37,15 @@ function rule(source, selector) {
   return matched[1]
 }
 
+function blocks(source, selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return [...source.matchAll(new RegExp(escaped + '\\s*\\{([^}]*)\\}', 'g'))].map((match) => match[1])
+}
+
+function declaresVisualChrome(body) {
+  return /(?:^|;)(?:color|background(?:-color)?|font-size|border-radius|padding|margin|gap)\s*:/.test(body)
+}
+
 function resetState() {
   state.sessions = [{ sessionId: 's1', title: '检查会话' }]
   state.session = {
@@ -396,6 +405,97 @@ describe('会话页按钮对齐 llgraph', () => {
       method: 'POST',
       body: {}
     })
+    wrapper.unmount()
+  })
+})
+
+describe('会话页交互动效', () => {
+  it('悬停 0.15s，按压 0.1s，不改按钮颜色字号圆角和间距', () => {
+    const row = blocks(css, '.session-row').join('\n')
+    expect(row).toMatch(/background-color 0\.15s ease/)
+    expect(row).toMatch(/border-color 0\.15s ease/)
+    expect(blocks(css, '.session-row:hover:not(.active)').join('\n')).toMatch(/background-color:\s*#f2f4f7/)
+    expect(blocks(css, '.split-handle').join('\n')).toMatch(/background-color 0\.15s ease/)
+    expect(blocks(css, '.split-handle.is-active').join('\n')).toMatch(/background:\s*#c8c8c3/)
+
+    for (const selector of ['.session-switch', '.agent-row', '.skill-pop button']) {
+      const body = blocks(css, selector).join('\n')
+      expect(body, selector).toMatch(/0\.15s ease/)
+      expect(body, selector).toMatch(/transform 0\.1s ease/)
+      expect(blocks(css, selector + ':hover').join('\n'), selector).toMatch(/transform:\s*translateY\(-1px\)/)
+      expect(blocks(css, selector + ':active').join('\n'), selector).toMatch(/transform:\s*translateY\(0\)/)
+    }
+
+    const buttonMotion = blocks(css, '.console-layout .el-button').join('\n')
+    expect(buttonMotion).toMatch(/color 0\.15s ease/)
+    expect(buttonMotion).toMatch(/background-color 0\.15s ease/)
+    expect(buttonMotion).toMatch(/border-color 0\.15s ease/)
+    expect(buttonMotion).not.toMatch(/transform/)
+    for (const selector of [
+      '.console-layout .el-button',
+      '.console-layout .el-button:hover:not(.is-disabled):not(:disabled)',
+      '.console-layout .el-button:active:not(.is-disabled):not(:disabled)'
+    ]) {
+      expect(declaresVisualChrome(blocks(css, selector).join('\n')), selector).toBe(false)
+    }
+    expect(rule(css, '.skill-pop button:hover')).toMatch(/background:\s*#f2f4f7/)
+  })
+
+  it('列宽展开是 0.2s，拖动时立刻跟上', () => {
+    expect(blocks(css, '.console-layout').join('\n')).toMatch(/grid-template-columns 0\.2s ease/)
+    expect(blocks(css, '.console-layout.is-resizing').join('\n')).toMatch(/transition:\s*none/)
+  })
+
+  it('折叠面板和 Trace 用 0.2s 展开', () => {
+    const fold = blocks(css, '.turn-trace::details-content').join('\n')
+    expect(fold).toMatch(/height 0\.2s ease/)
+    expect(fold).toMatch(/opacity 0\.2s ease/)
+    expect(blocks(css, '.turn-trace[open]::details-content').join('\n')).toMatch(/height:\s*auto/)
+    expect(blocks(css, '.turn-trace[open]::details-content').join('\n')).toMatch(/opacity:\s*1/)
+    const rail = blocks(css, '.rail-block::details-content').join('\n')
+    expect(rail).toMatch(/height 0\.2s ease/)
+    expect(rail).toMatch(/opacity 0\.2s ease/)
+    expect(blocks(css, '.rail-block[open]::details-content').join('\n')).toMatch(/opacity:\s*1/)
+    expect(blocks(css, '.rail-summary').join('\n')).toMatch(/background-color 0\.15s ease/)
+    expect(blocks(css, '.rail-summary').join('\n')).not.toMatch(/font-size|padding|margin|border-radius/)
+  })
+
+  it('切换会话和消息进入只做 0.15s 透明度', () => {
+    const frame = css.match(/@keyframes jas-msg-in\s*\{([\s\S]*?)\n\}/)
+    expect(frame, 'jas-msg-in').toBeTruthy()
+    expect(frame[1]).toMatch(/opacity:\s*0/)
+    expect(frame[1]).toMatch(/opacity:\s*1/)
+    expect(frame[1]).not.toMatch(/transform/)
+    expect(blocks(css, '.turn').join('\n')).toMatch(/jas-msg-in 0\.15s ease/)
+    expect(blocks(css, '.lg-timeline').join('\n')).toMatch(/jas-msg-in 0\.15s ease/)
+    expect(css).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)/)
+  })
+
+  it('右栏栏目默认展开，拖动分隔时标记按压', async () => {
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    const folds = wrapper.findAll('.right-rail details.rail-block')
+    expect(folds).toHaveLength(5)
+    for (const fold of folds) {
+      expect(fold.element.hasAttribute('open')).toBe(true)
+      expect(fold.find('.rail-summary h2').exists()).toBe(true)
+    }
+    expect(wrapper.get('.turn-trace').element.tagName).toBe('DETAILS')
+    expect(wrapper.get('.turn-trace').element.hasAttribute('open')).toBe(false)
+    const passes = wrapper.get('.rail-passes')
+    await passes.get('summary').trigger('click')
+    expect(passes.classes()).toContain('is-closing')
+    expect(passes.element.hasAttribute('open')).toBe(true)
+    expect(wrapper.get('.thread').attributes('data-thread')).toBe('s1')
+
+    const handle = wrapper.get('[data-resize="session"]')
+    await handle.trigger('mousedown', { clientX: 260 })
+    expect(wrapper.get('.console-layout').classes()).toContain('is-resizing')
+    expect(handle.classes()).toContain('is-active')
+    window.dispatchEvent(new MouseEvent('mouseup'))
+    await flushPromises()
+    expect(wrapper.get('.console-layout').classes()).not.toContain('is-resizing')
+    expect(handle.classes()).not.toContain('is-active')
     wrapper.unmount()
   })
 })

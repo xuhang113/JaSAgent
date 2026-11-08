@@ -1,5 +1,5 @@
 <template>
-  <div class="console-layout" data-layout="three-column" data-panels-open="true" :style="layoutStyle">
+  <div class="console-layout" :class="{ 'is-resizing': resizing }" data-layout="three-column" data-panels-open="true" :style="layoutStyle">
     <aside class="session-column">
       <div class="sidebar-top">
         <div class="sidebar-user">
@@ -50,7 +50,7 @@
         <el-button size="small" class="cursor-btn-ghost" @click="addNote">追加纠正</el-button>
       </div>
     </aside>
-    <div class="split-handle" data-resize="session" @mousedown.prevent="startResize($event, 'session')"></div>
+    <div class="split-handle" :class="{ 'is-active': resizing === 'session' }" data-resize="session" @mousedown.prevent="startResize($event, 'session')"></div>
 
     <section class="session-main">
       <header class="chat-head">
@@ -60,7 +60,7 @@
         </div>
       </header>
       <div class="messages">
-        <div class="thread">
+        <div class="thread" :key="activeSessionId || 'none'" :data-thread="activeSessionId || 'none'">
           <p v-if="!activeSessionId" class="muted">从左侧选择会话。</p>
           <p v-else-if="messages.length === 0" class="muted">输入 / 引用当前用户可见的 skill。</p>
           <article v-for="(message, index) in messages" :key="message.executionId || index" class="turn">
@@ -69,7 +69,7 @@
               <div>{{ message.text }}</div>
             </div>
             <details v-if="turnTools(message).length" class="turn-trace">
-              <summary>▶ Trace / 执行过程</summary>
+              <summary @click="foldDetails">▶ Trace / 执行过程</summary>
               <div v-for="tool in turnTools(message)" :key="tool.tool_call_id || tool.name" class="tool-result">
                 <strong>{{ tool.name }}</strong>
                 <pre>{{ tool.content }}</pre>
@@ -103,17 +103,17 @@
         </div>
       </div>
     </section>
-    <div class="split-handle" data-resize="rail" @mousedown.prevent="startResize($event, 'rail')"></div>
+    <div class="split-handle" :class="{ 'is-active': resizing === 'rail' }" data-resize="rail" @mousedown.prevent="startResize($event, 'rail')"></div>
 
     <aside class="right-rail">
-      <section class="rail-block rail-trace">
-        <h2>Trace</h2>
+      <details class="rail-block rail-trace" open>
+        <summary class="rail-summary" @click="foldDetails"><h2>Trace</h2></summary>
         <div class="rail-body">
           <p class="lg-legend">
             <span v-for="kind in langGraphTypes" :key="kind">{{ kind }}</span>
           </p>
           <p v-if="timeline.length === 0" class="muted">还没有这次执行的消息。</p>
-          <ol class="lg-timeline" data-timeline="langgraph">
+          <ol class="lg-timeline" :key="executionId || 'none'" data-timeline="langgraph">
             <li v-for="(message, index) in timeline" :key="index" :data-type="message.type">
               <div class="lg-type">{{ message.type }}</div>
               <div v-if="message.type === 'system'" class="lg-meta">
@@ -138,9 +138,9 @@
             <el-tag v-for="item in detail.evaluations || []" :key="item">{{ item }}</el-tag>
           </div>
         </div>
-      </section>
-      <section class="rail-block rail-passes">
-        <h2>通行证</h2>
+      </details>
+      <details class="rail-block rail-passes" open>
+        <summary class="rail-summary" @click="foldDetails"><h2>通行证</h2></summary>
         <div class="rail-body pass-list">
           <p v-if="!(detail.passes || []).length" class="muted">还没有通行证</p>
           <article v-for="row in detail.passes || []" :key="row.passId" class="pass-card">
@@ -156,9 +156,9 @@
             </div>
           </article>
         </div>
-      </section>
-      <section class="rail-block rail-tools">
-        <h2>工具</h2>
+      </details>
+      <details class="rail-block rail-tools" open>
+        <summary class="rail-summary" @click="foldDetails"><h2>工具</h2></summary>
         <div class="rail-body">
           <p class="muted">可用工具</p>
           <div v-if="(detail.tools || []).length" class="tags">
@@ -171,17 +171,17 @@
           </div>
           <p v-else class="muted">这次执行还没有插件</p>
         </div>
-      </section>
-      <section class="rail-block rail-context">
-        <h2>上下文</h2>
+      </details>
+      <details class="rail-block rail-context" open>
+        <summary class="rail-summary" @click="foldDetails"><h2>上下文</h2></summary>
         <div class="rail-body">
           <p class="muted">预算 {{ context.budgetTokens || 8000 }}，压缩阈值 {{ context.compressAt ?? 0.85 }}</p>
           <p v-for="rule in context.rules || []" :key="rule.id">{{ rule.id }} {{ rule.description }}</p>
           <p v-for="skill in context.skills || []" :key="skill.name">{{ skill.name }} {{ skill.description }}</p>
         </div>
-      </section>
-      <section class="rail-block rail-logs">
-        <h2>日志</h2>
+      </details>
+      <details class="rail-block rail-logs" open>
+        <summary class="rail-summary" @click="foldDetails"><h2>日志</h2></summary>
         <div class="rail-body">
           <pre class="log-box">{{ logs || '还没有日志' }}</pre>
           <h3>SSE</h3>
@@ -202,7 +202,7 @@
           <p class="muted">{{ detail.status || '未选择' }}</p>
           <p v-if="detail.errorCode" class="execution-error">{{ detail.errorCode }}</p>
         </div>
-      </section>
+      </details>
     </aside>
   </div>
 </template>
@@ -241,6 +241,8 @@ const timelines = ref({})
 const workspaceReady = ref(false)
 const sessionWidth = ref(260)
 const railWidth = ref(320)
+const resizing = ref('')
+const foldTimers = []
 let source = null
 let poll = 0
 
@@ -298,9 +300,37 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   closeStream()
   window.clearInterval(poll)
+  for (const timer of foldTimers) {
+    window.clearTimeout(timer)
+  }
 })
 
+function foldDetails(event) {
+  const details = event.currentTarget && event.currentTarget.parentElement
+  if (!details) {
+    return
+  }
+  if (details.classList.contains('is-closing')) {
+    event.preventDefault()
+    return
+  }
+  if (!details.open) {
+    return
+  }
+  event.preventDefault()
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    details.open = false
+    return
+  }
+  details.classList.add('is-closing')
+  foldTimers.push(window.setTimeout(() => {
+    details.open = false
+    details.classList.remove('is-closing')
+  }, 200))
+}
+
 function startResize(event, key) {
+  resizing.value = key
   const startX = event.clientX
   const start = key === 'session' ? sessionWidth.value : railWidth.value
   const direction = key === 'session' ? 1 : -1
@@ -313,6 +343,7 @@ function startResize(event, key) {
     }
   }
   function up() {
+    resizing.value = ''
     window.removeEventListener('mousemove', move)
     window.removeEventListener('mouseup', up)
   }
