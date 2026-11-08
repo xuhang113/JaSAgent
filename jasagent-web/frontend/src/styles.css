@@ -277,6 +277,41 @@ h3 {
   background: #fff;
 }
 
+.drawer-launcher {
+  position: relative;
+  margin-left: auto;
+}
+
+.drawer-menu {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 4px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 8rem;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #e4e4df;
+  border-radius: 8px;
+}
+
+.drawer-menu button {
+  border: 0;
+  background: transparent;
+  color: #1b1b18;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.drawer-menu button:hover {
+  background: #f2f4f7;
+}
+
 .messages {
   flex: 1;
   min-height: 0;
@@ -374,18 +409,14 @@ h3 {
 }
 
 .rail-tab[aria-selected="true"] {
-  color: #1b1b18;
+  color: #fff;
   font-weight: 600;
-  background: #f4f4f0;
-  box-shadow: inset 0 -2px 0 #1b1b18;
+  background: #1b1b18;
 }
 
-.rail-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px 8px;
-  border-bottom: 1px solid #e4e4df;
+.rail-tab[aria-selected="true"]:hover {
+  color: #fff;
+  background: #333;
 }
 
 .rail-tool {
@@ -758,6 +789,7 @@ h3 {
   .console-layout .el-button,
   .rail-tab,
   .rail-tool,
+  .drawer-menu button,
   .console-drawer,
   .turn-trace summary,
   .turn,

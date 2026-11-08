@@ -24,7 +24,7 @@
         <el-button size="small" type="primary" class="cursor-btn-primary" @click="createSession">新建</el-button>
       </div>
       <div class="session-list">
-        <p v-if="sessions.length === 0" class="muted">还没有会话。</p>
+        <p v-if="sessions.length === 0" class="muted">无会话。</p>
         <div v-for="item in sessions" :key="item.sessionId" class="session-row" :class="{ active: item.sessionId === activeSessionId }">
           <button type="button" class="session-switch" @click="switchSession(item.sessionId)">
             <strong>{{ item.title }}</strong>
@@ -35,16 +35,16 @@
       </div>
       <div class="session-meta">
         <h3>子 agent</h3>
-        <p v-if="!activeSessionId" class="muted">选择会话后显示。</p>
-        <p v-else-if="agents.length === 0" class="muted">这条会话还没有子 agent。</p>
+        <p v-if="!activeSessionId" class="muted">未选会话。</p>
+        <p v-else-if="agents.length === 0" class="muted">无子 agent。</p>
         <button v-for="agent in agents" :key="agent.agentId + agent.executionId" type="button" class="agent-row" @click="openAgent(agent)">
           <strong>{{ agent.agentId }}</strong>
           <span>{{ agent.role }}</span>
           <small>{{ agent.status }}</small>
         </button>
         <h3>纠正 note <small>harness note</small></h3>
-        <p v-if="!activeSessionId" class="muted">选择会话后显示。</p>
-        <p v-else-if="corrections.length === 0" class="muted">这条会话还没有纠正 note。</p>
+        <p v-if="!activeSessionId" class="muted">未选会话。</p>
+        <p v-else-if="corrections.length === 0" class="muted">无纠正。</p>
         <p v-for="note in corrections" :key="note.noteId" class="note-line">{{ note.source }} {{ note.text }}</p>
         <el-input v-model="noteText" placeholder="纠正 note" />
         <el-button size="small" class="cursor-btn-ghost" @click="addNote">追加纠正</el-button>
@@ -56,11 +56,24 @@
       <header class="chat-head chrome-bar">
         <span class="eyebrow">对话</span>
         <h2>{{ activeTitle || '会话' }}</h2>
+        <div class="drawer-launcher">
+          <button type="button" class="rail-tool" data-drawer-menu aria-haspopup="menu" aria-label="抽屉" :aria-expanded="drawerMenu ? 'true' : 'false'" @click="toggleDrawerMenu">···</button>
+          <div v-if="drawerMenu" class="drawer-menu" role="menu" aria-label="抽屉">
+            <button
+              v-for="item in railDrawers"
+              :key="item.id"
+              type="button"
+              role="menuitem"
+              :data-open="item.id"
+              @click="openDrawer(item.id)"
+            >{{ item.label }}</button>
+          </div>
+        </div>
       </header>
       <div class="messages">
         <div class="thread" :key="activeSessionId || 'none'" :data-thread="activeSessionId || 'none'">
-          <p v-if="!activeSessionId" class="muted">从左侧选择会话。</p>
-          <p v-else-if="messages.length === 0" class="muted">输入 / 引用当前用户可见的 skill。</p>
+          <p v-if="!activeSessionId" class="muted">未选会话。</p>
+          <p v-else-if="messages.length === 0" class="muted">无消息。</p>
           <article v-for="(message, index) in messages" :key="message.executionId || index" class="turn">
             <div class="bubble user">
               <strong>用户</strong>
@@ -85,8 +98,8 @@
       <div class="composer-dock">
         <div class="composer-inner">
           <div v-if="slashQuery !== null" class="skill-pop">
-            <p class="muted">当前用户可见的 skill</p>
-            <p v-if="filteredSkills.length === 0" class="muted">当前没有可见的 skill</p>
+            <p class="muted">skill</p>
+            <p v-if="filteredSkills.length === 0" class="muted">无 skill。</p>
             <button v-for="skill in filteredSkills" :key="skill.name" type="button" @mousedown.prevent="insertSkill(skill)">
               /skill:{{ skill.name }}
               <small>{{ skill.description }}</small>
@@ -117,21 +130,10 @@
             @click="selectRailTab(tab.id)"
           >{{ tab.label }}</button>
         </div>
-        <div class="rail-toolbar" role="toolbar" aria-label="次要面板">
-          <button
-            v-for="item in railDrawers"
-            :key="item.id"
-            type="button"
-            class="rail-tool"
-            :data-open="item.id"
-            :aria-pressed="drawer === item.id ? 'true' : 'false'"
-            @click="toggleDrawer(item.id)"
-          >{{ item.label }}</button>
-        </div>
       </div>
       <div class="rail-stage">
         <div v-if="railTab === 'trace'" class="rail-pane" role="tabpanel" data-pane="trace">
-          <p v-if="timeline.length === 0" class="muted empty-line">还没有消息。</p>
+          <p v-if="timeline.length === 0" class="muted empty-line">无 Trace。</p>
           <ol v-else class="lg-timeline" :key="executionId || 'none'" data-timeline="langgraph">
             <li v-for="(message, index) in timeline" :key="index" :data-type="message.type">
               <div class="lg-type">{{ message.type }}</div>
@@ -147,14 +149,13 @@
         </div>
         <div v-else-if="railTab === 'tools'" class="rail-pane" role="tabpanel" data-pane="tools">
           <div class="pane-block">
-            <p v-if="!(detail.tools || []).length" class="muted empty-line">还没有工具。</p>
+            <p v-if="!(detail.tools || []).length" class="muted empty-line">无工具。</p>
             <div v-else class="tags">
               <el-tag v-for="name in detail.tools" :key="name">{{ name }}</el-tag>
             </div>
           </div>
           <div class="pane-block">
-            <span class="pane-kicker">插件</span>
-            <p v-if="!(detail.plugins || []).length" class="muted empty-line">还没有插件。</p>
+            <p v-if="!(detail.plugins || []).length" class="muted empty-line">无插件。</p>
             <div v-else class="tags">
               <el-tag v-for="name in detail.plugins" :key="name">{{ name }}</el-tag>
             </div>
@@ -167,15 +168,14 @@
             <span>阈值</span>
             <span class="mono-num">{{ context.compressAt ?? 0.85 }}</span>
           </p>
-          <p v-if="!(context.rules || []).length && !(context.skills || []).length" class="muted empty-line">还没有规则。</p>
+          <p v-if="!(context.rules || []).length && !(context.skills || []).length" class="muted empty-line">无规则。</p>
           <p v-for="rule in context.rules || []" :key="rule.id">{{ rule.id }} {{ rule.description }}</p>
           <p v-for="skill in context.skills || []" :key="skill.name">{{ skill.name }} {{ skill.description }}</p>
         </div>
         <div v-else class="rail-pane" role="tabpanel" data-pane="logs">
-          <pre class="log-box">{{ logs || '还没有日志。' }}</pre>
+          <pre class="log-box">{{ logs || '无日志。' }}</pre>
           <div class="pane-block">
-            <span class="pane-kicker">SSE</span>
-            <pre class="log-box">{{ sseText || '等待事件。' }}</pre>
+            <pre class="log-box" data-stream="sse" aria-label="SSE">{{ sseText || '无事件。' }}</pre>
           </div>
         </div>
         <aside v-if="drawer" class="console-drawer" :data-drawer="drawer" role="dialog" :aria-label="drawerTitle">
@@ -185,7 +185,7 @@
           </header>
           <div class="drawer-body">
             <template v-if="drawer === 'retrieval'">
-              <p v-if="retrievalRows.length === 0" class="muted empty-line">还没有溯源。</p>
+              <p v-if="retrievalRows.length === 0" class="muted empty-line">无溯源。</p>
               <article v-for="(row, index) in retrievalRows" :key="index" class="trace-card">
                 <p>{{ row.sourceScope }} {{ row.uri }}</p>
                 <p class="muted mono-num">{{ row.docId }} {{ row.chunkId }} {{ row.contentHash }}</p>
@@ -193,13 +193,13 @@
               </article>
             </template>
             <template v-else-if="drawer === 'evaluation'">
-              <p v-if="!(detail.evaluations || []).length" class="muted empty-line">还没有评估。</p>
+              <p v-if="!(detail.evaluations || []).length" class="muted empty-line">无评估。</p>
               <div class="tags">
                 <el-tag v-for="item in detail.evaluations || []" :key="item">{{ item }}</el-tag>
               </div>
             </template>
             <div v-else-if="drawer === 'passes'" class="pass-list">
-              <p v-if="!(detail.passes || []).length" class="muted empty-line">还没有通行证。</p>
+              <p v-if="!(detail.passes || []).length" class="muted empty-line">无通行证。</p>
               <article v-for="row in detail.passes || []" :key="row.passId" class="pass-card">
                 <div class="pass-card-head">
                   <strong>{{ row.name }}</strong>
@@ -284,6 +284,7 @@ const railWidth = ref(320)
 const resizing = ref('')
 const railTab = ref('trace')
 const drawer = ref('')
+const drawerMenu = ref(false)
 const foldTimers = []
 let source = null
 let poll = 0
@@ -353,10 +354,16 @@ onBeforeUnmount(() => {
 
 function selectRailTab(id) {
   railTab.value = id
+  drawerMenu.value = false
 }
 
-function toggleDrawer(name) {
-  drawer.value = drawer.value === name ? '' : name
+function toggleDrawerMenu() {
+  drawerMenu.value = !drawerMenu.value
+}
+
+function openDrawer(name) {
+  drawer.value = name
+  drawerMenu.value = false
 }
 
 function closeDrawer() {

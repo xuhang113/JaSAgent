@@ -171,7 +171,8 @@ async function openSession(wrapper) {
 }
 
 async function openDrawer(wrapper, name) {
-  await wrapper.get(`.rail-toolbar [data-open="${name}"]`).trigger('click')
+  await wrapper.get('[data-drawer-menu]').trigger('click')
+  await wrapper.get(`[role="menu"] [data-open="${name}"]`).trigger('click')
   await flushPromises()
 }
 
@@ -197,18 +198,21 @@ describe('会话页三列布局', () => {
     expect(wrapper.get('.sidebar-top').classes()).toContain('chrome-bar')
     expect(rail.findAll('[role="tab"]').map((tab) => tab.text())).toEqual(['Trace', '工具', '上下文', '日志'])
     expect(rail.get('[role="tab"][aria-selected="true"]').text()).toBe('Trace')
+    expect(rule(css, '.rail-tab[aria-selected="true"]')).toMatch(/background:\s*#1b1b18/)
+    expect(rule(css, '.rail-tab[aria-selected="true"]')).toMatch(/color:\s*#fff/)
     expect(rail.find('.rail-summary').exists()).toBe(false)
     expect(rail.find('details.rail-block').exists()).toBe(false)
+    expect(rail.find('.rail-toolbar').exists()).toBe(false)
+    expect(rail.find('[data-open]').exists()).toBe(false)
     expect(rail.find('h2').exists()).toBe(false)
     expect(rail.find('.console-drawer').exists()).toBe(false)
-    const toolbar = rail.get('.rail-toolbar')
-    for (const label of ['溯源', '评估', '通行证', 'CLI']) {
-      expect(toolbar.text()).toContain(label)
+    for (const label of ['溯源', '评估', '通行证', 'CLI', 'SSE']) {
+      expect(rail.text()).not.toContain(label)
     }
     wrapper.unmount()
   })
 
-  it('右栏 tab 一次只显示一栏，抽屉从工具条打开', async () => {
+  it('右栏 tab 一次只显示一栏，抽屉从菜单打开', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
     const rail = wrapper.get('.right-rail')
@@ -222,8 +226,9 @@ describe('会话页三列布局', () => {
     expect(rail.find('[data-pane="trace"]').exists()).toBe(false)
     const tools = rail.get('[data-pane="tools"]')
     expect(tools.text()).toContain('clock')
-    expect(tools.text()).toContain('插件')
+    expect(tools.text()).toContain('grounding.default')
     expect(tools.text()).not.toContain('提交执行')
+    expect(tools.find('.pane-kicker').exists()).toBe(false)
     expect(tools.find('h2').exists()).toBe(false)
 
     await rail.get('[data-tab="context"]').trigger('click')
@@ -233,21 +238,24 @@ describe('会话页三列布局', () => {
 
     await rail.get('[data-tab="logs"]').trigger('click')
     const logs = rail.get('[data-pane="logs"]')
-    expect(logs.text()).toContain('SSE')
+    expect(logs.text()).not.toContain('SSE')
+    expect(logs.get('[data-stream="sse"]').attributes('aria-label')).toBe('SSE')
     expect(logs.text()).toContain('pass rag.search PENDING')
     expect(logs.text()).not.toContain('CLI')
     expect(logs.text()).not.toContain('提交执行')
+    expect(logs.find('.pane-kicker').exists()).toBe(false)
 
     await openDrawer(wrapper, 'retrieval')
-    expect(rail.get('[data-open="retrieval"]').attributes('aria-pressed')).toBe('true')
-    expect(rail.get('.console-drawer[data-drawer="retrieval"]').text()).toContain('还没有溯源')
+    expect(wrapper.get('.console-drawer[data-drawer="retrieval"]').text()).toContain('无溯源')
     await openDrawer(wrapper, 'evaluation')
-    expect(rail.get('.console-drawer[data-drawer="evaluation"]').text()).toContain('还没有评估')
-    expect(rail.find('.console-drawer[data-drawer="retrieval"]').exists()).toBe(false)
+    expect(wrapper.get('.console-drawer[data-drawer="evaluation"]').text()).toContain('无评估')
+    expect(wrapper.find('.console-drawer[data-drawer="retrieval"]').exists()).toBe(false)
     await openDrawer(wrapper, 'cli')
-    expect(rail.get('.console-drawer[data-drawer="cli"]').text()).toContain('提交执行')
-    await rail.get('.console-drawer [data-close]').trigger('click')
-    expect(rail.find('.console-drawer').exists()).toBe(false)
+    expect(wrapper.get('.console-drawer[data-drawer="cli"]').text()).toContain('提交执行')
+    expect(wrapper.get('.right-rail').text()).toContain('CLI')
+    await wrapper.get('.console-drawer [data-close]').trigger('click')
+    expect(wrapper.find('.console-drawer').exists()).toBe(false)
+    expect(wrapper.get('.right-rail').text()).not.toContain('CLI')
     wrapper.unmount()
   })
 
@@ -265,12 +273,18 @@ describe('会话页三列布局', () => {
     }
     const wrapper = await mountConsole()
     await openSession(wrapper)
-    expect(wrapper.get('[data-pane="trace"] .empty-line').text()).toBe('还没有消息。')
+    expect(wrapper.get('[data-pane="trace"] .empty-line').text()).toBe('无 Trace。')
     await wrapper.get('[data-tab="tools"]').trigger('click')
-    expect(wrapper.get('[data-pane="tools"] .empty-line').text()).toBe('还没有工具。')
+    expect(wrapper.findAll('[data-pane="tools"] .empty-line').map((node) => node.text())).toEqual(['无工具。', '无插件。'])
     await openDrawer(wrapper, 'passes')
-    expect(wrapper.get('.console-drawer .empty-line').text()).toBe('还没有通行证。')
+    expect(wrapper.get('.console-drawer .empty-line').text()).toBe('无通行证。')
+    expect(wrapper.text()).not.toMatch(/还没有/)
     wrapper.unmount()
+  })
+
+  it('页面空状态不写还没有', () => {
+    const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), './ConsoleView.vue'), 'utf8')
+    expect(source).not.toMatch(/还没有/)
   })
 
   it('输入框排在消息区之后，并钉在中间列', async () => {
@@ -553,8 +567,9 @@ describe('会话页交互动效', () => {
     expect(bar).toMatch(/height:\s*36px/)
     expect(bar).toMatch(/border-bottom:\s*1px solid #e4e4df/)
     const selected = rule(css, '.rail-tab[aria-selected="true"]')
-    expect(selected).toMatch(/#1b1b18/)
-    expect(selected).toMatch(/inset 0 -2px 0 #1b1b18/)
+    expect(selected).toMatch(/background:\s*#1b1b18/)
+    expect(selected).toMatch(/color:\s*#fff/)
+    expect(selected).not.toMatch(/inset 0 -2px/)
     const mono = rule(css, '.mono-num')
     expect(mono).toMatch(/monospace/)
     expect(mono).toMatch(/tabular-nums/)

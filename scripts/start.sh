@@ -27,8 +27,26 @@ chmod 600 "$JASAGENT_ADDRESS_FILE"
 chmod 600 "$JASAGENT_LOG_FILE"
 
 jasagent_load_model_env
-nohup "$JASAGENT_JAVA" -jar "$JASAGENT_JAR" server --server.address="$host" --server.port="$port" >>"$JASAGENT_LOG_FILE" 2>&1 &
-pid="$!"
+# nohup 之后再 setsid，避免服务留在调用方的进程组里，脚本一退就被一起停掉。
+pid="$(nohup python3 - "$JASAGENT_JAVA" "$JASAGENT_JAR" "$host" "$port" "$JASAGENT_LOG_FILE" <<'PY'
+import os
+import sys
+
+java, jar, host, port, log = sys.argv[1:]
+child = os.fork()
+if child > 0:
+    print(child)
+    raise SystemExit(0)
+os.setsid()
+fd = os.open(log, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+os.dup2(fd, 1)
+os.dup2(fd, 2)
+if fd > 2:
+    os.close(fd)
+os.execv(java, [java, "-jar", jar, "server", "--server.address=" + host, "--server.port=" + port])
+PY
+)"
+pid="$(printf '%s' "$pid" | tr -d '[:space:]')"
 printf '%s\n' "$pid" > "$JASAGENT_PID_FILE"
 chmod 600 "$JASAGENT_PID_FILE"
 

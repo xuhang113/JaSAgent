@@ -178,8 +178,33 @@ jasagent_sources_newer_than() {
     if [[ -n "$path" ]]; then
       return 0
     fi
-  done < <(find "$JASAGENT_ROOT/pom.xml" "$JASAGENT_ROOT"/jasagent-*/pom.xml "$JASAGENT_ROOT"/jasagent-*/src/main -type f -newer "$jar" 2>/dev/null || true)
+  done < <(find \
+    "$JASAGENT_ROOT/pom.xml" \
+    "$JASAGENT_ROOT"/jasagent-*/pom.xml \
+    "$JASAGENT_ROOT"/jasagent-*/src/main \
+    "$JASAGENT_ROOT/jasagent-web/frontend/src" \
+    "$JASAGENT_ROOT/jasagent-web/frontend/index.html" \
+    "$JASAGENT_ROOT/jasagent-web/frontend/package.json" \
+    "$JASAGENT_ROOT/jasagent-web/frontend/package-lock.json" \
+    "$JASAGENT_ROOT/jasagent-web/frontend/vite.config.js" \
+    "$JASAGENT_ROOT/jasagent-web/frontend/build.sh" \
+    -type f -newer "$jar" 2>/dev/null || true)
   return 1
+}
+
+jasagent_repo_server_pids() {
+  local line pid cmd
+  while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -n "$line" ]] || continue
+    pid="${line%% *}"
+    cmd="${line#"$pid"}"
+    cmd="${cmd#"${cmd%%[![:space:]]*}"}"
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue
+    if [[ "$cmd" == *"$JASAGENT_ROOT"/jasagent-app/target/jasagent-app-*.jar* ]]; then
+      printf '%s\n' "$pid"
+    fi
+  done < <(ps -axww -o pid=,command= 2>/dev/null || true)
 }
 
 jasagent_find_jar() {
