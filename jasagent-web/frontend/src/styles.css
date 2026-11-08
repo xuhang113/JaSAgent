@@ -494,3 +494,227 @@ h3 {
   color: #c45656;
   font-weight: 600;
 }
+
+/* llgraph-buttons */
+.console-layout .el-button {
+  height: auto;
+  min-height: 0;
+  border-radius: 8px;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.console-layout .el-button--small {
+  height: auto;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.console-layout .el-button + .el-button {
+  margin-left: 0;
+}
+
+.console-layout .row {
+  gap: 6px;
+}
+
+.console-layout .pass-actions {
+  gap: 6px;
+}
+
+.console-layout .el-button.cursor-btn-ghost {
+  background: transparent;
+  border: 1px solid #c8c8c3;
+  color: #1b1b18;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 400;
+  --el-button-bg-color: transparent;
+  --el-button-text-color: #1b1b18;
+  --el-button-border-color: #c8c8c3;
+  --el-button-hover-text-color: #1b1b18;
+  --el-button-hover-bg-color: #e3e3de;
+  --el-button-hover-border-color: #c8c8c3;
+  --el-button-active-text-color: #1b1b18;
+  --el-button-active-bg-color: #e3e3de;
+  --el-button-active-border-color: #c8c8c3;
+}
+
+.console-layout .el-button.cursor-btn-ghost:hover {
+  background: #e3e3de;
+  color: #1b1b18;
+  border-color: #c8c8c3;
+}
+
+.console-layout .el-button.cursor-btn-primary {
+  background: #1b1b18;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  --el-button-bg-color: #1b1b18;
+  --el-button-text-color: #fff;
+  --el-button-border-color: transparent;
+  --el-button-hover-text-color: #fff;
+  --el-button-hover-bg-color: #333;
+  --el-button-hover-border-color: transparent;
+  --el-button-active-text-color: #fff;
+  --el-button-active-bg-color: #333;
+  --el-button-active-border-color: transparent;
+}
+
+.console-layout .el-button.cursor-btn-primary:hover {
+  background: #333;
+  color: #fff;
+}
+
+.console-layout .el-button.cursor-btn-danger {
+  background: #b42318;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  --el-button-bg-color: #b42318;
+  --el-button-text-color: #fff;
+  --el-button-border-color: transparent;
+  --el-button-hover-text-color: #fff;
+  --el-button-hover-bg-color: #912018;
+  --el-button-hover-border-color: transparent;
+  --el-button-active-text-color: #fff;
+  --el-button-active-bg-color: #912018;
+  --el-button-active-border-color: transparent;
+}
+
+.console-layout .el-button.cursor-btn-danger:hover {
+  background: #912018;
+  color: #fff;
+}
+
+.console-layout .el-button.cursor-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.console-layout .el-button.cursor-btn-danger.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.console-layout .el-button.cursor-composer-stop {
+  min-width: 52px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #d4a5a5;
+  background: #fff5f5;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 500;
+  --el-button-bg-color: #fff5f5;
+  --el-button-text-color: #b42318;
+  --el-button-border-color: #d4a5a5;
+  --el-button-hover-text-color: #b42318;
+  --el-button-hover-bg-color: #ffe8e8;
+  --el-button-hover-border-color: #d4a5a5;
+  --el-button-active-text-color: #b42318;
+  --el-button-active-bg-color: #ffe8e8;
+  --el-button-active-border-color: #d4a5a5;
+}
+
+.console-layout .el-button.cursor-composer-stop:hover {
+  background: #ffe8e8;
+  color: #b42318;
+  border-color: #d4a5a5;
+}
+
+.console-layout .el-button.cursor-session-delete {
+  height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #8a8a84;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  --el-button-bg-color: transparent;
+  --el-button-text-color: #8a8a84;
+  --el-button-border-color: transparent;
+  --el-button-hover-text-color: #b42318;
+  --el-button-hover-bg-color: #e8d4d4;
+  --el-button-hover-border-color: transparent;
+  --el-button-active-text-color: #b42318;
+  --el-button-active-bg-color: #e8d4d4;
+  --el-button-active-border-color: transparent;
+}
+
+.console-layout .el-button.cursor-session-delete:hover {
+  background: #e8d4d4;
+  color: #b42318;
+}
+
+.console-layout .session-row {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  gap: 2px;
+  padding: 0;
+  margin-bottom: 2px;
+}
+
+.console-layout .session-row:hover {
+  background: #e3e3de;
+}
+
+.console-layout .session-row.active {
+  border-color: transparent;
+  background: #dcdcd7;
+}
+
+.console-layout .session-switch {
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #1b1b18;
+  border-radius: 0;
+}
+
+.console-layout .session-row.active .session-switch {
+  font-weight: 500;
+}
+
+.console-layout .session-switch small {
+  color: #8a8a84;
+  font-size: 10px;
+}
+
+.console-layout .agent-row {
+  border: 1px solid #c8c8c3;
+  background: transparent;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #1b1b18;
+  gap: 6px;
+}
+
+.console-layout .agent-row:hover {
+  background: #e3e3de;
+}
+
+.console-layout .skill-pop button {
+  padding: 8px 12px;
+  font-size: 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #1b1b18;
+}
+
+.console-layout .skill-pop button:hover {
+  background: #f0f0ec;
+}
