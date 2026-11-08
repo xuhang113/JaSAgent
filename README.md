@@ -72,7 +72,7 @@ embed 不走 DeepSeek。Gateway 提供 embeddings 时用 Gateway，否则用本�
 
 ## 通行证
 
-外部工具和插件执行前调用 `PassGate.acquire`。本版的 `DisabledPassGate` 只返回 `SKIPPED`，原因是 `agentpass-not-enabled`。`DENY` 不执行，`ALLOW` 和 `SKIPPED` 才执行。内置 `clock` 是内部工具，不申请通行证。本版不写权限策略、审批和管理页面。
+外部工具和插件执行前调用 `PassGate.acquire`。本版的 `DisabledPassGate` 只返回 `SKIPPED`，原因是 `agentpass-not-enabled`。`DENY` 不执行，`ALLOW` 和 `SKIPPED` 才执行。内置 `clock` 是内部工具，不申请通行证。控制台可以对当前用户这次执行里的通行证提交 `ALLOW` 或 `DENY`。不做单独的策略管理站，也不做跨用户审批。
 
 ## 中止和恢复
 
@@ -106,10 +106,17 @@ java -jar jasagent-app/target/jasagent-app-0.1.0.jar logout
 
 ## 页面
 
-- `/login` 登录
-- `/` 只看当前用户的执行，也可以选定工作区并检索
-- `/run` 提交工作流
-- `/executions/{id}` 看队列、节点日志、检索溯源、通行证、评估，并可以中止和恢复。详情页用 SSE 刷新
+页面在 `jasagent-web/frontend`，用 Vue 3、Vite 和 Element Plus。Spring 只托管构建结果和 REST，不使用 Spring AI。
+
+```bash
+cd jasagent-web/frontend
+npm install
+npm run build
+```
+
+构建写入 `jasagent-web/src/main/resources/static`。启动服务后打开 `http://127.0.0.1:8090/login`。本地改页面时可以另开 `npm run dev`，它把 `/api`、`/login`、`/logout` 代理到 `127.0.0.1:8090`。
+
+登录后是管理控制台，同一屏放着 CLI 面板和对话区。可以选定工作区，提交、查询、中止、恢复执行，看日志和 SSE。对话输入 `/` 会列出当前用户可见的 skill，选中后插入 `/skill:名称`。上下文是按钮，点开后面板。会话按当前登录用户新建、删除和切换。详情里能看到这次执行包含的插件和工具、检索溯源、评估，以及对通行证提交 `ALLOW` 或 `DENY`。用户看不到另一用户的会话和执行。
 
 ## 配置和密钥
 

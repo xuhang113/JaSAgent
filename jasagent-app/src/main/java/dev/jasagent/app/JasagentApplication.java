@@ -1,6 +1,5 @@
 package dev.jasagent.app;
 
-import dev.jasagent.api.exec.ExecutionApi;
 import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.cli.CliCommands;
 import dev.jasagent.controller.WorkspaceList;
@@ -32,7 +31,7 @@ public class JasagentApplication {
     }
 
     @Bean
-    ExecutionApi executionApi(LocalAuthService localAuthService) {
+    LocalRuntime localRuntime(LocalAuthService localAuthService) {
         return new LocalRuntime(localAuthService);
     }
 

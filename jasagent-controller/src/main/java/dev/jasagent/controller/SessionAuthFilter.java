@@ -26,7 +26,8 @@ public class SessionAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String path = request.getRequestURI();
-        if ("/health".equals(path) || "/login".equals(path) || path.startsWith("/css/") || path.startsWith("/js/")) {
+        if ("/health".equals(path) || "/login".equals(path) || "/index.html".equals(path)
+                || path.startsWith("/assets/") || path.startsWith("/css/") || path.startsWith("/js/")) {
             chain.doFilter(request, response);
             return;
         }

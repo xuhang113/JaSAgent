@@ -5,7 +5,7 @@ ROOT="$(cd "$HERE/../../.." && pwd)"
 mkdir -p "$HERE/../results" "$HERE/../logs"
 cd "$ROOT"
 set +e
-mvn -pl jasagent-app,jasagent-cli -am test -Dsurefire.failIfNoSpecifiedTests=false -Dtest=WebFlowTest,CliCommandTest > "$HERE/../logs/012-cli-web.log" 2>&1
+mvn -pl jasagent-app,jasagent-cli -am test -Dsurefire.failIfNoSpecifiedTests=false -Dtest=WebFlowTest,CliCommandTest,ConsolePageTest > "$HERE/../logs/012-cli-web.log" 2>&1
 code=$?
 set -e
 if [[ $code -eq 0 ]]; then

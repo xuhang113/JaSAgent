@@ -2,6 +2,7 @@ package dev.jasagent.controller;
 
 import dev.jasagent.api.auth.AuthService;
 import dev.jasagent.api.auth.Session;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -30,5 +31,21 @@ public class LoginController {
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         return ResponseEntity.ok(Map.of("login", session.login()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        Session current = (Session) request.getAttribute("jasagent.session");
+        if (current != null) {
+            auth.logout(current.token()).toCompletableFuture().join();
+        }
+        ResponseCookie cookie = ResponseCookie.from("JASAGENT_SESSION", "")
+                .httpOnly(true)
+                .path("/")
+                .maxAge(0)
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        return ResponseEntity.noContent().build();
     }
 }
