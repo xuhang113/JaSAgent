@@ -11,21 +11,67 @@ import dev.jasagent.api.llm.LlmTask;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 public final class ContextWindow {
     public static final int DEFAULT_BUDGET_TOKENS = 8000;
+    public static final double DEFAULT_COMPRESS_AT = 0.85;
+    public static final String COMPRESS_AT = "jasagent.context.compress-at";
     private static final int RECENT_TURNS = 4;
     private static final String COLLAPSED_TOOL = "tool: [collapsed]";
 
     private final ChatModel model;
+    private final double compressAt;
+    private final Object publishLock = new Object();
+    private ContextPrepared published;
+    private boolean compressing;
 
     public ContextWindow(ChatModel model) {
+        this(model, DEFAULT_COMPRESS_AT);
+    }
+
+    public ContextWindow(ChatModel model, double compressAt) {
         if (model == null) {
             throw new AgentException(ErrorCode.INTERNAL, "ChatModel");
         }
+        if (Double.isNaN(compressAt) || compressAt <= 0.0 || compressAt > 1.0) {
+            throw new AgentException(ErrorCode.INTERNAL, COMPRESS_AT);
+        }
         this.model = model;
+        this.compressAt = compressAt;
+    }
+
+    public static double compressAt(Map<String, String> configuration) {
+        if (configuration == null || !configuration.containsKey(COMPRESS_AT)) {
+            return DEFAULT_COMPRESS_AT;
+        }
+        String raw = configuration.get(COMPRESS_AT);
+        if (raw == null || raw.isBlank()) {
+            throw new AgentException(ErrorCode.INTERNAL, COMPRESS_AT);
+        }
+        try {
+            double parsed = Double.parseDouble(raw.trim());
+            if (Double.isNaN(parsed) || parsed <= 0.0 || parsed > 1.0) {
+                throw new AgentException(ErrorCode.INTERNAL, COMPRESS_AT);
+            }
+            return parsed;
+        } catch (NumberFormatException ex) {
+            throw new AgentException(ErrorCode.INTERNAL, COMPRESS_AT, null, ex);
+        }
+    }
+
+    public ContextPrepared published() {
+        synchronized (publishLock) {
+            return published;
+        }
+    }
+
+    public boolean compressing() {
+        synchronized (publishLock) {
+            return compressing;
+        }
     }
 
     public CompletionStage<ContextPrepared> prepare(ContextInput input) {
@@ -37,8 +83,11 @@ public final class ContextWindow {
         }
         List<ChatMessage> turns = new ArrayList<>(input.turns());
         List<SkillText> skills = new ArrayList<>(input.skills());
-        if (estimate(render(input, turns, skills, "")) <= input.budgetTokens()) {
-            return CompletableFuture.completedFuture(new ContextPrepared(render(input, turns, skills, ""), ""));
+        int estimated = estimate(render(input, turns, skills, ""));
+        if (!reached(estimated, input.budgetTokens())) {
+            ContextPrepared ready = new ContextPrepared(render(input, turns, skills, ""), "");
+            publish(ready);
+            return CompletableFuture.completedFuture(ready);
         }
         int keep = Math.min(RECENT_TURNS, turns.size());
         List<ChatMessage> older = new ArrayList<>();
@@ -53,20 +102,55 @@ public final class ContextWindow {
         }
         List<ChatMessage> recent = new ArrayList<>(turns.subList(turns.size() - keep, turns.size()));
         if (older.isEmpty()) {
-            return CompletableFuture.completedFuture(reduce(input, keptTools, recent, skills, "", input.budgetTokens()));
+            ContextPrepared reduced = reduce(input, keptTools, recent, skills, "", input.budgetTokens());
+            publish(reduced);
+            return CompletableFuture.completedFuture(reduced);
         }
         ChatRequest request = new ChatRequest(LlmTask.COMPRESS, List.copyOf(older), List.of(), null, input.executionId());
+        markCompressing();
         CompletionStage<ChatResponse> stage = model.complete(request);
         if (stage == null) {
+            clearCompressing();
             return CompletableFuture.failedFuture(new AgentException(ErrorCode.INTERNAL, "compress", input.executionId(), null));
         }
-        return stage.thenApply(response -> reduce(
-                input,
-                keptTools,
-                recent,
-                new ArrayList<>(input.skills()),
-                summaryText(response),
-                input.budgetTokens()));
+        return stage.thenApply(response -> {
+            ContextPrepared done = reduce(
+                    input,
+                    keptTools,
+                    recent,
+                    new ArrayList<>(input.skills()),
+                    summaryText(response),
+                    input.budgetTokens());
+            publish(done);
+            return done;
+        }).whenComplete((done, error) -> {
+            if (error != null) {
+                clearCompressing();
+            }
+        });
+    }
+
+    private boolean reached(int estimated, int budget) {
+        return estimated >= budget * compressAt;
+    }
+
+    private void publish(ContextPrepared prepared) {
+        synchronized (publishLock) {
+            published = prepared;
+            compressing = false;
+        }
+    }
+
+    private void markCompressing() {
+        synchronized (publishLock) {
+            compressing = true;
+        }
+    }
+
+    private void clearCompressing() {
+        synchronized (publishLock) {
+            compressing = false;
+        }
     }
 
     private static ContextPrepared reduce(

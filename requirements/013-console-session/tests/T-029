@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-029 jasagent-app ConsoleSessionPageTest consoleDropsAlwaysOnExecution '控制台脚本不含「当前执行」。'

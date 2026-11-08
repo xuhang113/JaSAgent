@@ -4,6 +4,7 @@ import dev.jasagent.agentpass.PassSettings;
 import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.cli.CliCommands;
 import dev.jasagent.controller.WorkspaceList;
+import dev.jasagent.core.ContextWindow;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -44,8 +45,11 @@ public class JasagentApplication {
 
     @Bean
     LocalRuntime localRuntime(LocalAuthService localAuthService,
-                              @Value("${jasagent.agentpass.enabled:true}") String agentpassEnabled) {
-        return new LocalRuntime(localAuthService, Map.of(PassSettings.ENABLED, agentpassEnabled));
+                              @Value("${jasagent.agentpass.enabled:true}") String agentpassEnabled,
+                              @Value("${jasagent.context.compress-at:0.85}") String compressAt) {
+        return new LocalRuntime(localAuthService, Map.of(
+                PassSettings.ENABLED, agentpassEnabled,
+                ContextWindow.COMPRESS_AT, compressAt));
     }
 
     @Bean

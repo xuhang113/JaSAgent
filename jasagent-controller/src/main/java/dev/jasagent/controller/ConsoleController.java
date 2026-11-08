@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.file.Path;
@@ -84,6 +85,14 @@ public class ConsoleController {
     public Map<String, Object> context(@PathVariable("id") String id, HttpServletRequest request) {
         Session session = session(request);
         return console.context(session.login(), session.token(), id);
+    }
+
+    @GetMapping("/api/sessions/{id}/timeline")
+    public Map<String, Object> timeline(
+            @PathVariable("id") String id,
+            @RequestParam(value = "executionId", required = false) String executionId,
+            HttpServletRequest request) {
+        return console.timeline(session(request).login(), id, executionId);
     }
 
     @PostMapping("/api/sessions/{id}/corrections")

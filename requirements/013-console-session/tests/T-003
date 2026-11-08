@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-003 jasagent-app ConsoleSessionPageTest consoleShowsHarnessNote '控制台脚本含有「纠正 note」和 `harness note`。'

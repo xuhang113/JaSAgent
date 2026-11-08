@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-018 jasagent-core ContextCompressGateTest atThresholdCallsCompressOnce '占用达到 0.85 且估算 token 不超过预算时，模型只被调用一次，任务是 compress，准备结果的摘要等于模型返回的完整正文。'

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-017 jasagent-core ContextCompressGateTest belowThresholdDoesNotCallModel '占用低于 0.85 时不调用模型。'

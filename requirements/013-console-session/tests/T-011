@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-011 jasagent-app ConsoleSessionPageTest timelineHasHuman '时间线含有类型为 human 的用户原文。'

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-015 jasagent-app ConsoleSessionPageTest otherUserCannotReadTimeline '另一用户读取该时间线得到 401。'

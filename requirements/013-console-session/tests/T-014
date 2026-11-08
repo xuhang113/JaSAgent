@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-014 jasagent-app ConsoleSessionPageTest timelineOrderIsLangGraph '时间线里 system、human、tool、ai 按这个顺序出现。'

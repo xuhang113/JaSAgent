@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-021 jasagent-app ConsoleSessionPageTest contextReportsCompressAt '会话上下文接口的正文含有 `compressAt`，数值是 0.85。'

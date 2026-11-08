@@ -20,6 +20,8 @@ public interface ConsoleApi {
 
     Map<String, Object> context(String userId, String token, String sessionId);
 
+    Map<String, Object> timeline(String userId, String sessionId, String executionId);
+
     Map<String, Object> addCorrection(String userId, String sessionId, String text, String executionId);
 
     List<Map<String, Object>> corrections(String userId, String sessionId);
