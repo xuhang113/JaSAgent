@@ -3,9 +3,19 @@ package dev.jasagent.api.llm;
 import java.util.concurrent.CompletionStage;
 
 public interface LlmClient {
-    LlmProvider provider();
+    CompletionStage<LlmChatResponse> chat(LlmChatRequest request);
 
-    CompletionStage<ChatResponse> chat(ChatRequest request);
+    CompletionStage<LlmEmbedResponse> embed(LlmEmbedRequest request);
 
-    CompletionStage<Embedding> embed(String text, String executionId);
+    default LlmProvider provider() {
+        return null;
+    }
+
+    default CompletionStage<ChatResponse> chat(ChatRequest request) {
+        throw new UnsupportedOperationException("chat(ChatRequest)");
+    }
+
+    default CompletionStage<Embedding> embed(String text, String executionId) {
+        throw new UnsupportedOperationException("embed(text)");
+    }
 }
