@@ -5,5 +5,9 @@ import java.util.concurrent.CompletionStage;
 public interface Tool {
     ToolSpec spec();
 
-    CompletionStage<ToolResult> call(ToolCall call);
+    CompletionStage<String> call(ToolCall call);
+
+    default CompletionStage<dev.jasagent.api.workflow.ToolResult> call(ToolCallContext context) {
+        throw new UnsupportedOperationException("call(ToolCallContext)");
+    }
 }
