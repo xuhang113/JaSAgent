@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -16,8 +17,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -29,6 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ConsolePageTest {
     private static final Path home = create("jasagent-console-home");
     private static final Path workspace = create("jasagent-console-ws");
+
+    @LocalServerPort
+    int port;
 
     @Autowired
     TestRestTemplate http;
@@ -80,6 +89,20 @@ class ConsolePageTest {
     @Test
     void consoleScriptHasSseEcho() {
         assertTrue(consoleScript().contains("SSE"));
+    }
+
+    @Test
+    void consoleScriptUsesLiveEndpoints() {
+        String script = consoleScript();
+        assertTrue(script.contains("EventSource"), "控制台脚本没有 EventSource");
+        assertTrue(script.contains("/api/executions/"), "控制台脚本没有执行接口");
+        assertTrue(script.contains("/interrupt"), "控制台脚本没有中止接口");
+        assertTrue(script.contains("/resume"), "控制台脚本没有恢复接口");
+        assertTrue(script.contains("/api/sessions"), "控制台脚本没有会话接口");
+        assertTrue(script.contains("/api/skills"), "控制台脚本没有技能接口");
+        assertTrue(script.contains("/skill:"), "控制台脚本没有技能引用");
+        assertTrue(script.contains("vue"), "控制台脚本不是 Vue 构建");
+        assertTrue(script.contains("element-plus") || script.contains("el-button"), "控制台脚本没有 Element Plus");
     }
 
     @Test
@@ -185,6 +208,115 @@ class ConsolePageTest {
         selectWorkspace(cookie);
         String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "answer-with-tool", "input", "hi")));
         assertTrue(get("/api/executions/" + executionId, cookie).getBody().contains("grounding.default"));
+    }
+
+    @Test
+    void defaultPassIsPendingNotSkipped() throws Exception {
+        String cookie = login("pending-user", "test-password-1");
+        selectWorkspace(cookie);
+        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "answer-with-tool", "input", "hi")));
+        String detail = awaitBody(cookie, executionId, "terminal SUSPENDED");
+        assertTrue(detail.contains("\"decision\":\"PENDING\""), detail);
+        assertTrue(detail.contains("approval-required"), detail);
+        assertTrue(detail.contains("rag.search"), detail);
+        assertTrue(detail.contains("grounding.default"), detail);
+        assertFalse(detail.contains("\"decision\":\"SKIPPED\""), detail);
+        assertFalse(detail.contains("agentpass-not-enabled"), detail);
+        assertFalse(detail.contains("\"name\":\"clock\""), detail);
+    }
+
+    @Test
+    void unmatchedPassDoesNotRunUntilAllowed() throws Exception {
+        writeCallRag();
+        writeWorkspacePolicy("""
+                rules:
+                - tool: rag.search
+                  decision: ALLOW
+                """);
+        String cookie = login("pending-run", "test-password-1");
+        selectWorkspace(cookie);
+        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "call-rag", "input", "hello")));
+        String waiting = awaitBody(cookie, executionId, "terminal SUSPENDED");
+        assertTrue(waiting.contains("\"retrievals\":[]"), waiting);
+        assertTrue(waiting.contains("\"decision\":\"PENDING\""), waiting);
+        assertTrue(waiting.contains("approval-required"), waiting);
+        assertFalse(waiting.contains("agentpass-not-enabled"), waiting);
+        String passId = passId(waiting, "rag.search");
+        post("/api/executions/" + executionId + "/passes/" + passId, cookie, Map.of("decision", "ALLOW"));
+        String done = awaitBody(cookie, executionId, "\"status\":\"SUCCEEDED\"");
+        assertTrue(done.contains("\"retrievals\":[{"), done);
+        assertTrue(done.contains("\"decision\":\"ALLOW\""), done);
+        assertFalse(done.contains("\"decision\":\"PENDING\""), done);
+    }
+
+    @Test
+    void matchedPolicyAllowRunsTool() throws Exception {
+        writeCallRag();
+        String cookie = login("policy-allow", "test-password-1");
+        selectWorkspace(cookie);
+        writeUserPolicy("policy-allow", """
+                rules:
+                - tool: rag.search
+                  decision: ALLOW
+                """);
+        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "call-rag", "input", "hello")));
+        String detail = awaitBody(cookie, executionId, "\"status\":\"SUCCEEDED\"");
+        assertTrue(detail.contains("\"decision\":\"ALLOW\""), detail);
+        assertTrue(detail.contains("\"retrievals\":[{"), detail);
+        assertFalse(detail.contains("\"decision\":\"PENDING\""), detail);
+        assertFalse(detail.contains("agentpass-not-enabled"), detail);
+    }
+
+    @Test
+    void matchedPolicyDenyDoesNotRunTool() throws Exception {
+        writeCallRag();
+        String cookie = login("policy-deny", "test-password-1");
+        selectWorkspace(cookie);
+        writeUserPolicy("policy-deny", """
+                rules:
+                - tool: rag.search
+                  decision: DENY
+                """);
+        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "call-rag", "input", "hello")));
+        String detail = awaitBody(cookie, executionId, "\"status\":\"SUCCEEDED\"");
+        assertTrue(detail.contains("\"decision\":\"DENY\""), detail);
+        assertTrue(detail.contains("\"retrievals\":[]"), detail);
+        assertFalse(detail.contains("\"decision\":\"PENDING\""), detail);
+        assertFalse(detail.contains("agentpass-not-enabled"), detail);
+    }
+
+    @Test
+    void sseEchoesExecutionStatus() throws Exception {
+        String cookie = login("sse-user", "test-password-1");
+        selectWorkspace(cookie);
+        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "answer-with-tool", "input", "hi")));
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/executions/" + executionId + "/events"))
+                .timeout(Duration.ofSeconds(20))
+                .header("Cookie", cookie)
+                .header("Accept", "text/event-stream")
+                .GET()
+                .build();
+        HttpResponse<String> response = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("event:status"), response.body());
+        assertTrue(response.body().contains(executionId), response.body());
+        assertTrue(response.body().contains("SUSPENDED"), response.body());
+    }
+
+    @Test
+    void interruptThenResume() throws Exception {
+        String cookie = login("stop-user", "test-password-1");
+        selectWorkspace(cookie);
+        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "answer-with-tool", "input", "hi")));
+        awaitBody(cookie, executionId, "terminal SUSPENDED");
+        ResponseEntity<String> stopped = post("/api/executions/" + executionId + "/interrupt", cookie, Map.of());
+        assertEquals(HttpStatus.OK, stopped.getStatusCode());
+        assertTrue(stopped.getBody().contains("SUSPENDED"), stopped.getBody());
+        ResponseEntity<String> resumed = post("/api/executions/" + executionId + "/resume", cookie, Map.of());
+        assertEquals(HttpStatus.OK, resumed.getStatusCode());
+        assertTrue(resumed.getBody().contains("resume"), resumed.getBody());
+        assertTrue(resumed.getBody().contains(executionId), resumed.getBody());
     }
 
     @Test
@@ -344,6 +476,39 @@ class ConsolePageTest {
         assertTrue(start >= 0, body);
         start += marker.length();
         return body.substring(start, body.indexOf('"', start));
+    }
+
+    private String awaitBody(String cookie, String executionId, String marker) throws Exception {
+        String body = "";
+        for (int attempt = 0; attempt < 80; attempt++) {
+            body = get("/api/executions/" + executionId, cookie).getBody();
+            if (body != null && body.contains(marker)) {
+                return body;
+            }
+            Thread.sleep(40);
+        }
+        assertTrue(body != null && body.contains(marker), body);
+        return body;
+    }
+
+    private void writeCallRag() throws Exception {
+        Path dir = workspace.resolve("jasagent").resolve("workflows");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("call-rag.json"), """
+                {"id":"call-rag","nodes":[{"id":"search","type":"tool","tool":"rag.search","arguments":"hello","next":"done"},{"id":"done","type":"end"}]}
+                """);
+    }
+
+    private void writeWorkspacePolicy(String yaml) throws Exception {
+        Path file = workspace.resolve("jasagent").resolve("auth").resolve("policies.yaml");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, yaml);
+    }
+
+    private void writeUserPolicy(String user, String yaml) throws Exception {
+        Path file = home.resolve(user).resolve("jasagent").resolve("auth").resolve("policies.yaml");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, yaml);
     }
 
     private static Path create(String name) {

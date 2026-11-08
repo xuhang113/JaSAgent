@@ -16,7 +16,7 @@ public final class GatedPluginRunner {
     public CompletionStage<PluginOutcome> run(NodePlugin plugin, PluginContext context, PassGate gate, boolean failOnError) {
         PassRequest request = new PassRequest(null, context.executionId(), null, plugin.id(), context.phase());
         return gate.acquire(request).thenCompose(pass -> {
-            if (pass.decision() == PassDecision.DENY) {
+            if (pass.decision() == PassDecision.DENY || pass.decision() == PassDecision.PENDING) {
                 return CompletableFuture.completedFuture(new PluginOutcome(false, pass.reason()));
             }
             return plugin.invoke(context).handle((outcome, error) -> {

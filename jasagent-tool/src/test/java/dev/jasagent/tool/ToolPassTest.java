@@ -26,6 +26,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ToolPassTest {
@@ -70,6 +71,17 @@ class ToolPassTest {
                 (executionId, kind, name, pass) -> logged.add(pass)));
         assertEquals(0, tool.count.get());
         assertEquals(PassDecision.DENY, logged.get(0).decision());
+    }
+
+    @Test
+    void pendingDoesNotRunTool() {
+        CounterTool tool = new CounterTool(false);
+        ToolResult result = join(new GatedToolRunner().run(tool, new ToolCallContext("user-a", "exec-1", "{}"),
+                new CountingGate(new Pass(PassDecision.PENDING, "approval-required")), (a, b, c, d) -> {
+                }));
+        assertEquals(0, tool.count.get());
+        assertFalse(result.success());
+        assertEquals("approval-required", result.text());
     }
 
     @Test

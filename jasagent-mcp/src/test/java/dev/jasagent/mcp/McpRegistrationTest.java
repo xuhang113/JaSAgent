@@ -6,6 +6,7 @@ import dev.jasagent.api.pass.PassGate;
 import dev.jasagent.api.pass.PassRequest;
 import dev.jasagent.api.tool.Tool;
 import dev.jasagent.api.tool.ToolCallContext;
+import dev.jasagent.api.workflow.ToolResult;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -15,6 +16,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class McpRegistrationTest {
@@ -61,6 +63,24 @@ class McpRegistrationTest {
         Tool tool = McpRegistrar.register(List.of(endpoint), gate(PassDecision.DENY), new ArrayList<>()).get(0);
         join(tool.call(new ToolCallContext("user-a", "exec-1", "{}")));
         assertEquals(0, remote.get());
+    }
+
+    @Test
+    void pendingDoesNotCallRemote() {
+        AtomicInteger remote = new AtomicInteger();
+        McpEndpoint endpoint = new McpEndpoint() {
+            public String server() { return "demo"; }
+            public List<String> listTools() { return List.of("echo"); }
+            public String call(String tool, String arguments) {
+                remote.incrementAndGet();
+                return "ok";
+            }
+        };
+        Tool tool = McpRegistrar.register(List.of(endpoint), gate(PassDecision.PENDING), new ArrayList<>()).get(0);
+        ToolResult result = tool.call(new ToolCallContext("user-a", "exec-1", "{}")).toCompletableFuture().join();
+        assertEquals(0, remote.get());
+        assertFalse(result.success());
+        assertEquals("reason", result.text());
     }
 
     private static McpEndpoint endpoint(String server, List<String> tools, String body) {

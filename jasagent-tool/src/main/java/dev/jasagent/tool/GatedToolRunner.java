@@ -29,6 +29,9 @@ public final class GatedToolRunner {
             if (log != null) {
                 log.record(context.executionId(), "tool", tool.spec().name(), pass);
             }
+            if (pass.decision() == PassDecision.PENDING) {
+                return CompletableFuture.completedFuture(new ToolResult(pass.reason(), false));
+            }
             if (pass.decision() == PassDecision.DENY) {
                 return CompletableFuture.completedFuture(new ToolResult("denied", false));
             }

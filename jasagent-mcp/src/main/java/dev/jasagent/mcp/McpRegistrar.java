@@ -59,6 +59,9 @@ public final class McpRegistrar {
         public CompletionStage<ToolResult> call(ToolCallContext context) {
             return gate.acquire(new PassRequest(context.userId(), context.executionId(), name, null, context.argumentsJson()))
                     .thenCompose(pass -> {
+                        if (pass.decision() == PassDecision.PENDING) {
+                            return CompletableFuture.completedFuture(new ToolResult(pass.reason(), false));
+                        }
                         if (pass.decision() == PassDecision.DENY) {
                             return CompletableFuture.completedFuture(new ToolResult("denied", false));
                         }

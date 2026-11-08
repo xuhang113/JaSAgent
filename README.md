@@ -72,7 +72,7 @@ embed 不走 DeepSeek。Gateway 提供 embeddings 时用 Gateway，否则用本�
 
 ## 通行证
 
-外部工具和插件执行前调用 `PassGate.acquire`。本版的 `DisabledPassGate` 只返回 `SKIPPED`，原因是 `agentpass-not-enabled`。`DENY` 不执行，`ALLOW` 和 `SKIPPED` 才执行。内置 `clock` 是内部工具，不申请通行证。控制台可以对当前用户这次执行里的通行证提交 `ALLOW` 或 `DENY`。不做单独的策略管理站，也不做跨用户审批。
+外部工具和插件执行前调用 `PassGate.acquire`。默认 `jasagent.agentpass.enabled=true`。本用户 `auth/policies.yaml` 命中则 `ALLOW` 或 `DENY`，未命中返回 `PENDING`，原因是 `approval-required`，不执行该工具或插件，执行状态变为 `SUSPENDED`。`SKIPPED` 只在显式 `jasagent.agentpass.enabled=false` 时出现，原因是 `agentpass-not-enabled`，这时才执行。`DENY` 不执行。`ALLOW` 后用原来的 executionId 继续并执行该次调用。内置 `clock` 是内部工具，不申请通行证。工作区里的策略不能放宽用户策略。控制台可以对当前用户这次执行里的通行证提交 `ALLOW` 或 `DENY`。不做单独的策略管理站，也不做跨用户审批。
 
 ## 中止和恢复
 

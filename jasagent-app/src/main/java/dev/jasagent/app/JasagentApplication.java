@@ -1,5 +1,6 @@
 package dev.jasagent.app;
 
+import dev.jasagent.agentpass.PassSettings;
 import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.cli.CliCommands;
 import dev.jasagent.controller.WorkspaceList;
@@ -31,8 +32,9 @@ public class JasagentApplication {
     }
 
     @Bean
-    LocalRuntime localRuntime(LocalAuthService localAuthService) {
-        return new LocalRuntime(localAuthService);
+    LocalRuntime localRuntime(LocalAuthService localAuthService,
+                              @Value("${jasagent.agentpass.enabled:true}") String agentpassEnabled) {
+        return new LocalRuntime(localAuthService, Map.of(PassSettings.ENABLED, agentpassEnabled));
     }
 
     @Bean

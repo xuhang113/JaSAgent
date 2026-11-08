@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,6 +34,28 @@ class PluginPassTest {
         join(new GatedPluginRunner().run(new OkPlugin("sample.plugin"), context("onNodeStart", "answer"), gate, false));
         assertEquals(1, gate.calls.get());
         assertEquals("sample.plugin", gate.last.pluginId());
+    }
+
+    @Test
+    void pendingDoesNotInvokePlugin() {
+        AtomicInteger hits = new AtomicInteger();
+        NodePlugin plugin = new NodePlugin() {
+            @Override
+            public String id() {
+                return "sample.plugin";
+            }
+
+            @Override
+            public CompletionStage<PluginOutcome> invoke(PluginContext context) {
+                hits.incrementAndGet();
+                return CompletableFuture.completedFuture(PluginOutcome.ok());
+            }
+        };
+        PluginOutcome outcome = join(new GatedPluginRunner().run(plugin, context("onNodeStart", "answer"),
+                new CountingGate(new Pass(PassDecision.PENDING, "approval-required")), false));
+        assertEquals(0, hits.get());
+        assertFalse(outcome.continued());
+        assertEquals("approval-required", outcome.detail());
     }
 
     @Test

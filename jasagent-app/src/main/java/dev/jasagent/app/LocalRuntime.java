@@ -1,6 +1,6 @@
 package dev.jasagent.app;
 
-import dev.jasagent.agentpass.DisabledPassGate;
+import dev.jasagent.agentpass.PassSettings;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.jasagent.api.auth.Catalog;
@@ -18,6 +18,7 @@ import dev.jasagent.api.llm.ChatResponse;
 import dev.jasagent.api.llm.Embedding;
 import dev.jasagent.api.llm.TokenUsage;
 import dev.jasagent.api.pass.PassDecision;
+import dev.jasagent.api.pass.PassGate;
 import dev.jasagent.api.pass.PassRequest;
 import dev.jasagent.api.tool.ToolCallContext;
 import dev.jasagent.api.workflow.RetrievalResult;
@@ -60,12 +61,18 @@ import java.util.concurrent.Executors;
 public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     private static final ObjectMapper JSON = new ObjectMapper();
     private final LocalAuthService auth;
+    private final PassGate passGate;
     private final Map<String, Exec> executions = new ConcurrentHashMap<>();
     private final ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
     private final ChatModel model = new OfflineChatModel();
 
     public LocalRuntime(LocalAuthService auth) {
+        this(auth, Map.of());
+    }
+
+    public LocalRuntime(LocalAuthService auth, Map<String, String> configuration) {
         this.auth = auth;
+        this.passGate = PassSettings.create(configuration, userId -> auth.directories().userDirectory(userId));
     }
 
     @Override
@@ -208,11 +215,11 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                     },
                     (name, executionId, output) -> CompletableFuture.completedFuture(BuiltinEvaluators.toolSuccessRate(1, 1)),
                     (executionId, child, parts) -> CompletableFuture.completedFuture(List.of()),
-                    (pluginId, phase, executionId, nodeId) -> CompletableFuture.completedFuture(null));
+                    (pluginId, phase, executionId, nodeId) -> holdPlugin(exec, pluginId));
             WorkflowRun workflowRun = new WorkflowRun(exec.executionId, exec.executionId, exec.userId, input, "base", "research", "answer", "", List.of(), new ArrayList<>(), 8000);
             WorkflowResult result = engine.execute(document, workflowRun).toCompletableFuture().join();
-            if (exec.suspended) {
-                exec.status = "SUSPENDED";
+            if (exec.suspended || pending(exec)) {
+                finishSuspended(exec, result.output());
                 return;
             }
             exec.output = result.output() == null ? "" : result.output();
@@ -223,14 +230,49 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             exec.queue.clear();
             exec.queue.add("sub-1: done");
         } catch (Exception ex) {
-            if (exec.suspended) {
-                exec.status = "SUSPENDED";
+            if (exec.suspended || pending(exec)) {
+                finishSuspended(exec, exec.output);
                 return;
             }
             exec.status = "FAILED";
             exec.errorCode = ex instanceof AgentException agent ? agent.code().name() : ErrorCode.INTERNAL.name();
             exec.append("terminal FAILED " + exec.errorCode);
         }
+    }
+
+    private void finishSuspended(Exec exec, String output) {
+        exec.suspended = true;
+        exec.status = "SUSPENDED";
+        if (output != null && !output.isBlank()) {
+            exec.output = output;
+        }
+        exec.append("terminal SUSPENDED");
+    }
+
+    private static boolean pending(Exec exec) {
+        for (Map<String, Object> pass : exec.passes) {
+            if (PassDecision.PENDING.name().equals(pass.get("decision"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private CompletableFuture<Void> holdPlugin(Exec exec, String pluginId) {
+        if (pluginId == null || pluginId.isBlank()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        Map<String, Object> recorded = findPass(exec, pluginId, "plugin");
+        if (recorded == null) {
+            recorded = addPass(exec, pluginId, "plugin");
+        }
+        String decision = String.valueOf(recorded.get("decision"));
+        exec.append("pass " + pluginId + " " + decision);
+        if (PassDecision.PENDING.name().equals(decision)) {
+            exec.suspended = true;
+            exec.status = "SUSPENDED";
+        }
+        return CompletableFuture.completedFuture(null);
     }
 
     private CompletableFuture<ToolResult> callTool(Exec exec, String name, String arguments) {
@@ -240,7 +282,13 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 recorded = addPass(exec, name, "tool");
             }
             exec.append("pass " + name + " " + recorded.get("decision"));
-            if (PassDecision.DENY.name().equals(recorded.get("decision"))) {
+            String decision = String.valueOf(recorded.get("decision"));
+            if (PassDecision.PENDING.name().equals(decision)) {
+                exec.suspended = true;
+                exec.status = "SUSPENDED";
+                return CompletableFuture.completedFuture(new ToolResult("approval-required", false));
+            }
+            if (PassDecision.DENY.name().equals(decision)) {
                 return CompletableFuture.completedFuture(new ToolResult("denied", false));
             }
         }
@@ -479,6 +527,13 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 pass.put("decision", decision);
                 pass.put("reason", "user-" + decision.toLowerCase());
                 exec.append("pass " + pass.get("name") + " " + decision);
+                if ("ALLOW".equals(decision) && exec.pendingWorkflow != null && (exec.suspended || "SUSPENDED".equals(exec.status))) {
+                    exec.suspended = false;
+                    exec.status = "RUNNING";
+                    String workflowId = exec.pendingWorkflow;
+                    String resumedInput = exec.pendingInput;
+                    workers.execute(() -> run(exec, workflowId, resumedInput));
+                }
                 return view(exec);
             }
         }
@@ -518,7 +573,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
 
     private Map<String, Object> addPass(Exec exec, String name, String kind) {
         boolean tool = "tool".equals(kind);
-        var pass = new DisabledPassGate().acquire(new PassRequest(
+        var pass = passGate.acquire(new PassRequest(
                 exec.userId,
                 exec.executionId,
                 tool ? name : null,
