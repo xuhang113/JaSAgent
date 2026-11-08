@@ -323,6 +323,16 @@ class LlmRouterTest {
     }
 
     @Test
+    void routerKeepsReasoningText() {
+        Fixture fixture = open(settings("", false, false, ""), () -> false);
+        fixture.deepseek.response = new LlmChatResponse("ignored", "ignored", "答案", 1, 2, 3, false, "先想一步");
+        LlmChatResponse response = join(fixture.router.chat(chat(LlmTask.REACT, null, 1)));
+        assertEquals("答案", response.text());
+        assertEquals("先想一步", response.thinking());
+        assertEquals("deepseek-flash", response.model());
+    }
+
+    @Test
     void deepSeekThinkingEnabledFromEnvironment() {
         LlmSettings settings = LlmSettings.fromEnvironment(Map.of(
                 "JASAGENT_DEEPSEEK_API_KEY", DEEPSEEK_KEY,
@@ -504,7 +514,7 @@ class LlmRouterTest {
         final List<Boolean> virtual = new ArrayList<>();
         int timeouts;
         RuntimeException failure;
-        final LlmChatResponse response = new LlmChatResponse("ignored", "ignored", "answer", 11, 7, 18, false);
+        LlmChatResponse response = new LlmChatResponse("ignored", "ignored", "answer", 11, 7, 18, false);
 
         @Override
         public CompletionStage<LlmChatResponse> chat(LlmChatRequest request) {

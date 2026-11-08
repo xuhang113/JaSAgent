@@ -317,6 +317,10 @@ final class WorkflowGraph {
                 update.put("lastOutput", content);
                 update.put("output", content);
             }
+            String thinking = reply.thinking() == null ? "" : reply.thinking().trim();
+            if (!thinking.isEmpty()) {
+                update.put("thinking", thinking);
+            }
             return update;
         });
     }

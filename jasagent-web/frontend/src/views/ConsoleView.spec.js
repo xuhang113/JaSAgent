@@ -683,3 +683,71 @@ describe('会话页交互动效', () => {
     wrapper.unmount()
   })
 })
+
+describe('助手回复上的思考', () => {
+  function paint() {
+    const style = document.createElement('style')
+    style.textContent = css
+    document.head.appendChild(style)
+    return style
+  }
+
+  it('有思考内容时在气泡里显示可折叠的灰色小字，默认收起', async () => {
+    state.execution.thinking = '先核对时钟再回答'
+    state.timeline.messages = [
+      { type: 'system', content: 'rules', rules: [], skills: [] },
+      { type: 'human', content: '请给出时间' },
+      { type: 'tool', name: 'clock', tool_call_id: 'clock-1', content: '2026-11-08T00:00:00Z' },
+      { type: 'ai', content: '模型未配置', thinking: '先核对时钟再回答', tool_calls: [] }
+    ]
+    const style = paint()
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    const bubble = wrapper.get('.bubble.assistant')
+    const block = bubble.get('.thinking')
+    expect(block.element.tagName).toBe('DETAILS')
+    expect(block.element.hasAttribute('open')).toBe(false)
+    expect(block.get('summary').text()).toBe('思考')
+    expect(block.get('.thinking-body').text()).toBe('先核对时钟再回答')
+    const html = bubble.element.innerHTML
+    expect(html.indexOf('thinking')).toBeGreaterThanOrEqual(0)
+    expect(html.indexOf('思考')).toBeLessThan(html.indexOf('执行输出'))
+    expect(html.indexOf('thinking')).toBeLessThan(html.indexOf('模型未配置'))
+    expect(wrapper.find('.right-rail .thinking').exists()).toBe(false)
+    await wrapper.get('[data-tab="trace"]').trigger('click')
+    expect(wrapper.get('.right-rail').text()).not.toContain('先核对时钟再回答')
+
+    const thinkingStyle = getComputedStyle(block.element)
+    const bubbleStyle = getComputedStyle(bubble.element)
+    expect(thinkingStyle.color === 'rgb(152, 162, 179)' || thinkingStyle.color === '#98a2b3').toBe(true)
+    expect(thinkingStyle.fontSize).toBe('12px')
+    expect(parseFloat(thinkingStyle.fontSize)).toBeLessThan(parseFloat(bubbleStyle.fontSize))
+    expect(rule(css, '.thinking')).toMatch(/color:\s*#98a2b3/)
+    expect(rule(css, '.thinking')).toMatch(/font-size:\s*12px/)
+
+    block.get('summary').element.click()
+    await flushPromises()
+    expect(block.element.open).toBe(true)
+    expect(block.get('.thinking-body').text()).toBe('先核对时钟再回答')
+    block.get('summary').element.click()
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(block.element.open).toBe(false)
+    style.remove()
+    wrapper.unmount()
+  })
+
+  it('没有思考内容时不渲染思考块', async () => {
+    state.execution.thinking = '   '
+    state.timeline.messages = [
+      { type: 'human', content: '请给出时间' },
+      { type: 'ai', content: '模型未配置', thinking: '  ', tool_calls: [] }
+    ]
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    expect(wrapper.find('.bubble.assistant').exists()).toBe(true)
+    expect(wrapper.find('.thinking').exists()).toBe(false)
+    expect(wrapper.get('.bubble.assistant').text()).not.toContain('思考')
+    wrapper.unmount()
+  })
+})

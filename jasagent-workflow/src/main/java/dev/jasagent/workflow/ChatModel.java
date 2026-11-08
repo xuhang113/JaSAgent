@@ -12,7 +12,16 @@ public interface ChatModel {
     record ChatMessage(String role, String content) {
     }
 
-    record ModelReply(String content, List<ToolCall> toolCalls) {
+    record ModelReply(String content, List<ToolCall> toolCalls, String thinking) {
+        public ModelReply(String content, List<ToolCall> toolCalls) {
+            this(content, toolCalls, "");
+        }
+
+        public ModelReply {
+            if (thinking == null) {
+                thinking = "";
+            }
+        }
     }
 
     record ToolCall(String id, String name, String arguments) {

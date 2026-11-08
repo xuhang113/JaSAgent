@@ -12,5 +12,11 @@ public record WorkflowRun(
         Boolean evaluationPassed,
         List<String> correctionSources,
         String checkpointSaver,
-        String detail) {
+        String detail,
+        String thinking) {
+    public WorkflowRun {
+        if (thinking == null) {
+            thinking = "";
+        }
+    }
 }

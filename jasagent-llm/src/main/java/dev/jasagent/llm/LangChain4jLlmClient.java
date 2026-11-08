@@ -18,6 +18,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiChatResponseMetadata;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.model.output.TokenUsage;
 
@@ -35,7 +36,11 @@ public final class LangChain4jLlmClient implements LlmClient {
     }
 
     public static LangChain4jLlmClient deepSeek(LlmSettings settings) {
-        return new LangChain4jLlmClient(LangChain4jModels.chat(OpenAiCallConfig.deepSeek(settings)), null);
+        return from(OpenAiCallConfig.deepSeek(settings));
+    }
+
+    static LangChain4jLlmClient from(OpenAiCallConfig config) {
+        return new LangChain4jLlmClient(LangChain4jModels.chat(config), null);
     }
 
     public static LangChain4jLlmClient gateway(LlmSettings settings) {
@@ -63,14 +68,23 @@ public final class LangChain4jLlmClient implements LlmClient {
         try {
             ChatResponse response = chatModel.chat(toRequest(request));
             String text = "";
-            if (response.aiMessage() != null && response.aiMessage().text() != null) {
-                text = response.aiMessage().text();
+            String thinking = "";
+            if (response.aiMessage() != null) {
+                if (response.aiMessage().text() != null) {
+                    text = response.aiMessage().text();
+                }
+                if (response.aiMessage().thinking() != null) {
+                    thinking = response.aiMessage().thinking();
+                }
+            }
+            if (thinking.isBlank()) {
+                thinking = reasoningFrom(response);
             }
             TokenUsage usage = response.tokenUsage();
             int prompt = count(usage == null ? null : usage.inputTokenCount());
             int completion = count(usage == null ? null : usage.outputTokenCount());
             int total = usage == null || usage.totalTokenCount() == null ? prompt + completion : usage.totalTokenCount();
-            return new LlmChatResponse("", "", text, prompt, completion, total, false);
+            return new LlmChatResponse("", "", text, prompt, completion, total, false, thinking);
         } catch (RuntimeException ex) {
             throw failure(request.executionId(), ex);
         }
@@ -86,6 +100,14 @@ public final class LangChain4jLlmClient implements LlmClient {
         } catch (RuntimeException ex) {
             throw failure(request.executionId(), ex);
         }
+    }
+
+    private static String reasoningFrom(ChatResponse response) {
+        if (response.metadata() instanceof OpenAiChatResponseMetadata metadata
+                && metadata.rawHttpResponse() != null) {
+            return ReasoningText.fromCompletionJson(metadata.rawHttpResponse().body());
+        }
+        return "";
     }
 
     private static ChatRequest toRequest(LlmChatRequest request) {

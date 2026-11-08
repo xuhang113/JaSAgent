@@ -252,6 +252,31 @@ class ConsoleSessionPageTest {
         assertFalse(consoleScript().contains("当前执行"));
     }
 
+    @Test
+    void consoleFoldsThinkingAboveReply() {
+        String script = consoleScript();
+        assertTrue(script.contains("思考"), scriptSnippet(script, "思考"));
+        assertTrue(script.contains("thinking"), scriptSnippet(script, "thinking"));
+        String css = consoleCss();
+        int at = css.indexOf(".thinking{");
+        assertTrue(at >= 0, css);
+        int end = css.indexOf('}', at);
+        assertTrue(end > at, css);
+        String rule = css.substring(at, end);
+        assertTrue(rule.contains("#98a2b3"), rule);
+        assertTrue(rule.contains("12px"), rule);
+        String props = readProps();
+        assertTrue(props.contains("jasagent.deepseek.thinking=true"), props);
+    }
+
+    private static String readProps() {
+        try {
+            return Files.readString(Path.of("src/main/resources/application.properties"));
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
     private String supportTimeline(String user) throws Exception {
         String cookie = login(user);
         selectWorkspace(cookie);

@@ -98,7 +98,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         this.scheduler = new QueueAgentScheduler(configuration, runner);
         this.compressAt = ContextWindow.compressAt(configuration);
         this.modelReady = WorkflowModels.configured();
-        this.workflowChat = WorkflowModels.chat();
+        this.workflowChat = WorkflowModels.chat(configuration);
         this.environment = environment(configuration);
         ExecutionJournal opened = null;
         try {
@@ -391,6 +391,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 if (result.output() != null && !result.output().isBlank()) {
                     exec.output = result.output();
                 }
+                rememberThinking(exec, result);
                 recordAi(exec, exec.output);
                 finishSuspended(exec, exec.output);
                 return;
@@ -398,6 +399,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             boolean offline = !modelReady && ("LLM".equals(result.errorCode()) || (usesModel && "SUCCEEDED".equals(result.status())));
             if (offline) {
                 exec.output = "";
+                exec.thinking = "";
                 exec.errorCode = "OFFLINE";
                 exec.status = "FAILED";
                 recordAi(exec, "模型未配置");
@@ -405,6 +407,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 return;
             }
             exec.output = result.output() == null ? "" : result.output();
+            rememberThinking(exec, result);
             exec.evaluations.add("completion.nonempty:" + !exec.output.isBlank());
             exec.errorCode = result.errorCode() == null ? "" : result.errorCode();
             recordAi(exec, exec.output);
@@ -442,11 +445,20 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         }
     }
 
+    private static void rememberThinking(Exec exec, WorkflowRun result) {
+        if (result != null && result.thinking() != null && !result.thinking().isBlank()) {
+            exec.thinking = result.thinking().trim();
+        }
+    }
+
     private void recordAi(Exec exec, String content) {
         Map<String, Object> ai = new LinkedHashMap<>();
         ai.put("type", "ai");
         ai.put("content", content == null ? "" : content);
         ai.put("tool_calls", List.of());
+        if (exec.thinking != null && !exec.thinking.isBlank()) {
+            ai.put("thinking", exec.thinking);
+        }
         synchronized (exec.timeline) {
             exec.timeline.add(ai);
         }
@@ -615,6 +627,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         synchronized (exec) {
             Map<String, Object> row = summary(exec);
             row.put("output", exec.output);
+            row.put("thinking", exec.thinking == null ? "" : exec.thinking);
             row.put("errorCode", exec.errorCode);
             row.put("queue", List.copyOf(exec.queue));
             row.put("logs", exec.logs.toString());
@@ -1348,6 +1361,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         private String sessionId = "";
         private volatile String status = "ACCEPTED";
         private volatile String output = "";
+        private volatile String thinking = "";
         private volatile String errorCode = "";
         private volatile boolean suspended;
         private volatile String pendingWorkflow;
@@ -1378,6 +1392,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             body.put("rootSpanId", rootSpanId);
             body.put("status", status);
             body.put("output", output);
+            body.put("thinking", thinking == null ? "" : thinking);
             body.put("errorCode", errorCode);
             body.put("suspended", suspended);
             body.put("pendingWorkflow", pendingWorkflow);
@@ -1410,6 +1425,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             exec.rootSpanId = row.otelRootSpanId() == null ? text(state.get("rootSpanId")) : row.otelRootSpanId();
             exec.status = row.status();
             exec.output = text(state.get("output"));
+            exec.thinking = text(state.get("thinking"));
             exec.errorCode = text(state.get("errorCode"));
             exec.suspended = "SUSPENDED".equals(row.status());
             exec.pendingWorkflow = text(state.get("pendingWorkflow"));

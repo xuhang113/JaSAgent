@@ -47,10 +47,12 @@ public class JasagentApplication {
     @Bean
     LocalRuntime localRuntime(LocalAuthService localAuthService,
                               @Value("${jasagent.agentpass.enabled:true}") String agentpassEnabled,
-                              @Value("${jasagent.context.compress-at:0.85}") String compressAt) {
+                              @Value("${jasagent.context.compress-at:0.85}") String compressAt,
+                              @Value("${jasagent.deepseek.thinking:false}") String deepseekThinking) {
         return new LocalRuntime(localAuthService, Map.of(
                 PassSettings.ENABLED, agentpassEnabled,
-                ContextWindow.COMPRESS_AT, compressAt));
+                ContextWindow.COMPRESS_AT, compressAt,
+                "jasagent.deepseek.thinking", deepseekThinking));
     }
 
     @Bean

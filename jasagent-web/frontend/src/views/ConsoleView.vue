@@ -117,7 +117,11 @@
                 <pre>{{ tool.content }}</pre>
               </div>
             </details>
-            <div v-if="turnReply(message) || message.status || message.errorCode" class="bubble assistant">
+            <div v-if="turnReply(message) || turnThinking(message) || message.status || message.errorCode" class="bubble assistant">
+              <details v-if="turnThinking(message)" class="thinking">
+                <summary @click="foldDetails">思考</summary>
+                <div class="thinking-body">{{ turnThinking(message) }}</div>
+              </details>
               <strong>执行输出</strong>
               <div v-if="turnReply(message)">{{ turnReply(message) }}</div>
               <small v-if="message.executionId" class="muted mono-num">{{ message.executionId }} {{ message.status }}</small>
@@ -617,6 +621,27 @@ function turnTools(message) {
   return turnRows(message).filter((row) => row.type === 'tool')
 }
 
+function turnThinking(message) {
+  const rows = turnRows(message)
+  let fromRows = ''
+  for (const row of rows) {
+    if (row && row.type === 'ai') {
+      const text = cleanThinking(row.thinking)
+      if (text) {
+        fromRows = text
+      }
+    }
+  }
+  return fromRows || cleanThinking(message && message.thinking)
+}
+
+function cleanThinking(value) {
+  if (value == null) {
+    return ''
+  }
+  return String(value).trim()
+}
+
 function turnReply(message) {
   if (message.output) {
     return message.output
@@ -907,6 +932,7 @@ async function refreshMessageOutputs() {
       message.status = row.status
       message.errorCode = row.errorCode || ''
       message.output = row.output
+      message.thinking = row.thinking || ''
     } catch {
       // 执行可能还不属于这次登录。
     }

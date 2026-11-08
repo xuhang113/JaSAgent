@@ -399,6 +399,36 @@ h3 {
   border: 1px solid #e4e4df;
 }
 
+.thinking {
+  margin: 0 0 6px;
+  color: #98a2b3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.thinking summary {
+  cursor: pointer;
+  color: #98a2b3;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  list-style: none;
+}
+
+.thinking summary::-webkit-details-marker {
+  display: none;
+}
+
+.thinking-body {
+  margin: 4px 0 0;
+  color: #98a2b3;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .turn-trace {
   align-self: stretch;
   min-width: 0;

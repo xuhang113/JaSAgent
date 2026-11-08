@@ -158,6 +158,22 @@ class WorkflowReactTest {
         assertEquals(1, clocks.get());
         assertEquals("SUCCEEDED", run.status());
         assertEquals("ready", run.output());
+        assertEquals("", run.thinking());
+    }
+
+    @Test
+    void reactKeepsModelThinkingBesideReply() {
+        ChatModel chat = request -> CompletableFuture.completedFuture(new ModelReply("ready", List.of(), "先想一步"));
+        WorkflowRun run = join(engine(
+                chat,
+                null,
+                null,
+                query -> CompletableFuture.completedFuture(List.of(new RetrievalHit("hit"))),
+                query -> CompletableFuture.completedFuture(new EvaluationOutcome(true, "ok")),
+                null).execute(request(WorkflowParser.exampleAnswerWithTool(), "现在几点", blank())));
+        assertEquals("SUCCEEDED", run.status());
+        assertEquals("ready", run.output());
+        assertEquals("先想一步", run.thinking());
     }
 
     @Test

@@ -104,7 +104,16 @@ public final class LlmRouter implements LlmClient {
         LlmChatResponse raw = call(client, request);
         long latency = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
         String text = raw.text() == null ? "" : raw.text();
-        LlmChatResponse response = new LlmChatResponse(provider, model, text, raw.promptTokens(), raw.completionTokens(), raw.totalTokens(), fallback);
+        String thinking = raw.thinking() == null ? "" : raw.thinking();
+        LlmChatResponse response = new LlmChatResponse(
+                provider,
+                model,
+                text,
+                raw.promptTokens(),
+                raw.completionTokens(),
+                raw.totalTokens(),
+                fallback,
+                thinking);
         Stages.join(store.save(new LlmCall(
                 request.executionId(),
                 request.task() == null ? "" : request.task().wireName(),

@@ -92,7 +92,8 @@ public final class LangGraphWorkflowEngine {
                 null,
                 List.of(),
                 saver == null ? "" : saver.getClass().getName(),
-                chain(error));
+                chain(error),
+                "");
     }
 
     private WorkflowRun snapshot(
@@ -122,7 +123,8 @@ public final class LangGraphWorkflowEngine {
                 evaluation,
                 List.copyOf(sources),
                 saver.getClass().getName(),
-                detail);
+                detail,
+                StateValues.text(state, "thinking"));
     }
 
     private BaseCheckpointSaver saver(WorkflowRequest request) throws Exception {
