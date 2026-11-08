@@ -23,6 +23,7 @@
     <module>jasagent-agentpass</module>
     <module>jasagent-core</module>
     <module>jasagent-interrupt</module>
+    <module>jasagent-rag</module>
     <module>jasagent-app</module>
   </modules>
 
