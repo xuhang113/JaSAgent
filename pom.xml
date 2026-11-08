@@ -21,6 +21,7 @@
     <module>jasagent-tool</module>
     <module>jasagent-plugin</module>
     <module>jasagent-agentpass</module>
+    <module>jasagent-core</module>
   </modules>
 
   <properties>
