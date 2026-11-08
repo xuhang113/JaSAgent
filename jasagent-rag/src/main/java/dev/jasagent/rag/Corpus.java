@@ -15,6 +15,10 @@ public final class Corpus {
         this.chunks = List.copyOf(chunks);
     }
 
+    public static Corpus empty() {
+        return new Corpus(List.of());
+    }
+
     public static Corpus index(Path docs, String scope) throws IOException {
         List<Chunk> chunks = new ArrayList<>();
         try (var files = Files.list(docs)) {

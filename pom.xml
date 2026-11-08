@@ -27,6 +27,9 @@
     <module>jasagent-mcp</module>
     <module>jasagent-evaluation</module>
     <module>jasagent-app</module>
+    <module>jasagent-controller</module>
+    <module>jasagent-web</module>
+    <module>jasagent-cli</module>
   </modules>
 
   <properties>
@@ -36,6 +39,7 @@
     <junit.version>5.11.4</junit.version>
     <flyway.version>10.20.1</flyway.version>
     <h2.version>2.3.232</h2.version>
+    <spring-boot.version>3.4.5</spring-boot.version>
     <otel.version>1.43.0</otel.version>
   </properties>
 
@@ -110,6 +114,16 @@
         <groupId>io.opentelemetry</groupId>
         <artifactId>opentelemetry-exporter-otlp</artifactId>
         <version>${otel.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+        <version>${spring-boot.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <version>${spring-boot.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
