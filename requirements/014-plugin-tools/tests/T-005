@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../../.." && pwd)"
+mkdir -p "$HERE/../results" "$HERE/../logs"
+name="T-005"
+result_text='注入一条标题 `Alpha`、url `https://example.invalid/alpha`、摘要 `brief` 的搜索结果时，返回文本等于这三行，行之间用换行连接。'
+cd "$ROOT"
+start=$(python3 -c 'import time; print(int(time.time()*1000))')
+set +e
+mvn -pl jasagent-plugin -am test -Dsurefire.failIfNoSpecifiedTests=false -Dtest=PluginToolTest#injectedSearchReturnsClientLines > "$HERE/../logs/${name}.log" 2>&1
+code=$?
+set -e
+end=$(python3 -c 'import time; print(int(time.time()*1000))')
+elapsed=$((end - start))
+if [[ $code -eq 0 ]]; then
+  status="通过"
+else
+  status="失败"
+fi
+printf '%s\t%s\t%s\t%s\tlogs/%s.log\n' "$name" "$status" "$result_text" "$elapsed" "$name" > "$HERE/../results/${name}.txt"
+exit "$code"

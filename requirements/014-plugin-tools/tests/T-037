@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../../.." && pwd)"
+mkdir -p "$HERE/../results" "$HERE/../logs"
+name="T-037"
+result_text='插件 `echo.stats` 成功调用一次后，按 `echo.stats` 查到的成功次数比调用前多 1。'
+cd "$ROOT"
+start=$(python3 -c 'import time; print(int(time.time()*1000))')
+set +e
+mvn -pl jasagent-plugin -am test -Dsurefire.failIfNoSpecifiedTests=false -Dtest=PluginToolTest#pluginSuccessIncrementsOnce > "$HERE/../logs/${name}.log" 2>&1
+code=$?
+set -e
+end=$(python3 -c 'import time; print(int(time.time()*1000))')
+elapsed=$((end - start))
+if [[ $code -eq 0 ]]; then
+  status="通过"
+else
+  status="失败"
+fi
+printf '%s\t%s\t%s\t%s\tlogs/%s.log\n' "$name" "$status" "$result_text" "$elapsed" "$name" > "$HERE/../results/${name}.txt"
+exit "$code"

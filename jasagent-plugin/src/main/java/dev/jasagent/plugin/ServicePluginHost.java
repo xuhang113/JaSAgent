@@ -9,6 +9,7 @@ import dev.jasagent.api.pass.PassDecision;
 import dev.jasagent.api.pass.PassGate;
 import dev.jasagent.api.pass.PassRequest;
 import dev.jasagent.api.plugin.AgentPlugin;
+import dev.jasagent.api.plugin.CallStats;
 import dev.jasagent.api.plugin.PluginCall;
 import dev.jasagent.api.plugin.PluginCallEntry;
 import dev.jasagent.api.plugin.PluginCallStore;
@@ -108,8 +109,10 @@ public final class ServicePluginHost implements PluginHost {
     private CompletionStage<PluginResult> run(AgentPlugin plugin, PluginCall call, PluginContext context, Pass pass, String hash) {
         return plugin.invoke(call, context).handle((output, error) -> {
             if (error == null) {
+                CallStats.load().recordSuccess(call.pluginId());
                 return finish(call, hash, pass, true, false, output == null ? "" : output);
             }
+            CallStats.load().recordFailure(call.pluginId());
             Throwable cause = unwrap(error);
             if (call.failure() == PluginFailure.FAIL) {
                 return finish(call, hash, pass, false, true, message(cause)).thenCompose(ignored -> {

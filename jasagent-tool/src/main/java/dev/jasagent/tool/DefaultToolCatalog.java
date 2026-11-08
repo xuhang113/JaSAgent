@@ -8,6 +8,7 @@ import dev.jasagent.api.pass.PassApproval;
 import dev.jasagent.api.pass.PassDecision;
 import dev.jasagent.api.pass.PassGate;
 import dev.jasagent.api.pass.PassRequest;
+import dev.jasagent.api.plugin.CallStats;
 import dev.jasagent.api.tool.Tool;
 import dev.jasagent.api.tool.ToolCall;
 import dev.jasagent.api.tool.ToolCallEntry;
@@ -19,8 +20,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 
 public final class DefaultToolCatalog implements ToolCatalog {
     private final PassGate gate;
@@ -64,7 +67,7 @@ public final class DefaultToolCatalog implements ToolCatalog {
             if (pass.decision() == PassDecision.DENY || pass.decision() == PassDecision.PENDING) {
                 return finish(call, hash, pass, false, "");
             }
-            return tool.call(call).thenCompose(output -> finish(call, hash, pass, true, output));
+            return invoke(tool, call, hash, pass);
         });
     }
 
@@ -88,8 +91,49 @@ public final class DefaultToolCatalog implements ToolCatalog {
             if (tool == null) {
                 return failed(new AgentException(ErrorCode.TOOL, "unknown tool " + stored.name()));
             }
-            return tool.call(stored).thenCompose(output -> finish(stored, pass.argumentHash(), pass, true, output));
+            return invoke(tool, stored, pass.argumentHash(), pass);
         });
+    }
+
+    private CompletionStage<ToolResult> invoke(Tool tool, ToolCall call, String hash, Pass pass) {
+        CompletionStage<String> stage;
+        try {
+            stage = tool.call(call);
+        } catch (RuntimeException ex) {
+            CallStats.load().recordFailure(call.name());
+            return failedThrowable(ex);
+        }
+        return stage.handle((output, error) -> {
+            if (error != null) {
+                CallStats.load().recordFailure(call.name());
+                return failedThrowable(error);
+            }
+            CallStats.load().recordSuccess(call.name());
+            return finish(call, hash, pass, true, output);
+        }).thenCompose(future -> future);
+    }
+
+    private static CompletionStage<ToolResult> failedThrowable(Throwable error) {
+        Throwable cause = unwrap(error);
+        if (cause instanceof AgentException agent) {
+            return CompletableFuture.failedFuture(agent);
+        }
+        if (cause instanceof RuntimeException runtime) {
+            return CompletableFuture.failedFuture(runtime);
+        }
+        return failed(new AgentException(ErrorCode.TOOL, message(cause), null, cause));
+    }
+
+    private static Throwable unwrap(Throwable error) {
+        Throwable current = error;
+        while ((current instanceof CompletionException || current instanceof ExecutionException) && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static String message(Throwable cause) {
+        return cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
     }
 
     private CompletionStage<ToolResult> finish(ToolCall call, String hash, Pass pass, boolean executed, String output) {
