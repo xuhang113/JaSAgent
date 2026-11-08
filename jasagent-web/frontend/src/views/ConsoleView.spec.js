@@ -141,7 +141,10 @@ async function mountConsole() {
     global: {
       plugins: [router],
       stubs: {
-        'el-button': { template: '<button type="button" class="el-button"><slot /></button>' },
+        'el-button': {
+          props: ['type', 'size', 'text', 'loading', 'nativeType'],
+          template: '<button type="button" class="el-button" :class="[type && `el-button--${type}`, text && \'is-text\']"><slot /></button>'
+        },
         'el-input': { template: '<textarea class="el-input" />' },
         'el-select': { template: '<div class="el-select workspace-select"><slot /></div>' },
         'el-option': { template: '<div class="el-option" />' },
@@ -250,6 +253,149 @@ describe('会话页三列布局', () => {
     expect(messages.text()).not.toContain('不要编造数字')
     expect(messages.text()).not.toContain('harness note')
     expect(rule(css, '.session-meta')).not.toMatch(/position:\s*(absolute|fixed)/)
+    wrapper.unmount()
+  })
+})
+
+function buttonByText(wrapper, text) {
+  const found = wrapper.findAll('.el-button').find((node) => node.text() === text)
+  expect(found, text).toBeTruthy()
+  return found
+}
+
+describe('会话页按钮对齐 llgraph', () => {
+  it('主操作使用 cursor-btn-primary 的颜色、字号、圆角和内边距', async () => {
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    for (const label of ['选定工作区', '新建', '发送', '提交执行', 'ALLOW']) {
+      const button = buttonByText(wrapper, label)
+      expect(button.classes()).toContain('cursor-btn-primary')
+      expect(button.classes()).toContain('el-button')
+    }
+    const primary = rule(css, '.console-layout .el-button.cursor-btn-primary')
+    expect(primary).toMatch(/background:\s*#1b1b18/)
+    expect(primary).toMatch(/color:\s*#fff/)
+    expect(primary).toMatch(/border:\s*none/)
+    expect(primary).toMatch(/border-radius:\s*8px/)
+    expect(primary).toMatch(/padding:\s*7px 10px/)
+    expect(primary).toMatch(/font-size:\s*12px/)
+    expect(primary).toMatch(/font-weight:\s*500/)
+    expect(rule(css, '.console-layout .el-button.cursor-btn-primary:hover')).toMatch(/background:\s*#333\b/)
+    wrapper.unmount()
+  })
+
+  it('次操作使用 cursor-btn-ghost', async () => {
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    for (const label of ['退出', '追加纠正', '恢复', '刷新列表', '查询']) {
+      expect(buttonByText(wrapper, label).classes()).toContain('cursor-btn-ghost')
+    }
+    const ghost = rule(css, '.console-layout .el-button.cursor-btn-ghost')
+    expect(ghost).toMatch(/background:\s*transparent/)
+    expect(ghost).toMatch(/border:\s*1px solid #c8c8c3/)
+    expect(ghost).toMatch(/color:\s*#1b1b18/)
+    expect(ghost).toMatch(/border-radius:\s*8px/)
+    expect(ghost).toMatch(/padding:\s*7px 10px/)
+    expect(ghost).toMatch(/font-size:\s*12px/)
+    expect(rule(css, '.console-layout .el-button.cursor-btn-ghost:hover')).toMatch(/background:\s*#e3e3de/)
+    wrapper.unmount()
+  })
+
+  it('危险操作使用 cursor-btn-danger，中止使用 composer stop', async () => {
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    expect(buttonByText(wrapper, 'DENY').classes()).toContain('cursor-btn-danger')
+    expect(buttonByText(wrapper, '中止').classes()).toContain('cursor-composer-stop')
+    const danger = rule(css, '.console-layout .el-button.cursor-btn-danger')
+    expect(danger).toMatch(/background:\s*#b42318/)
+    expect(danger).toMatch(/color:\s*#fff/)
+    expect(danger).toMatch(/border:\s*none/)
+    expect(danger).toMatch(/border-radius:\s*8px/)
+    expect(danger).toMatch(/padding:\s*7px 12px/)
+    expect(danger).toMatch(/font-size:\s*12px/)
+    expect(danger).toMatch(/font-weight:\s*500/)
+    expect(rule(css, '.console-layout .el-button.cursor-btn-danger:hover')).toMatch(/background:\s*#912018/)
+    expect(rule(css, '.console-layout .el-button.cursor-btn-danger:disabled')).toMatch(/opacity:\s*0\.5/)
+    const stop = rule(css, '.console-layout .el-button.cursor-composer-stop')
+    expect(stop).toMatch(/min-width:\s*52px/)
+    expect(stop).toMatch(/height:\s*28px/)
+    expect(stop).toMatch(/padding:\s*0 10px/)
+    expect(stop).toMatch(/border-radius:\s*8px/)
+    expect(stop).toMatch(/border:\s*1px solid #d4a5a5/)
+    expect(stop).toMatch(/background:\s*#fff5f5/)
+    expect(stop).toMatch(/color:\s*#b42318/)
+    expect(stop).toMatch(/font-size:\s*12px/)
+    expect(stop).toMatch(/font-weight:\s*500/)
+    expect(rule(css, '.console-layout .el-button.cursor-composer-stop:hover')).toMatch(/background:\s*#ffe8e8/)
+    wrapper.unmount()
+  })
+
+  it('会话删除按钮沿用列表删除的颜色和圆角，并保持可见', async () => {
+    const wrapper = await mountConsole()
+    const button = buttonByText(wrapper, '删除')
+    expect(button.classes()).toContain('cursor-session-delete')
+    const del = rule(css, '.console-layout .el-button.cursor-session-delete')
+    expect(del).toMatch(/border:\s*none/)
+    expect(del).toMatch(/border-radius:\s*4px/)
+    expect(del).toMatch(/background:\s*transparent/)
+    expect(del).toMatch(/color:\s*#8a8a84/)
+    expect(del).toMatch(/height:\s*24px/)
+    expect(del).not.toMatch(/opacity:\s*0\b/)
+    expect(rule(css, '.console-layout .el-button.cursor-session-delete:hover')).toMatch(/background:\s*#e8d4d4/)
+    expect(rule(css, '.console-layout .el-button.cursor-session-delete:hover')).toMatch(/color:\s*#b42318/)
+    wrapper.unmount()
+  })
+
+  it('按钮间距去掉 Element Plus 的相邻外边距', () => {
+    expect(rule(css, '.console-layout .el-button + .el-button')).toMatch(/margin-left:\s*0/)
+    expect(rule(css, '.console-layout .row')).toMatch(/gap:\s*6px/)
+    expect(rule(css, '.console-layout .pass-actions')).toMatch(/gap:\s*6px/)
+  })
+
+  it('会话行、子 agent 和 skill 按钮只改颜色、字号、圆角', () => {
+    expect(rule(css, '.console-layout .session-switch')).toMatch(/font-size:\s*13px/)
+    expect(rule(css, '.console-layout .session-switch')).toMatch(/color:\s*#1b1b18/)
+    expect(rule(css, '.console-layout .session-switch')).toMatch(/padding:\s*6px 12px/)
+    expect(rule(css, '.console-layout .session-row.active')).toMatch(/background:\s*#dcdcd7/)
+    expect(rule(css, '.console-layout .session-row:hover')).toMatch(/background:\s*#e3e3de/)
+    const agent = rule(css, '.console-layout .agent-row')
+    expect(agent).toMatch(/border:\s*1px solid #c8c8c3/)
+    expect(agent).toMatch(/border-radius:\s*8px/)
+    expect(agent).toMatch(/padding:\s*7px 10px/)
+    expect(agent).toMatch(/font-size:\s*12px/)
+    expect(agent).toMatch(/color:\s*#1b1b18/)
+    expect(rule(css, '.console-layout .agent-row:hover')).toMatch(/background:\s*#e3e3de/)
+    const skill = rule(css, '.console-layout .skill-pop button')
+    expect(skill).toMatch(/padding:\s*8px 12px/)
+    expect(skill).toMatch(/font-size:\s*12px/)
+    expect(skill).toMatch(/border-radius:\s*6px/)
+    expect(skill).toMatch(/color:\s*#1b1b18/)
+    expect(rule(css, '.console-layout .skill-pop button:hover')).toMatch(/background:\s*#f0f0ec/)
+  })
+
+  it('按钮样式不加入过渡或关键帧', () => {
+    const at = css.indexOf('/* llgraph-buttons */')
+    expect(at).toBeGreaterThanOrEqual(0)
+    const block = css.slice(at)
+    expect(block).not.toMatch(/transition\s*:/)
+    expect(block).not.toMatch(/@keyframes/)
+    expect(block).not.toMatch(/animation\s*:/)
+  })
+
+  it('通行证决定和中止仍走原来的接口', async () => {
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    await buttonByText(wrapper, 'DENY').trigger('click')
+    await buttonByText(wrapper, '中止').trigger('click')
+    await flushPromises()
+    expect(api).toHaveBeenCalledWith('/api/executions/exec-1/passes/p1', {
+      method: 'POST',
+      body: { decision: 'DENY' }
+    })
+    expect(api).toHaveBeenCalledWith('/api/executions/exec-1/interrupt', {
+      method: 'POST',
+      body: {}
+    })
     wrapper.unmount()
   })
 })

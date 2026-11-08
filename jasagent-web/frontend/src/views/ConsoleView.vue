@@ -5,7 +5,7 @@
         <div class="sidebar-user">
           <span class="brand">JaSAgent</span>
           <span class="who">{{ loginName }}</span>
-          <el-button size="small" @click="logout">退出</el-button>
+          <el-button size="small" class="cursor-btn-ghost" @click="logout">退出</el-button>
         </div>
       </div>
       <div class="workspace-block">
@@ -14,14 +14,14 @@
           <el-option v-for="item in workspaceOptions" :key="item" :label="item" :value="item" />
         </el-select>
         <div class="row">
-          <el-button type="primary" size="small" @click="saveWorkspace">选定工作区</el-button>
+          <el-button type="primary" size="small" class="cursor-btn-primary" @click="saveWorkspace">选定工作区</el-button>
           <span v-if="workspaceReady" class="who">已选定</span>
         </div>
         <p v-if="workspace" class="workspace-path">{{ workspace }}</p>
       </div>
       <div class="session-head">
         <h2>会话</h2>
-        <el-button size="small" type="primary" @click="createSession">新建</el-button>
+        <el-button size="small" type="primary" class="cursor-btn-primary" @click="createSession">新建</el-button>
       </div>
       <div class="session-list">
         <p v-if="sessions.length === 0" class="muted">还没有会话。</p>
@@ -30,7 +30,7 @@
             <strong>{{ item.title }}</strong>
             <small>{{ item.sessionId.slice(0, 8) }}</small>
           </button>
-          <el-button size="small" text type="danger" @click="removeSession(item.sessionId)">删除</el-button>
+          <el-button size="small" text type="danger" class="cursor-session-delete" @click="removeSession(item.sessionId)">删除</el-button>
         </div>
       </div>
       <div class="session-meta">
@@ -47,7 +47,7 @@
         <p v-else-if="corrections.length === 0" class="muted">这条会话还没有纠正 note。</p>
         <p v-for="note in corrections" :key="note.noteId" class="note-line">{{ note.source }} {{ note.text }}</p>
         <el-input v-model="noteText" placeholder="纠正 note" />
-        <el-button size="small" @click="addNote">追加纠正</el-button>
+        <el-button size="small" class="cursor-btn-ghost" @click="addNote">追加纠正</el-button>
       </div>
     </aside>
     <div class="split-handle" data-resize="session" @mousedown.prevent="startResize($event, 'session')"></div>
@@ -96,9 +96,9 @@
           </div>
           <el-input v-model="draft" type="textarea" :rows="2" placeholder="输入 / 选择 skill" @keydown.enter.exact.prevent="sendMessage" />
           <div class="row">
-            <el-button type="primary" size="small" @click="sendMessage">发送</el-button>
-            <el-button size="small" @click="interruptExecution">中止</el-button>
-            <el-button size="small" @click="resumeExecution">恢复</el-button>
+            <el-button type="primary" size="small" class="cursor-btn-primary" @click="sendMessage">发送</el-button>
+            <el-button size="small" class="cursor-composer-stop" @click="interruptExecution">中止</el-button>
+            <el-button size="small" class="cursor-btn-ghost" @click="resumeExecution">恢复</el-button>
           </div>
         </div>
       </div>
@@ -151,8 +151,8 @@
             </div>
             <p class="muted">{{ row.reason }}</p>
             <div class="pass-actions">
-              <el-button size="small" type="success" @click="decide(row, 'ALLOW')">ALLOW</el-button>
-              <el-button size="small" type="danger" @click="decide(row, 'DENY')">DENY</el-button>
+              <el-button size="small" type="primary" class="cursor-btn-primary" @click="decide(row, 'ALLOW')">ALLOW</el-button>
+              <el-button size="small" type="danger" class="cursor-btn-danger" @click="decide(row, 'DENY')">DENY</el-button>
             </div>
           </article>
         </div>
@@ -191,12 +191,12 @@
             <el-select v-model="workflowId" class="grow" placeholder="workflow">
               <el-option v-for="item in workflows" :key="item.id" :label="item.id" :value="item.id" />
             </el-select>
-            <el-button size="small" @click="loadWorkflows">刷新列表</el-button>
+            <el-button size="small" class="cursor-btn-ghost" @click="loadWorkflows">刷新列表</el-button>
           </div>
           <el-input v-model="cliInput" type="textarea" :rows="2" placeholder="执行输入" />
           <div class="row">
-            <el-button type="primary" size="small" @click="submitExecution">提交执行</el-button>
-            <el-button size="small" @click="queryExecution">查询</el-button>
+            <el-button type="primary" size="small" class="cursor-btn-primary" @click="submitExecution">提交执行</el-button>
+            <el-button size="small" class="cursor-btn-ghost" @click="queryExecution">查询</el-button>
           </div>
           <el-input v-model="executionId" placeholder="executionId" />
           <p class="muted">{{ detail.status || '未选择' }}</p>
