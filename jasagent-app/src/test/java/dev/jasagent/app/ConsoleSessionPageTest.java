@@ -148,7 +148,8 @@ class ConsoleSessionPageTest {
     void timelineHasAiReply() throws Exception {
         String body = supportTimeline("ai-user");
         assertTrue(body.contains("\"type\":\"ai\""), body);
-        assertTrue(body.contains("已收到"), body);
+        assertTrue(body.contains("模型未配置"), body);
+        assertFalse(body.contains("已收到"), body);
     }
 
     @Test
@@ -277,7 +278,7 @@ class ConsoleSessionPageTest {
                 "workflowId", "show-support"));
         assertEquals(HttpStatus.OK, sent.getStatusCode(), sent.getBody());
         String executionId = field(sent.getBody(), "executionId");
-        awaitBody(cookie, executionId, "SUCCEEDED");
+        awaitBody(cookie, executionId, "\"status\":\"FAILED\"");
         ResponseEntity<String> timeline = get("/api/sessions/" + sessionId + "/timeline?executionId=" + executionId, cookie);
         assertEquals(HttpStatus.OK, timeline.getStatusCode(), timeline.getBody());
         assertNotNull(timeline.getBody());

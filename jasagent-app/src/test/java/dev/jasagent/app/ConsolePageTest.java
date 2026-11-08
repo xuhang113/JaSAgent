@@ -53,6 +53,14 @@ class ConsolePageTest {
     }
 
     @Test
+    void healthReportsStorageUp() {
+        ResponseEntity<String> response = http.getForEntity("/health", String.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertTrue(response.getBody().contains("\"status\":\"ok\""), response.getBody());
+        assertTrue(response.getBody().contains("\"storage\":\"up\""), response.getBody());
+    }
+
+    @Test
     void loginPageReferencesVueBuild() {
         String body = page("/login");
         assertTrue(body.contains("id=\"app\""));

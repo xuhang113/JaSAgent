@@ -8,6 +8,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletionStage;
 
 public final class ExecutionStore {
@@ -54,14 +56,7 @@ public final class ExecutionStore {
                     if (!rows.next()) {
                         throw persist(executionId, "执行不存在", null);
                     }
-                    return new ExecutionRow(
-                            rows.getString(1),
-                            rows.getString(2),
-                            rows.getString(3),
-                            rows.getString(4),
-                            rows.getString(5),
-                            rows.getString(6),
-                            rows.getString(7));
+                    return readExecution(rows);
                 }
             } catch (SQLException ex) {
                 throw persist(executionId, "执行读取失败", ex);
@@ -123,6 +118,89 @@ public final class ExecutionStore {
         });
     }
 
+    public CompletionStage<Void> updateStatus(String executionId, String status) {
+        return VirtualIo.supply(() -> {
+            try (Connection connection = database.connect();
+                 PreparedStatement statement = connection.prepareStatement(
+                         "UPDATE execution SET status = ? WHERE execution_id = ?")) {
+                statement.setString(1, status);
+                statement.setString(2, executionId);
+                if (statement.executeUpdate() != 1) {
+                    throw persist(executionId, "执行不存在", null);
+                }
+                return null;
+            } catch (SQLException ex) {
+                throw persist(executionId, "执行状态写入失败", ex);
+            }
+        });
+    }
+
+    public CompletionStage<List<ExecutionRow>> listExecutions(String userId) {
+        return VirtualIo.supply(() -> {
+            String sql = """
+                    SELECT execution_id, user_id, session_id, workspace_path, status, otel_trace_id, otel_root_span_id
+                    FROM execution WHERE user_id = ? ORDER BY execution_id
+                    """;
+            try (Connection connection = database.connect();
+                 PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, userId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    List<ExecutionRow> found = new ArrayList<>();
+                    while (rows.next()) {
+                        found.add(readExecution(rows));
+                    }
+                    return found;
+                }
+            } catch (SQLException ex) {
+                throw persist(null, "执行读取失败", ex);
+            }
+        });
+    }
+
+    public CompletionStage<Void> saveDocument(String executionId, String sessionId, String body) {
+        return VirtualIo.supply(() -> {
+            String messageId = "view-" + executionId;
+            try (Connection connection = database.connect()) {
+                connection.setAutoCommit(false);
+                try (PreparedStatement delete = connection.prepareStatement("DELETE FROM message WHERE message_id = ?")) {
+                    delete.setString(1, messageId);
+                    delete.executeUpdate();
+                }
+                try (PreparedStatement insert = connection.prepareStatement(
+                        "INSERT INTO message (message_id, execution_id, session_id, role, body) VALUES (?, ?, ?, ?, ?)")) {
+                    insert.setString(1, messageId);
+                    insert.setString(2, executionId);
+                    insert.setString(3, sessionId == null || sessionId.isBlank() ? executionId : sessionId);
+                    insert.setString(4, "view");
+                    insert.setString(5, body == null ? "" : body);
+                    insert.executeUpdate();
+                }
+                connection.commit();
+                return null;
+            } catch (SQLException ex) {
+                throw persist(executionId, "执行状态写入失败", ex);
+            }
+        });
+    }
+
+    public CompletionStage<String> findDocument(String executionId) {
+        return VirtualIo.supply(() -> {
+            try (Connection connection = database.connect();
+                 PreparedStatement statement = connection.prepareStatement(
+                         "SELECT body FROM message WHERE message_id = ?")) {
+                statement.setString(1, "view-" + executionId);
+                try (ResultSet rows = statement.executeQuery()) {
+                    if (!rows.next()) {
+                        return null;
+                    }
+                    return rows.getString(1);
+                }
+            } catch (SQLException ex) {
+                throw persist(executionId, "执行状态读取失败", ex);
+            }
+        });
+    }
+
     public CompletionStage<Void> insertTask(String taskId, String executionId, String status) {
         return VirtualIo.supply(() -> {
             try (Connection connection = database.connect();
@@ -180,6 +258,17 @@ public final class ExecutionStore {
                 throw persist(null, "任务读取失败", ex);
             }
         });
+    }
+
+    private static ExecutionRow readExecution(ResultSet rows) throws SQLException {
+        return new ExecutionRow(
+                rows.getString(1),
+                rows.getString(2),
+                rows.getString(3),
+                rows.getString(4),
+                rows.getString(5),
+                rows.getString(6),
+                rows.getString(7));
     }
 
     private static AgentException persist(String executionId, String message, Throwable cause) {

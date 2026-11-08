@@ -7,16 +7,22 @@ import dev.jasagent.api.auth.Catalog;
 import dev.jasagent.api.auth.RuleDocument;
 import dev.jasagent.api.auth.Session;
 import dev.jasagent.api.auth.SkillDocument;
+import dev.jasagent.api.event.TraceEvent;
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
 import dev.jasagent.api.exec.ConsoleApi;
 import dev.jasagent.api.exec.ExecutionApi;
+import dev.jasagent.api.exec.ExecutionSnapshot;
+import dev.jasagent.api.exec.ExecutionStatus;
 import dev.jasagent.api.llm.ChatMessage;
 import dev.jasagent.api.llm.ChatResponse;
+import dev.jasagent.api.llm.Embedding;
 import dev.jasagent.api.llm.TokenUsage;
 import dev.jasagent.api.pass.PassDecision;
 import dev.jasagent.api.pass.PassGate;
 import dev.jasagent.api.pass.PassRequest;
+import dev.jasagent.api.plugin.CallStats;
+import dev.jasagent.api.tool.ToolCall;
 import dev.jasagent.api.schedule.ScheduleBatch;
 import dev.jasagent.api.schedule.SubAgentRunner;
 import dev.jasagent.api.task.AgentRole;
@@ -27,6 +33,11 @@ import dev.jasagent.auth.LocalCatalogLoader;
 import dev.jasagent.core.ContextInput;
 import dev.jasagent.core.ContextWindow;
 import dev.jasagent.core.QueueAgentScheduler;
+import dev.jasagent.interrupt.CheckpointRunControl;
+import dev.jasagent.interrupt.NodeTask;
+import dev.jasagent.api.trace.TraceWriter;
+import dev.jasagent.persist.ExecutionRow;
+import dev.jasagent.plugin.PluginToolCatalog;
 import dev.jasagent.workflow.ChatModel;
 import dev.jasagent.workflow.Evaluator;
 import dev.jasagent.workflow.LangGraphWorkflowEngine;
@@ -42,11 +53,13 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,8 +74,15 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     private final PassGate passGate;
     private final QueueAgentScheduler scheduler;
     private final double compressAt;
+    private final boolean modelReady;
+    private final ChatModel workflowChat;
+    private final ExecutionJournal journal;
+    private final SavedTraceTracer traces = new SavedTraceTracer();
+    private final Map<String, String> environment;
+    private final Map<String, CheckpointRunControl> controls = new ConcurrentHashMap<>();
     private final Map<String, Exec> executions = new ConcurrentHashMap<>();
     private final ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
+    private PluginToolCatalog pluginTools;
 
     public LocalRuntime(LocalAuthService auth) {
         this(auth, Map.of());
@@ -74,6 +94,29 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         SubAgentRunner runner = item -> CompletableFuture.completedFuture(null);
         this.scheduler = new QueueAgentScheduler(configuration, runner);
         this.compressAt = ContextWindow.compressAt(configuration);
+        this.modelReady = WorkflowModels.configured();
+        this.workflowChat = WorkflowModels.chat();
+        this.environment = environment(configuration);
+        ExecutionJournal opened = null;
+        try {
+            opened = ExecutionJournal.open(auth.directories().homeRoot(), environment);
+        } catch (RuntimeException ignored) {
+            opened = null;
+        }
+        this.journal = opened;
+    }
+
+    public boolean storageReachable() {
+        return journal != null && journal.reachable();
+    }
+
+    List<String> observedChildTraceIds() {
+        return traces.childTraceIds();
+    }
+
+    public void close() {
+        controls.clear();
+        workers.shutdownNow();
     }
 
     @Override
@@ -82,20 +125,27 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     private Map<String, Object> submit(String userId, String token, String workflowId, String input, String sessionId) {
+        requireJournal();
         Session session = auth.authenticate(token).toCompletableFuture().join();
         if (session.workspace() == null || session.workspace().isBlank()) {
             throw new AgentException(ErrorCode.WORKFLOW, "未选择工作区");
         }
         String id = UUID.randomUUID().toString();
-        Exec exec = new Exec(id, userId, session.workspace(), session.token());
+        String workspace = Path.of(session.workspace()).toAbsolutePath().normalize().toString();
+        Exec exec = new Exec(id, userId, workspace, session.token());
         String sessionKey = sessionId == null || sessionId.isBlank() ? id : sessionId;
         exec.sessionId = sessionKey;
+        exec.traceId = hex(32);
+        exec.rootSpanId = hex(16);
+        traces.assign(id, exec.traceId, exec.rootSpanId);
         executions.put(id, exec);
         exec.append("accepted " + id);
         exec.append("user " + userId);
-        exec.append("workspace " + session.workspace());
-        rememberCapabilities(exec, loadDefinition(session.workspace(), workflowId));
+        exec.append("workspace " + workspace);
+        rememberCapabilities(exec, loadDefinition(workspace, workflowId));
         String text = input == null ? "" : input;
+        exec.pendingWorkflow = workflowId;
+        exec.pendingInput = text;
         scheduler.enqueue(new WorkItem(id, id, sessionKey, workflowId, text, workflowId, text))
                 .toCompletableFuture()
                 .join();
@@ -115,7 +165,9 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         if (exec.queue.isEmpty()) {
             exec.queue.add("main: " + workflowId);
         }
-        workers.execute(() -> run(exec, workflowId, text));
+        journal.insert(new ExecutionRow(id, userId, sessionKey, workspace, "ACCEPTED", exec.traceId, exec.rootSpanId));
+        save(exec, false);
+        workers.execute(() -> start(exec));
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("executionId", id);
         body.put("status", "ACCEPTED");
@@ -124,11 +176,13 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
 
     @Override
     public List<Map<String, Object>> list(String userId) {
+        requireJournal();
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Exec exec : executions.values()) {
-            if (userId.equals(exec.userId)) {
-                rows.add(summary(exec));
-            }
+        for (ExecutionRow row : journal.list(userId)) {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("executionId", row.executionId());
+            summary.put("status", row.status());
+            rows.add(summary);
         }
         return rows;
     }
@@ -146,27 +200,39 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     @Override
     public Map<String, Object> interrupt(String userId, String executionId) {
         Exec exec = owned(userId, executionId);
-        exec.suspended = true;
-        exec.status = "SUSPENDED";
-        exec.append("interrupt");
-        return view(exec);
+        synchronized (exec) {
+            exec.append("interrupt");
+            save(exec, false);
+        }
+        try {
+            ExecutionSnapshot snapshot = controlFor(exec).interrupt(exec.executionId, exec.userId).toCompletableFuture().join();
+            applySnapshot(exec, snapshot);
+        } catch (RuntimeException ex) {
+            synchronized (exec) {
+                if (!terminalStatus(exec.status)) {
+                    finishSuspended(exec, exec.output);
+                    save(exec, true);
+                }
+            }
+        }
+        return view(owned(userId, executionId));
     }
 
     @Override
     public Map<String, Object> resume(String userId, String executionId) {
         Exec exec = owned(userId, executionId);
-        if (!"SUSPENDED".equals(exec.status)) {
-            return view(exec);
+        synchronized (exec) {
+            if (!"SUSPENDED".equals(exec.status)) {
+                return view(exec);
+            }
+            exec.append("resume");
+            exec.suspended = false;
+            exec.status = "RUNNING";
+            save(exec, true);
         }
-        exec.suspended = false;
-        exec.status = "RUNNING";
-        exec.append("resume");
-        if (exec.pendingWorkflow != null) {
-            String workflowId = exec.pendingWorkflow;
-            String input = exec.pendingInput;
-            workers.execute(() -> run(exec, workflowId, input));
-        }
-        return view(exec);
+        ExecutionSnapshot snapshot = controlFor(exec).resume(exec.executionId, exec.userId).toCompletableFuture().join();
+        applySnapshot(exec, snapshot);
+        return view(owned(userId, executionId));
     }
 
     @Override
@@ -175,88 +241,151 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         return retrieval(query);
     }
 
-    private void run(Exec exec, String workflowId, String input) {
-        exec.pendingWorkflow = workflowId;
-        exec.pendingInput = input;
-        exec.status = "RUNNING";
-        if (exec.suspended) {
-            exec.status = "SUSPENDED";
-            return;
-        }
+    private void start(Exec exec) {
         try {
-            WorkflowDefinition definition = loadDefinition(exec.workspace, workflowId);
-            List<Map<String, Object>> rules = new ArrayList<>();
-            List<Map<String, Object>> skills = new ArrayList<>();
-            try {
-                Catalog catalog = catalog(exec.userId, exec.token);
-                for (RuleDocument rule : catalog.rules()) {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rule.id() == null ? "" : rule.id());
-                    row.put("description", rule.description() == null ? "" : rule.description());
-                    rules.add(row);
+            ExecutionSnapshot snapshot = controlFor(exec)
+                    .start(exec.executionId, exec.userId, exec.sessionId, exec.workspace)
+                    .toCompletableFuture()
+                    .join();
+            applySnapshot(exec, snapshot);
+        } catch (RuntimeException ex) {
+            synchronized (exec) {
+                if (exec.suspended || pending(exec)) {
+                    finishSuspended(exec, exec.output);
+                } else {
+                    exec.status = "FAILED";
+                    exec.errorCode = offlineCode(ex);
+                    recordAi(exec, "OFFLINE".equals(exec.errorCode) ? "模型未配置" : exec.output);
+                    exec.append("terminal FAILED " + exec.errorCode);
                 }
-                for (SkillDocument skill : catalog.skills()) {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("name", skill.name() == null ? "" : skill.name());
-                    row.put("description", skill.description() == null ? "" : skill.description());
-                    skills.add(row);
+                save(exec, true);
+            }
+        }
+    }
+
+    private CompletionStage<String> runNode(String executionId) {
+        Exec exec = requireExec(executionId);
+        try {
+            executeWorkflow(exec);
+        } catch (RuntimeException ex) {
+            synchronized (exec) {
+                if (exec.suspended || pending(exec)) {
+                    finishSuspended(exec, exec.output);
+                } else {
+                    exec.status = "FAILED";
+                    exec.errorCode = offlineCode(ex);
+                    recordAi(exec, "OFFLINE".equals(exec.errorCode) ? "模型未配置" : exec.output);
+                    exec.append("terminal FAILED " + exec.errorCode);
                 }
-            } catch (RuntimeException ignored) {
-                // 目录读不到时时间线仍保留 system 和 human。
+                save(exec, false);
             }
-            recordOpening(exec, rules, skills, input);
-            Path database = checkpoint(exec);
-            LangGraphWorkflowEngine engine = new LangGraphWorkflowEngine(
-                    request -> CompletableFuture.completedFuture(new ChatModel.ModelReply("已收到", List.of())),
-                    (executionId, name, arguments) -> callTool(exec, name, arguments),
-                    call -> holdPlugin(exec, call.pluginId()),
-                    query -> CompletableFuture.completedFuture(List.of()),
-                    query -> CompletableFuture.completedFuture(new Evaluator.EvaluationOutcome(true, "tool.success.rate")),
-                    call -> CompletableFuture.completedFuture(""));
-            List<String> ruleLines = new ArrayList<>();
-            for (Map<String, Object> rule : rules) {
-                ruleLines.add(rule.get("id") + " " + rule.get("description"));
+        }
+        synchronized (exec) {
+            save(exec, false);
+            if (exec.suspended || pending(exec)) {
+                return hang(exec);
             }
-            List<String> skillLines = new ArrayList<>();
-            for (Map<String, Object> skill : skills) {
-                skillLines.add(skill.get("name") + " " + skill.get("description"));
+            if (!"SUCCEEDED".equals(exec.status)) {
+                throw failure(exec);
             }
-            WorkflowRequest request = new WorkflowRequest(
-                    exec.executionId,
-                    exec.sessionId,
-                    exec.userId,
-                    database,
-                    input,
-                    definition,
-                    new PromptContext("assistant", ruleLines, skillLines, List.of(), "", List.of(), List.of()),
-                    null);
-            WorkflowRun result = engine.execute(request).toCompletableFuture().join();
+            return CompletableFuture.completedFuture(exec.output == null ? "" : exec.output);
+        }
+    }
+
+    private void executeWorkflow(Exec exec) {
+        synchronized (exec) {
+            exec.pendingWorkflow = exec.pendingWorkflow == null ? "" : exec.pendingWorkflow;
+            exec.status = "RUNNING";
+            exec.suspended = false;
+        }
+        WorkflowDefinition definition = loadDefinition(exec.workspace, exec.pendingWorkflow);
+        boolean usesModel = false;
+        for (WorkflowDefinition.NodeSpec node : definition.nodes()) {
+            if ("react".equals(node.type())) {
+                usesModel = true;
+                break;
+            }
+        }
+        exec.modelNode = usesModel;
+        List<Map<String, Object>> rules = new ArrayList<>();
+        List<Map<String, Object>> skills = new ArrayList<>();
+        try {
+            Catalog catalog = catalog(exec.userId, exec.token);
+            for (RuleDocument rule : catalog.rules()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", rule.id() == null ? "" : rule.id());
+                row.put("description", rule.description() == null ? "" : rule.description());
+                rules.add(row);
+            }
+            for (SkillDocument skill : catalog.skills()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("name", skill.name() == null ? "" : skill.name());
+                row.put("description", skill.description() == null ? "" : skill.description());
+                skills.add(row);
+            }
+        } catch (RuntimeException ignored) {
+            // 目录读不到时时间线仍保留 system 和 human。
+        }
+        synchronized (exec) {
+            if (!hasSystem(exec)) {
+                recordOpening(exec, rules, skills, exec.pendingInput);
+            }
+        }
+        Path database = checkpoint(exec);
+        LangGraphWorkflowEngine engine = new LangGraphWorkflowEngine(
+                workflowChat,
+                (id, name, arguments) -> callTool(exec, name, arguments),
+                call -> holdPlugin(exec, call.pluginId()),
+                query -> CompletableFuture.completedFuture(List.of()),
+                query -> CompletableFuture.completedFuture(new Evaluator.EvaluationOutcome(true, "tool.success.rate")),
+                call -> CompletableFuture.completedFuture(""));
+        List<String> ruleLines = new ArrayList<>();
+        for (Map<String, Object> rule : rules) {
+            ruleLines.add(rule.get("id") + " " + rule.get("description"));
+        }
+        List<String> skillLines = new ArrayList<>();
+        for (Map<String, Object> skill : skills) {
+            skillLines.add(skill.get("name") + " " + skill.get("description"));
+        }
+        String jdbc = environment.get("JASAGENT_JDBC_URL");
+        WorkflowRequest request = new WorkflowRequest(
+                exec.executionId,
+                exec.sessionId,
+                exec.userId,
+                database,
+                exec.pendingInput == null ? "" : exec.pendingInput,
+                definition,
+                new PromptContext("assistant", ruleLines, skillLines, List.of(), "", List.of(), List.of()),
+                jdbc == null || jdbc.isBlank() ? null : jdbc);
+        WorkflowRun result = engine.execute(request).toCompletableFuture().join();
+        synchronized (exec) {
             if (exec.suspended || pending(exec)) {
                 if (result.output() != null && !result.output().isBlank()) {
                     exec.output = result.output();
                 }
-                recordAi(exec);
+                recordAi(exec, exec.output);
                 finishSuspended(exec, exec.output);
+                return;
+            }
+            boolean offline = !modelReady && ("LLM".equals(result.errorCode()) || (usesModel && "SUCCEEDED".equals(result.status())));
+            if (offline) {
+                exec.output = "";
+                exec.errorCode = "OFFLINE";
+                exec.status = "FAILED";
+                recordAi(exec, "模型未配置");
+                exec.append("terminal FAILED OFFLINE");
                 return;
             }
             exec.output = result.output() == null ? "" : result.output();
             exec.evaluations.add("completion.nonempty:" + !exec.output.isBlank());
             exec.errorCode = result.errorCode() == null ? "" : result.errorCode();
-            recordAi(exec);
+            recordAi(exec, exec.output);
             exec.status = "FAILED".equals(result.status()) ? "FAILED" : "SUCCEEDED";
             exec.append("terminal " + exec.status);
-            exec.queue.clear();
-            exec.queue.add("sub-1: done");
-        } catch (Exception ex) {
-            if (exec.suspended || pending(exec)) {
-                recordAi(exec);
-                finishSuspended(exec, exec.output);
-                return;
+            if ("SUCCEEDED".equals(exec.status)) {
+                exec.queue.clear();
+                exec.queue.add("sub-1: done");
             }
-            exec.errorCode = ex instanceof AgentException agent ? agent.code().name() : ErrorCode.INTERNAL.name();
-            recordAi(exec);
-            exec.status = "FAILED";
-            exec.append("terminal FAILED " + exec.errorCode);
         }
     }
 
@@ -285,10 +414,10 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         }
     }
 
-    private void recordAi(Exec exec) {
+    private void recordAi(Exec exec, String content) {
         Map<String, Object> ai = new LinkedHashMap<>();
         ai.put("type", "ai");
-        ai.put("content", exec.output == null ? "" : exec.output);
+        ai.put("content", content == null ? "" : content);
         ai.put("tool_calls", List.of());
         synchronized (exec.timeline) {
             exec.timeline.add(ai);
@@ -306,11 +435,15 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         }
     }
 
-    private static Path checkpoint(Exec exec) throws Exception {
-        Path directory = Path.of(exec.workspace).resolve("jasagent").resolve("data");
-        Files.createDirectories(directory);
-        exec.runs += 1;
-        return directory.resolve(exec.executionId + "-" + exec.runs + ".db");
+    private static Path checkpoint(Exec exec) {
+        try {
+            Path directory = Path.of(exec.workspace).resolve("jasagent").resolve("data");
+            Files.createDirectories(directory);
+            exec.runs += 1;
+            return directory.resolve(exec.executionId + "-" + exec.runs + ".db");
+        } catch (Exception ex) {
+            throw new AgentException(ErrorCode.PERSIST, "检查点存储器无法打开", exec.executionId, ex);
+        }
     }
 
     private void finishSuspended(Exec exec, String output) {
@@ -319,7 +452,6 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         if (output != null && !output.isBlank()) {
             exec.output = output;
         }
-        exec.append("terminal SUSPENDED");
     }
 
     private static boolean pending(Exec exec) {
@@ -373,11 +505,35 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         } else if ("rag.search".equals(name)) {
             exec.retrievals.add(retrieval(arguments));
             result = "retrieved";
+        } else if (pluginNames().contains(name)) {
+            result = callPlugin(exec, name, arguments);
         } else {
             result = "";
         }
         recordTool(exec, name, result);
         return CompletableFuture.completedFuture(result);
+    }
+
+    private String callPlugin(Exec exec, String name, String arguments) {
+        try {
+            String result = pluginTools().require(name).call(new ToolCall(
+                    exec.userId,
+                    exec.executionId,
+                    auth.directories().userDirectory(exec.userId),
+                    Path.of(exec.workspace).resolve("jasagent"),
+                    name,
+                    argumentMap(arguments))).toCompletableFuture().join();
+            CallStats.load().recordSuccess(name);
+            return result == null ? "" : result;
+        } catch (RuntimeException ex) {
+            try {
+                CallStats.load().recordFailure(name);
+            } catch (RuntimeException ignored) {
+                // 统计写不进去时仍把工具失败留在时间线。
+            }
+            Throwable cause = ex instanceof CompletionException && ex.getCause() != null ? ex.getCause() : ex;
+            return cause.getMessage() == null ? "tool failed" : cause.getMessage();
+        }
     }
 
     private static Map<String, Object> retrieval(String arguments) {
@@ -393,9 +549,17 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
 
     private Exec owned(String userId, String executionId) {
         Exec exec = executions.get(executionId);
+        if (exec == null) {
+            exec = load(executionId);
+            if (exec != null) {
+                executions.putIfAbsent(executionId, exec);
+                exec = executions.get(executionId);
+            }
+        }
         if (exec == null || !userId.equals(exec.userId)) {
             throw new AgentException(ErrorCode.AUTH, "不能读取其他用户的执行");
         }
+        overlay(exec);
         return exec;
     }
 
@@ -406,19 +570,21 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         return row;
     }
 
-    private static Map<String, Object> view(Exec exec) {
-        Map<String, Object> row = summary(exec);
-        row.put("output", exec.output);
-        row.put("errorCode", exec.errorCode);
-        row.put("queue", List.copyOf(exec.queue));
-        row.put("logs", exec.logs.toString());
-        row.put("retrievals", List.copyOf(exec.retrievals));
-        row.put("passes", List.copyOf(exec.passes));
-        row.put("evaluations", List.copyOf(exec.evaluations));
-        row.put("tools", List.copyOf(exec.tools));
-        row.put("plugins", List.copyOf(exec.plugins));
-        row.put("traceId", exec.traceId);
-        return row;
+    private Map<String, Object> view(Exec exec) {
+        synchronized (exec) {
+            Map<String, Object> row = summary(exec);
+            row.put("output", exec.output);
+            row.put("errorCode", exec.errorCode);
+            row.put("queue", List.copyOf(exec.queue));
+            row.put("logs", exec.logs.toString());
+            row.put("retrievals", copyMaps(exec.retrievals));
+            row.put("passes", copyMaps(exec.passes));
+            row.put("evaluations", List.copyOf(exec.evaluations));
+            row.put("tools", List.copyOf(exec.tools));
+            row.put("plugins", List.copyOf(exec.plugins));
+            row.put("traceId", exec.traceId);
+            return row;
+        }
     }
 
     @Override
@@ -600,7 +766,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             row.put("description", rule.description());
             rules.add(row);
         }
-        new ContextWindow(new OfflineChatModel()).prepare(new ContextInput(
+        try {
+            new ContextWindow(new OfflineChatModel(), compressAt).prepare(new ContextInput(
                 sessionId,
                 "assistant",
                 "",
@@ -610,6 +777,9 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 List.of(),
                 "",
                 ContextWindow.DEFAULT_BUDGET_TOKENS)).toCompletableFuture().join();
+        } catch (RuntimeException ignored) {
+            // 压缩没完成时不把半截摘要当成上下文。
+        }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("sessionId", stored.get("sessionId"));
         body.put("title", stored.get("title"));
@@ -670,12 +840,15 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             if (passId.equals(pass.get("passId"))) {
                 pass.put("decision", decision);
                 pass.put("reason", "ALLOW".equals(decision) ? "approved" : "denied");
-                if ("ALLOW".equals(decision) && exec.pendingWorkflow != null && (exec.suspended || "SUSPENDED".equals(exec.status))) {
+                boolean resume = "ALLOW".equals(decision) && exec.pendingWorkflow != null && (exec.suspended || "SUSPENDED".equals(exec.status));
+                if (resume) {
                     exec.suspended = false;
                     exec.status = "RUNNING";
-                    String workflowId = exec.pendingWorkflow;
-                    String resumedInput = exec.pendingInput;
-                    workers.execute(() -> run(exec, workflowId, resumedInput));
+                    exec.append("resume");
+                }
+                save(exec, true);
+                if (resume) {
+                    workers.execute(() -> continueRun(exec));
                 }
                 return view(exec);
             }
@@ -851,6 +1024,247 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         return id;
     }
 
+    private void requireJournal() {
+        if (journal == null) {
+            throw new AgentException(ErrorCode.PERSIST, "存储不可连接");
+        }
+    }
+
+    private static Map<String, String> environment(Map<String, String> configuration) {
+        Map<String, String> env = new HashMap<>(System.getenv());
+        if (configuration == null) {
+            return env;
+        }
+        String url = configuration.get("JASAGENT_JDBC_URL");
+        if (url != null && !url.isBlank()) {
+            env.put("JASAGENT_JDBC_URL", url);
+        }
+        return env;
+    }
+
+    private CheckpointRunControl controlFor(Exec exec) {
+        requireJournal();
+        return controls.computeIfAbsent(exec.workspace, workspace -> CheckpointRunControl.open(
+                Path.of(workspace),
+                List.of(NodeTask.of("workflow", this::runNode)),
+                traces,
+                new MemoryTrace(),
+                environment));
+    }
+
+    private CompletionStage<String> hang(Exec exec) {
+        CompletableFuture<String> hanging = new CompletableFuture<>();
+        Thread.ofVirtual().start(() -> {
+            try {
+                controlFor(exec).interrupt(exec.executionId, exec.userId).toCompletableFuture().join();
+            } catch (RuntimeException ex) {
+                hanging.completeExceptionally(ex);
+            }
+        });
+        return hanging;
+    }
+
+    private void continueRun(Exec exec) {
+        try {
+            ExecutionSnapshot snapshot = controlFor(exec).resume(exec.executionId, exec.userId).toCompletableFuture().join();
+            applySnapshot(exec, snapshot);
+        } catch (RuntimeException ex) {
+            synchronized (exec) {
+                exec.status = "FAILED";
+                exec.errorCode = offlineCode(ex);
+                exec.append("terminal FAILED " + exec.errorCode);
+                save(exec, true);
+            }
+        }
+    }
+
+    private void applySnapshot(Exec exec, ExecutionSnapshot snapshot) {
+        synchronized (exec) {
+            String code = snapshot.errorCode() == null ? "" : snapshot.errorCode();
+            if (!modelReady && snapshot.status() == ExecutionStatus.FAILED && ("LLM".equals(code) || "OFFLINE".equals(exec.errorCode))) {
+                exec.status = "FAILED";
+                exec.errorCode = "OFFLINE";
+            } else {
+                exec.status = snapshot.status().name();
+                if (!code.isBlank()) {
+                    exec.errorCode = code;
+                }
+            }
+            exec.suspended = "SUSPENDED".equals(exec.status);
+            if ("SUSPENDED".equals(exec.status) && !exec.logs.toString().contains("terminal SUSPENDED")) {
+                exec.append("terminal SUSPENDED");
+            }
+            if (snapshot.traceId() != null && !snapshot.traceId().isBlank()) {
+                exec.traceId = snapshot.traceId();
+            }
+            if (snapshot.rootSpanId() != null && !snapshot.rootSpanId().isBlank()) {
+                exec.rootSpanId = snapshot.rootSpanId();
+            }
+            if ((exec.output == null || exec.output.isBlank()) && snapshot.output() != null && !snapshot.output().isBlank()) {
+                exec.output = snapshot.output();
+            }
+            save(exec, true);
+        }
+    }
+
+    private void save(Exec exec, boolean status) {
+        requireJournal();
+        journal.saveDocument(exec.executionId, exec.sessionId, ExecutionJournal.writeJson(exec.state()));
+        if (status) {
+            journal.updateStatus(exec.executionId, exec.status);
+        }
+    }
+
+    private void overlay(Exec exec) {
+        if (journal == null) {
+            return;
+        }
+        ExecutionRow row = journal.findIfPresent(exec.executionId);
+        if (row == null) {
+            return;
+        }
+        synchronized (exec) {
+            exec.status = row.status();
+            exec.suspended = "SUSPENDED".equals(row.status());
+            if (row.otelTraceId() != null && !row.otelTraceId().isBlank()) {
+                exec.traceId = row.otelTraceId();
+            }
+            if (row.otelRootSpanId() != null && !row.otelRootSpanId().isBlank()) {
+                exec.rootSpanId = row.otelRootSpanId();
+            }
+        }
+    }
+
+    private Exec load(String executionId) {
+        if (journal == null) {
+            return null;
+        }
+        ExecutionRow row = journal.findIfPresent(executionId);
+        if (row == null) {
+            return null;
+        }
+        String document = journal.document(executionId);
+        if (document == null || document.isBlank()) {
+            Exec exec = new Exec(row.executionId(), row.userId(), row.workspacePath(), "");
+            exec.sessionId = row.sessionId();
+            exec.status = row.status();
+            exec.traceId = row.otelTraceId() == null ? "" : row.otelTraceId();
+            exec.rootSpanId = row.otelRootSpanId() == null ? "" : row.otelRootSpanId();
+            return exec;
+        }
+        return Exec.restore(ExecutionJournal.readJson(document), row);
+    }
+
+    private Exec requireExec(String executionId) {
+        Exec exec = executions.get(executionId);
+        if (exec != null) {
+            return exec;
+        }
+        exec = load(executionId);
+        if (exec == null) {
+            throw new AgentException(ErrorCode.PERSIST, "执行不存在", executionId, null);
+        }
+        executions.put(executionId, exec);
+        return exec;
+    }
+
+    private AgentException failure(Exec exec) {
+        if ("OFFLINE".equals(exec.errorCode) || (!modelReady && exec.modelNode)) {
+            return new AgentException(ErrorCode.LLM, "模型未配置", exec.executionId, null);
+        }
+        ErrorCode code = ErrorCode.INTERNAL;
+        try {
+            if (exec.errorCode != null && !exec.errorCode.isBlank()) {
+                code = ErrorCode.valueOf(exec.errorCode);
+            }
+        } catch (IllegalArgumentException ignored) {
+            code = ErrorCode.INTERNAL;
+        }
+        return new AgentException(code, exec.errorCode == null || exec.errorCode.isBlank() ? "执行失败" : exec.errorCode, exec.executionId, null);
+    }
+
+    private String offlineCode(RuntimeException ex) {
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof AgentException agent && agent.code() == ErrorCode.LLM && !modelReady) {
+                return "OFFLINE";
+            }
+            if (current instanceof AgentException agent) {
+                return agent.code().name();
+            }
+            current = current.getCause();
+        }
+        return ErrorCode.INTERNAL.name();
+    }
+
+    private static boolean terminalStatus(String status) {
+        return "SUCCEEDED".equals(status) || "FAILED".equals(status) || "CANCELLED".equals(status) || "SUSPENDED".equals(status) || "OFFLINE".equals(status);
+    }
+
+    private static boolean hasSystem(Exec exec) {
+        synchronized (exec.timeline) {
+            for (Map<String, Object> message : exec.timeline) {
+                if ("system".equals(message.get("type"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private PluginToolCatalog pluginTools() {
+        if (pluginTools == null) {
+            pluginTools = PluginToolCatalog.load(passGate);
+        }
+        return pluginTools;
+    }
+
+    private List<String> pluginNames() {
+        try {
+            return pluginTools().names();
+        } catch (RuntimeException ex) {
+            return List.of();
+        }
+    }
+
+    private static Map<String, String> argumentMap(String raw) {
+        Map<String, String> values = new LinkedHashMap<>();
+        if (raw == null || raw.isBlank()) {
+            return values;
+        }
+        String text = raw.trim();
+        if (text.startsWith("{")) {
+            try {
+                Map<String, Object> parsed = JSON.readValue(text, new TypeReference<LinkedHashMap<String, Object>>() {
+                });
+                for (Map.Entry<String, Object> entry : parsed.entrySet()) {
+                    values.put(entry.getKey(), entry.getValue() == null ? "" : String.valueOf(entry.getValue()));
+                }
+                return values;
+            } catch (Exception ignored) {
+                // 原文不是对象时按查询和链接记下。
+            }
+        }
+        values.put("query", text);
+        values.put("url", text);
+        values.put("repo", text);
+        values.put("arguments", text);
+        return values;
+    }
+
+    private static List<Map<String, Object>> copyMaps(List<Map<String, Object>> source) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map<String, Object> item : source) {
+            rows.add(new LinkedHashMap<>(item));
+        }
+        return rows;
+    }
+
+    private static String hex(int length) {
+        String raw = UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "");
+        return raw.substring(0, length);
+    }
+
     private static final class Exec {
         private final String executionId;
         private final String userId;
@@ -866,7 +1280,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         private final List<Map<String, Object>> agents = new ArrayList<>();
         private final List<Map<String, Object>> timeline = new ArrayList<>();
         private final AtomicInteger toolSequence = new AtomicInteger();
-        private final String traceId = UUID.randomUUID().toString().replace("-", "");
+        private String traceId = "";
+        private String rootSpanId = "";
         private String sessionId = "";
         private volatile String status = "ACCEPTED";
         private volatile String output = "";
@@ -874,6 +1289,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         private volatile boolean suspended;
         private volatile String pendingWorkflow;
         private volatile String pendingInput;
+        private boolean modelNode;
         private int runs;
 
         private Exec(String executionId, String userId, String workspace, String token) {
@@ -886,23 +1302,130 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         private void append(String line) {
             logs.append(line).append('\n');
         }
+
+        private Map<String, Object> state() {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("executionId", executionId);
+            body.put("userId", userId);
+            body.put("workspace", workspace);
+            body.put("token", token);
+            body.put("sessionId", sessionId);
+            body.put("traceId", traceId);
+            body.put("rootSpanId", rootSpanId);
+            body.put("status", status);
+            body.put("output", output);
+            body.put("errorCode", errorCode);
+            body.put("suspended", suspended);
+            body.put("pendingWorkflow", pendingWorkflow);
+            body.put("pendingInput", pendingInput);
+            body.put("modelNode", modelNode);
+            body.put("runs", runs);
+            body.put("toolSequence", toolSequence.get());
+            body.put("logs", logs.toString());
+            body.put("queue", List.copyOf(queue));
+            body.put("retrievals", copyMaps(retrievals));
+            body.put("passes", copyMaps(passes));
+            body.put("tools", List.copyOf(tools));
+            body.put("plugins", List.copyOf(plugins));
+            body.put("evaluations", List.copyOf(evaluations));
+            body.put("agents", copyMaps(agents));
+            synchronized (timeline) {
+                body.put("timeline", copyMaps(timeline));
+            }
+            return body;
+        }
+
+        private static Exec restore(Map<String, Object> state, ExecutionRow row) {
+            Exec exec = new Exec(
+                    row.executionId(),
+                    row.userId(),
+                    row.workspacePath(),
+                    text(state.get("token")));
+            exec.sessionId = row.sessionId();
+            exec.traceId = row.otelTraceId() == null ? text(state.get("traceId")) : row.otelTraceId();
+            exec.rootSpanId = row.otelRootSpanId() == null ? text(state.get("rootSpanId")) : row.otelRootSpanId();
+            exec.status = row.status();
+            exec.output = text(state.get("output"));
+            exec.errorCode = text(state.get("errorCode"));
+            exec.suspended = "SUSPENDED".equals(row.status());
+            exec.pendingWorkflow = text(state.get("pendingWorkflow"));
+            exec.pendingInput = text(state.get("pendingInput"));
+            exec.modelNode = Boolean.TRUE.equals(state.get("modelNode"));
+            exec.runs = number(state.get("runs"));
+            exec.toolSequence.set(number(state.get("toolSequence")));
+            exec.logs.append(text(state.get("logs")));
+            exec.queue.addAll(strings(state.get("queue")));
+            exec.retrievals.addAll(maps(state.get("retrievals")));
+            exec.passes.addAll(maps(state.get("passes")));
+            exec.tools.addAll(strings(state.get("tools")));
+            exec.plugins.addAll(strings(state.get("plugins")));
+            exec.evaluations.addAll(strings(state.get("evaluations")));
+            exec.agents.addAll(maps(state.get("agents")));
+            exec.timeline.addAll(maps(state.get("timeline")));
+            return exec;
+        }
+
+        private static String text(Object value) {
+            return value == null ? "" : String.valueOf(value);
+        }
+
+        private static int number(Object value) {
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            if (value == null || String.valueOf(value).isBlank()) {
+                return 0;
+            }
+            return Integer.parseInt(String.valueOf(value));
+        }
+
+        private static List<String> strings(Object value) {
+            List<String> rows = new ArrayList<>();
+            if (value instanceof List<?> list) {
+                for (Object item : list) {
+                    rows.add(item == null ? "" : String.valueOf(item));
+                }
+            }
+            return rows;
+        }
+
+        private static List<Map<String, Object>> maps(Object value) {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            if (value instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> map) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        map.forEach((key, entry) -> row.put(String.valueOf(key), entry));
+                        rows.add(row);
+                    }
+                }
+            }
+            return rows;
+        }
     }
 
     private static final class OfflineChatModel implements dev.jasagent.api.llm.ChatModel {
         @Override
         public CompletionStage<ChatResponse> complete(dev.jasagent.api.llm.ChatRequest request) {
-            return CompletableFuture.completedFuture(new ChatResponse(
-                    "offline",
-                    "offline-answer",
-                    ChatMessage.text("assistant", "已收到"),
-                    new TokenUsage(1, 1),
-                    1,
-                    false));
+            String executionId = request == null ? null : request.executionId();
+            return CompletableFuture.failedFuture(new AgentException(ErrorCode.LLM, "模型未配置", executionId, null));
         }
 
         @Override
-        public CompletionStage<dev.jasagent.api.llm.Embedding> embed(String text, String executionId) {
-            return CompletableFuture.failedFuture(new AgentException(ErrorCode.LLM, "embed 未配置"));
+        public CompletionStage<Embedding> embed(String text, String executionId) {
+            return CompletableFuture.failedFuture(new AgentException(ErrorCode.LLM, "模型未配置", executionId, null));
+        }
+    }
+
+    private static final class MemoryTrace implements TraceWriter {
+        @Override
+        public CompletionStage<Void> event(Path workspace, TraceEvent event) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletionStage<String> readLog(Path workspace, String executionId) {
+            return CompletableFuture.completedFuture("");
         }
     }
 }

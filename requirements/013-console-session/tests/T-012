@@ -2,4 +2,4 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/case.sh"
-run_case T-012 jasagent-app ConsoleSessionPageTest timelineHasAiReply '时间线含有类型为 ai 的模型回复「已收到」。'
+run_case T-012 jasagent-app ConsoleSessionPageTest timelineHasAiReply '没配模型时时间线的 ai 是「模型未配置」，不是成功回复「已收到」。'

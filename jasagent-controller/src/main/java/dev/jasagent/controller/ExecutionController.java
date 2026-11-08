@@ -18,6 +18,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @RestController
 public class ExecutionController {
@@ -67,31 +69,39 @@ public class ExecutionController {
     public SseEmitter events(@PathVariable("id") String id, HttpServletRequest request) {
         Session session = session(request);
         SseEmitter emitter = new SseEmitter(0L);
+        AtomicBoolean open = new AtomicBoolean(true);
+        emitter.onCompletion(() -> open.set(false));
+        emitter.onTimeout(() -> open.set(false));
+        emitter.onError(ignored -> open.set(false));
         Thread.ofVirtual().start(() -> {
             try {
                 String previous = "";
-                for (int i = 0; i < 120; i++) {
+                while (open.get()) {
                     Map<String, Object> detail = executions.detail(session.login(), id);
                     String status = String.valueOf(detail.get("status"));
-                    if (!status.equals(previous)) {
+                    String signature = status + "\n" + detail.get("logs") + "\n" + detail.get("output");
+                    if (!signature.equals(previous)) {
                         emitter.send(SseEmitter.event().name("status").data(detail));
-                        previous = status;
+                        previous = signature;
                     }
-                    if ("SUCCEEDED".equals(status) || "FAILED".equals(status) || "CANCELLED".equals(status) || "SUSPENDED".equals(status)) {
-                        emitter.send(SseEmitter.event().name("status").data(detail));
-                        if (!"SUSPENDED".equals(status) || i > 2) {
-                            break;
-                        }
+                    if (terminal(status)) {
+                        break;
                     }
-                    Thread.sleep(400);
+                    Thread.sleep(200);
                 }
                 emitter.complete();
             } catch (IOException | InterruptedException ex) {
                 emitter.complete();
                 Thread.currentThread().interrupt();
+            } catch (RuntimeException ex) {
+                emitter.completeWithError(ex);
             }
         });
         return emitter;
+    }
+
+    private static boolean terminal(String status) {
+        return Set.of("SUCCEEDED", "FAILED", "CANCELLED", "SUSPENDED", "OFFLINE").contains(status);
     }
 
     @PostMapping("/api/workspace")

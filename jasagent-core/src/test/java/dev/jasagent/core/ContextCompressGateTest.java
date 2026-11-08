@@ -88,6 +88,20 @@ class ContextCompressGateTest {
         assertFalse(window.compressing());
     }
 
+    @Test
+    void failedCompressKeepsPublishedSummary() {
+        OnceThenFail model = new OnceThenFail();
+        ContextWindow window = new ContextWindow(model);
+        ContextPrepared first = join(window.prepare(around(0.92)));
+        assertEquals(FULL, first.summary());
+        assertEquals(FULL, window.published().summary());
+        AgentException error = org.junit.jupiter.api.Assertions.assertThrows(AgentException.class, () -> join(window.prepare(around(0.92))));
+        assertEquals(ErrorCode.LLM, error.code());
+        assertEquals(FULL, window.published().summary());
+        assertFalse(window.compressing());
+        assertFalse(window.published().messages().stream().anyMatch(message -> message.content() != null && message.content().contains("PARTIAL")));
+    }
+
     private static ContextInput around(double target) {
         int budget = 1000;
         ContextInput best = null;
@@ -232,6 +246,24 @@ class ContextCompressGateTest {
             calls += 1;
             task = request.task();
             return gate;
+        }
+
+        @Override
+        public CompletionStage<Embedding> embed(String text, String executionId) {
+            return CompletableFuture.failedFuture(new AgentException(ErrorCode.LLM, "unused"));
+        }
+    }
+
+    private static final class OnceThenFail implements ChatModel {
+        private int calls;
+
+        @Override
+        public CompletionStage<ChatResponse> complete(ChatRequest request) {
+            calls += 1;
+            if (calls == 1) {
+                return CompletableFuture.completedFuture(reply(FULL));
+            }
+            return CompletableFuture.failedFuture(new AgentException(ErrorCode.LLM, "PARTIAL 模型未配置"));
         }
 
         @Override

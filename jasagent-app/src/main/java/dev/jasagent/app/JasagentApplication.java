@@ -3,6 +3,7 @@ package dev.jasagent.app;
 import dev.jasagent.agentpass.PassSettings;
 import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.cli.CliCommands;
+import dev.jasagent.controller.StorageStatus;
 import dev.jasagent.controller.WorkspaceList;
 import dev.jasagent.core.ContextWindow;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,6 +51,11 @@ public class JasagentApplication {
         return new LocalRuntime(localAuthService, Map.of(
                 PassSettings.ENABLED, agentpassEnabled,
                 ContextWindow.COMPRESS_AT, compressAt));
+    }
+
+    @Bean
+    StorageStatus storageStatus(LocalRuntime localRuntime) {
+        return localRuntime::storageReachable;
     }
 
     @Bean

@@ -94,9 +94,23 @@ jasagent_note_java_fallback() {
   fi
 }
 
+jasagent_realpath() {
+  local path="$1"
+  local dir
+  while [[ -L "$path" ]]; do
+    dir="$(cd "$(dirname "$path")" && pwd)"
+    path="$(readlink "$path")"
+    if [[ "$path" != /* ]]; then
+      path="$dir/$path"
+    fi
+  done
+  printf '%s\n' "$path"
+}
+
 jasagent_export_java_home() {
-  local home
-  home="$(cd "$(dirname "$JASAGENT_JAVA")/.." && pwd)"
+  local resolved home
+  resolved="$(jasagent_realpath "$JASAGENT_JAVA")"
+  home="$(cd "$(dirname "$resolved")/.." && pwd)"
   if [[ -x "$home/bin/java" && -e "$home/release" ]]; then
     export JAVA_HOME="$home"
     export PATH="$home/bin:$PATH"
@@ -150,9 +164,9 @@ jasagent_require_java() {
     done
   done
   if [[ -n "${JASAGENT_TOO_OLD_JAVA:-}" ]]; then
-    echo "需要 Java 21。当前 java 是 ${JASAGENT_TOO_OLD_VERSION:-未知}（${JASAGENT_TOO_OLD_JAVA}）。" >&2
+    echo "需要 Java 21 或更高。当前 java 是 ${JASAGENT_TOO_OLD_VERSION:-未知}（${JASAGENT_TOO_OLD_JAVA}）。不会改用 Java 17 或更低版本。" >&2
   else
-    echo "需要 Java 21。当前找不到 java。" >&2
+    echo "需要 Java 21 或更高。当前找不到可用的 java。不会改用 Java 17 或更低版本。" >&2
   fi
   exit 1
 }
