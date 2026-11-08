@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-009 jasagent-app ConsoleSessionPageTest timelineSystemContainsRule '时间线里类型为 system 的消息正文含有这次写入的规则描述。'

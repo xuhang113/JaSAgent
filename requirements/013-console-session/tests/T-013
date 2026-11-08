@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-013 jasagent-app ConsoleSessionPageTest timelineHasClockTool '时间线含有类型为 tool、名称为 clock 的消息，正文是这次时钟工具返回的时间文本。'

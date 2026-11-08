@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-019 jasagent-core ContextCompressGateTest publishedSummaryStaysUntilComplete '压缩尚未完成时，已发布摘要仍是上一次完成的空摘要；模型返回完整正文后，已发布摘要等于该正文，并且不再处于压缩中。'

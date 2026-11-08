@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-027 jasagent-app ConsoleSessionPageTest messagesRuleIsCompact '构建出的样式里 `.messages` 规则不含 `180px`。'

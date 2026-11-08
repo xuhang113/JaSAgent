@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-007 jasagent-app ConsoleSessionPageTest sessionShowsCorrection '用户为自己的会话追加纠正 note 后，读取该会话能看到这段文字。'

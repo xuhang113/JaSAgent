@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-016 jasagent-core ContextCompressGateTest defaultCompressAtIs085 '`ContextWindow.DEFAULT_COMPRESS_AT` 是 0.85。'

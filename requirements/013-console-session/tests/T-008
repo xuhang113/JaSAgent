@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-008 jasagent-app ConsoleSessionPageTest otherUserCannotReadSession '另一用户读取该会话得到 401。'

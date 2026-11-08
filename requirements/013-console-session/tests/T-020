@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-020 jasagent-app ConsoleSessionPageTest compressAtPropertyDefaultsTo085 '`application.properties` 含有 `jasagent.context.compress-at=0.85`。'

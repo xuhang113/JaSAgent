@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+source "$HERE/case.sh"
+run_case T-005 jasagent-app ConsoleSessionPageTest panelsCanResize '控制台脚本含有 `data-resize`。'
