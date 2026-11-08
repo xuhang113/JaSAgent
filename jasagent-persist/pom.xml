@@ -10,11 +10,40 @@
   </parent>
   <artifactId>jasagent-persist</artifactId>
   <name>jasagent-persist</name>
-
   <dependencies>
     <dependency>
       <groupId>dev.jasagent</groupId>
       <artifactId>jasagent-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>2.3.232</version>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+      <version>11.20.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+      <version>11.20.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.bsc.langgraph4j</groupId>
+      <artifactId>langgraph4j-sqlite-saver</artifactId>
+      <version>${langgraph4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.bsc.langgraph4j</groupId>
+      <artifactId>langgraph4j-postgres-saver</artifactId>
+      <version>${langgraph4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>
