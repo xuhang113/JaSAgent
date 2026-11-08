@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# 把子命令转发给本机 Java 命令行。
+set -euo pipefail
+source "$(cd "$(dirname "$0")" && pwd)/scripts/common.sh"
+
+if [[ $# -eq 0 || "$1" == "-h" || "$1" == "--help" || "$1" == "help" ]]; then
+  cat <<'EOF'
+用法：在仓库根目录执行 ./jasagent <命令>。需要本机 Java 21。
+
+  ./jasagent user add --user <登录名> --password <口令>
+  ./jasagent login --user <登录名> --password <口令>
+  ./jasagent logout
+  ./jasagent use --workspace <工作区路径>
+  ./jasagent workflows
+  ./jasagent run --workflow <workflowId> --input <文本>
+  ./jasagent status --execution <executionId>
+  ./jasagent logs --execution <executionId>
+  ./jasagent interrupt --execution <executionId>
+  ./jasagent resume --execution <executionId>
+  ./jasagent pass approve --execution <executionId> --pass <passId>
+  ./jasagent pass deny --execution <executionId> --pass <passId>
+  ./jasagent server
+
+后台启停用 ./scripts/start.sh 和 ./scripts/stop.sh。默认地址是 http://127.0.0.1:8090。
+<口令> 是占位符，不要把真实口令写进仓库。
+EOF
+  exit 0
+fi
+
+jasagent_require_java
+jasagent_ensure_jar
+exec "$JASAGENT_JAVA" -jar "$JASAGENT_JAR" "$@"
