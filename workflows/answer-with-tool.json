@@ -1,0 +1,12 @@
+{
+  "id": "answer-with-tool",
+  "rules": ["base"],
+  "skills": ["research"],
+  "budgetTokens": 8000,
+  "nodes": [
+    {"id": "find", "type": "retrieve", "queryFrom": "input", "topK": 5, "scopes": ["user", "workspace"], "required": false, "next": "act"},
+    {"id": "act", "type": "react", "maxSteps": 6, "tools": ["clock", "rag.search"], "grounding": true, "next": "grade"},
+    {"id": "grade", "type": "evaluate", "evaluator": "tool.success.rate", "required": false, "next": "done"},
+    {"id": "done", "type": "end"}
+  ]
+}

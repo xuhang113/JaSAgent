@@ -17,6 +17,7 @@
     <module>jasagent-trace</module>
     <module>jasagent-otel</module>
     <module>jasagent-exception</module>
+    <module>jasagent-workflow</module>
   </modules>
 
   <properties>
