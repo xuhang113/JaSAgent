@@ -12,6 +12,10 @@
   <modules>
     <module>jasagent-api</module>
     <module>jasagent-auth</module>
+    <module>jasagent-persist</module>
+    <module>jasagent-trace</module>
+    <module>jasagent-otel</module>
+    <module>jasagent-exception</module>
   </modules>
 
   <properties>
@@ -32,6 +36,26 @@
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter</artifactId>
         <version>${junit.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.jasagent</groupId>
+        <artifactId>jasagent-persist</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.jasagent</groupId>
+        <artifactId>jasagent-trace</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.jasagent</groupId>
+        <artifactId>jasagent-otel</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.jasagent</groupId>
+        <artifactId>jasagent-exception</artifactId>
+        <version>${project.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
