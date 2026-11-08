@@ -2,4 +2,4 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/case.sh"
-run_case T-004 jasagent-app ConsoleSessionPageTest panelsHiddenByDefault '控制台脚本含有 `data-default-panels":"hidden"`。'
+run_case T-004 jasagent-app ConsoleSessionPageTest rightRailStaysOpen '控制台脚本含有 `data-panels-open":"true"`，右栏常驻，不再默认收起。'
