@@ -10,6 +10,7 @@
   </parent>
   <artifactId>jasagent-web</artifactId>
   <name>jasagent-web</name>
+
   <dependencies>
     <dependency>
       <groupId>dev.jasagent</groupId>

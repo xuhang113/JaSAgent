@@ -10,14 +10,89 @@
   </parent>
   <artifactId>jasagent-app</artifactId>
   <name>jasagent-app</name>
+
   <dependencies>
     <dependency>
       <groupId>dev.jasagent</groupId>
       <artifactId>jasagent-api</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
       <groupId>dev.jasagent</groupId>
       <artifactId>jasagent-auth</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-workflow</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-tool</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-mcp</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-plugin</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-rag</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-llm</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-persist</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-interrupt</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-exception</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-agentpass</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-trace</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-otel</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-evaluation</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -35,65 +110,5 @@
       <artifactId>jasagent-cli</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
-      <groupId>dev.jasagent</groupId>
-      <artifactId>jasagent-workflow</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.jasagent</groupId>
-      <artifactId>jasagent-tool</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.jasagent</groupId>
-      <artifactId>jasagent-agentpass</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.jasagent</groupId>
-      <artifactId>jasagent-rag</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.jasagent</groupId>
-      <artifactId>jasagent-evaluation</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.jasagent</groupId>
-      <artifactId>jasagent-persist</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.jasagent</groupId>
-      <artifactId>jasagent-interrupt</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-maven-plugin</artifactId>
-        <version>${spring-boot.version}</version>
-        <executions>
-          <execution>
-            <goals>
-              <goal>repackage</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
-  </build>
 </project>

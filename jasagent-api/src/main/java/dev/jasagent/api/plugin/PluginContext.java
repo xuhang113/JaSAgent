@@ -1,4 +1,6 @@
 package dev.jasagent.api.plugin;
 
-public record PluginContext(String phase, String executionId, String nodeId, String answer, String evidence) {
+import dev.jasagent.api.dsl.PluginPhase;
+
+public record PluginContext(String pluginId, PluginPhase phase, String executionId, String nodeId, String payload) {
 }

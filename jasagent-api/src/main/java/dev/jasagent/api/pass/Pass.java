@@ -1,4 +1,4 @@
 package dev.jasagent.api.pass;
 
-public record Pass(PassDecision decision, String reason) {
+public record Pass(String passId, PassDecision decision, String reason) {
 }

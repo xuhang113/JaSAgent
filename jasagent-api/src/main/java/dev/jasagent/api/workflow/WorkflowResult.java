@@ -1,9 +1,6 @@
 package dev.jasagent.api.workflow;
 
-import java.util.List;
+import dev.jasagent.api.exec.ExecutionStatus;
 
-public record WorkflowResult(String status, String output, String errorCode, List<CorrectionNote> notes) {
-    public WorkflowResult {
-        notes = notes == null ? List.of() : List.copyOf(notes);
-    }
+public record WorkflowResult(String executionId, ExecutionStatus status, String output, String errorCode) {
 }

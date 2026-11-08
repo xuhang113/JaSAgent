@@ -8,41 +8,36 @@
   <version>0.1.0</version>
   <packaging>pom</packaging>
   <name>jasagent</name>
-
   <modules>
     <module>jasagent-api</module>
     <module>jasagent-auth</module>
-    <module>jasagent-llm</module>
-    <module>jasagent-persist</module>
-    <module>jasagent-trace</module>
-    <module>jasagent-otel</module>
-    <module>jasagent-exception</module>
+    <module>jasagent-core</module>
     <module>jasagent-workflow</module>
     <module>jasagent-tool</module>
-    <module>jasagent-plugin</module>
-    <module>jasagent-agentpass</module>
-    <module>jasagent-core</module>
-    <module>jasagent-interrupt</module>
-    <module>jasagent-rag</module>
     <module>jasagent-mcp</module>
+    <module>jasagent-plugin</module>
+    <module>jasagent-rag</module>
+    <module>jasagent-llm</module>
+    <module>jasagent-persist</module>
+    <module>jasagent-interrupt</module>
+    <module>jasagent-exception</module>
+    <module>jasagent-agentpass</module>
+    <module>jasagent-trace</module>
+    <module>jasagent-otel</module>
     <module>jasagent-evaluation</module>
-    <module>jasagent-app</module>
     <module>jasagent-controller</module>
     <module>jasagent-web</module>
     <module>jasagent-cli</module>
+    <module>jasagent-app</module>
   </modules>
-
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <maven.compiler.release>21</maven.compiler.release>
     <junit.version>5.11.4</junit.version>
-    <flyway.version>10.20.1</flyway.version>
-    <h2.version>2.3.232</h2.version>
     <spring-boot.version>3.4.5</spring-boot.version>
-    <otel.version>1.43.0</otel.version>
+    <langgraph4j.version>1.9.9</langgraph4j.version>
   </properties>
-
   <dependencyManagement>
     <dependencies>
       <dependency>
@@ -56,78 +51,37 @@
         <version>${junit.version}</version>
       </dependency>
       <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        <version>2.18.2</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-core</artifactId>
-        <version>2.18.2</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-annotations</artifactId>
-        <version>2.18.2</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.dataformat</groupId>
-        <artifactId>jackson-dataformat-toml</artifactId>
-        <version>2.18.2</version>
-      </dependency>
-      <dependency>
-        <groupId>com.fasterxml.jackson.datatype</groupId>
-        <artifactId>jackson-datatype-jsr310</artifactId>
-        <version>2.18.2</version>
-      </dependency>
-      <dependency>
-        <groupId>com.h2database</groupId>
-        <artifactId>h2</artifactId>
-        <version>${h2.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.flywaydb</groupId>
-        <artifactId>flyway-core</artifactId>
-        <version>${flyway.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.flywaydb</groupId>
-        <artifactId>flyway-database-postgresql</artifactId>
-        <version>${flyway.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.postgresql</groupId>
-        <artifactId>postgresql</artifactId>
-        <version>42.7.4</version>
-      </dependency>
-      <dependency>
-        <groupId>io.opentelemetry</groupId>
-        <artifactId>opentelemetry-api</artifactId>
-        <version>${otel.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.opentelemetry</groupId>
-        <artifactId>opentelemetry-sdk</artifactId>
-        <version>${otel.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.opentelemetry</groupId>
-        <artifactId>opentelemetry-exporter-otlp</artifactId>
-        <version>${otel.version}</version>
-      </dependency>
-      <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-web</artifactId>
         <version>${spring-boot.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-test</artifactId>
-        <version>${spring-boot.version}</version>
+        <groupId>org.bsc.langgraph4j</groupId>
+        <artifactId>langgraph4j-core</artifactId>
+        <version>${langgraph4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.bsc.langgraph4j</groupId>
+        <artifactId>langgraph4j-dsl</artifactId>
+        <version>${langgraph4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.bsc.langgraph4j</groupId>
+        <artifactId>langgraph4j-sqlite-saver</artifactId>
+        <version>${langgraph4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.bsc.langgraph4j</groupId>
+        <artifactId>langgraph4j-postgres-saver</artifactId>
+        <version>${langgraph4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.bsc.langgraph4j</groupId>
+        <artifactId>langgraph4j-opentelemetry</artifactId>
+        <version>${langgraph4j.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
-
   <build>
     <pluginManagement>
       <plugins>

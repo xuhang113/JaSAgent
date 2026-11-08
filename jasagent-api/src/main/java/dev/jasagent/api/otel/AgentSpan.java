@@ -7,5 +7,5 @@ public interface AgentSpan {
 
     String spanId();
 
-    String attribute(String key);
+    String executionId();
 }

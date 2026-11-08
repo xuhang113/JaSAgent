@@ -1,5 +1,7 @@
 package dev.jasagent.api.plugin;
 
+import java.util.concurrent.CompletionStage;
+
 public interface HallucinationGuard {
-    boolean check(String answer, String evidence);
+    CompletionStage<Boolean> grounded(String answer, String evidence, String executionId);
 }

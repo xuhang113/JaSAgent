@@ -10,19 +10,31 @@
   </parent>
   <artifactId>jasagent-workflow</artifactId>
   <name>jasagent-workflow</name>
+
   <dependencies>
     <dependency>
       <groupId>dev.jasagent</groupId>
       <artifactId>jasagent-api</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
+      <groupId>org.bsc.langgraph4j</groupId>
+      <artifactId>langgraph4j-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
+      <groupId>org.bsc.langgraph4j</groupId>
+      <artifactId>langgraph4j-dsl</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.bsc.langgraph4j</groupId>
+      <artifactId>langgraph4j-sqlite-saver</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.bsc.langgraph4j</groupId>
+      <artifactId>langgraph4j-postgres-saver</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.bsc.langgraph4j</groupId>
+      <artifactId>langgraph4j-opentelemetry</artifactId>
     </dependency>
   </dependencies>
 </project>

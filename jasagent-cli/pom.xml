@@ -10,15 +10,15 @@
   </parent>
   <artifactId>jasagent-cli</artifactId>
   <name>jasagent-cli</name>
+
   <dependencies>
     <dependency>
       <groupId>dev.jasagent</groupId>
       <artifactId>jasagent-api</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
     </dependency>
   </dependencies>
 </project>

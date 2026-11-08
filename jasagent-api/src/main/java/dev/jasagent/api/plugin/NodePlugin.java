@@ -5,5 +5,5 @@ import java.util.concurrent.CompletionStage;
 public interface NodePlugin {
     String id();
 
-    CompletionStage<PluginOutcome> invoke(PluginContext context);
+    CompletionStage<Void> invoke(PluginContext context);
 }
