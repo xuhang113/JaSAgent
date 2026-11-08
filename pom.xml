@@ -12,6 +12,9 @@
   <modules>
     <module>jasagent-api</module>
     <module>jasagent-auth</module>
+    <module>jasagent-tool</module>
+    <module>jasagent-plugin</module>
+    <module>jasagent-agentpass</module>
   </modules>
 
   <properties>
