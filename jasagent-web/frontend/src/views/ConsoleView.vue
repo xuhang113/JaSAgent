@@ -34,14 +34,6 @@
         </div>
       </div>
       <div class="session-meta">
-        <h3>子 agent</h3>
-        <p v-if="!activeSessionId" class="muted">未选会话。</p>
-        <p v-else-if="agents.length === 0" class="muted">无子 agent。</p>
-        <button v-for="agent in agents" :key="agent.agentId + agent.executionId" type="button" class="agent-row" @click="openAgent(agent)">
-          <strong>{{ agent.agentId }}</strong>
-          <span>{{ agent.role }}</span>
-          <small>{{ agent.status }}</small>
-        </button>
         <h3>纠正 note <small>harness note</small></h3>
         <p v-if="!activeSessionId" class="muted">未选会话。</p>
         <p v-else-if="corrections.length === 0" class="muted">无纠正。</p>
@@ -70,6 +62,45 @@
           </div>
         </div>
       </header>
+      <div v-if="activeSessionId" class="agent-dock">
+        <div class="agent-live">
+          <p v-if="liveAgents.length === 0" class="muted empty-line">无正在执行。</p>
+          <button
+            v-for="agent in liveAgents"
+            :key="agent.agentId + agent.executionId"
+            type="button"
+            class="agent-row"
+            data-agent-live
+            @click="openAgent(agent)"
+          >
+            <strong>{{ agent.agentId }}</strong>
+            <span>{{ resolvedStatus(agent.status, agent.executionId) }}</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          class="rail-tool"
+          data-agent-list
+          aria-haspopup="listbox"
+          :aria-expanded="agentListOpen ? 'true' : 'false'"
+          aria-label="全部子 agent"
+          @click="toggleAgentList"
+        >全部</button>
+        <div v-if="agentListOpen" class="agent-listbox" role="listbox" aria-label="子 agent">
+          <p v-if="agents.length === 0" class="muted empty-line">无子 agent。</p>
+          <button
+            v-for="agent in agents"
+            :key="'all-' + agent.agentId + agent.executionId"
+            type="button"
+            class="agent-row"
+            role="option"
+            @click="pickAgent(agent)"
+          >
+            <strong>{{ agent.agentId }}</strong>
+            <span>{{ resolvedStatus(agent.status, agent.executionId) }}</span>
+          </button>
+        </div>
+      </div>
       <div class="messages">
         <div class="thread" :key="activeSessionId || 'none'" :data-thread="activeSessionId || 'none'">
           <p v-if="!activeSessionId" class="muted">未选会话。</p>
@@ -132,7 +163,25 @@
         </div>
       </div>
       <div class="rail-stage">
-        <div v-if="railTab === 'trace'" class="rail-pane" role="tabpanel" data-pane="trace">
+        <div v-if="railTab === 'tasks'" class="rail-pane" role="tabpanel" data-pane="tasks">
+          <p v-if="!activeSessionId" class="muted empty-line">未选会话。</p>
+          <p v-else-if="taskGroups.length === 0" class="muted empty-line">无任务。</p>
+          <section v-for="group in taskGroups" :key="group.id" class="task-group" :data-task-group="group.id">
+            <p class="task-group-label">{{ group.label }}</p>
+            <div v-for="row in group.rows" :key="row.id" class="task-item">
+              <button
+                type="button"
+                class="task-row"
+                :aria-expanded="openTaskId === row.id ? 'true' : 'false'"
+                @click="toggleTask(row)"
+              >
+                <span class="task-title">{{ row.title }}</span>
+              </button>
+              <p v-if="openTaskId === row.id" class="task-summary">{{ taskSummary(row) }}</p>
+            </div>
+          </section>
+        </div>
+        <div v-else-if="railTab === 'trace'" class="rail-pane" role="tabpanel" data-pane="trace">
           <p v-if="timeline.length === 0" class="muted empty-line">无 Trace。</p>
           <ol v-else class="lg-timeline" :key="executionId || 'none'" data-timeline="langgraph">
             <li v-for="(message, index) in timeline" :key="index" :data-type="message.type">
@@ -243,11 +292,15 @@ import { ElMessage } from 'element-plus'
 import { api } from '../api'
 
 const railTabs = [
+  { id: 'tasks', label: '任务' },
   { id: 'trace', label: 'Trace' },
   { id: 'tools', label: '工具' },
   { id: 'context', label: '上下文' },
   { id: 'logs', label: '日志' }
 ]
+const LIVE_STATUS = new Set(['RUNNING', 'QUEUED', 'PENDING', 'ACCEPTED'])
+const REVIEW_STATUS = new Set(['SUSPENDED', 'FAILED'])
+const DONE_STATUS = new Set(['SUCCEEDED', 'CANCELLED'])
 const railDrawers = [
   { id: 'retrieval', label: '溯源' },
   { id: 'evaluation', label: '评估' },
@@ -282,9 +335,12 @@ const workspaceReady = ref(false)
 const sessionWidth = ref(260)
 const railWidth = ref(320)
 const resizing = ref('')
-const railTab = ref('trace')
+const railTab = ref('tasks')
 const drawer = ref('')
 const drawerMenu = ref(false)
+const agentListOpen = ref(false)
+const openTaskId = ref('')
+const detailExecutionId = ref('')
 const foldTimers = []
 let source = null
 let poll = 0
@@ -334,6 +390,53 @@ const retrievalRows = computed(() => {
   }
   return rows
 })
+const liveAgents = computed(() => agents.value.filter((agent) => agentIsLive(agent)))
+const taskGroups = computed(() => {
+  const rows = []
+  const covered = new Set()
+  for (const agent of agents.value) {
+    const executionId = agent.executionId || ''
+    const message = messages.value.find((item) => executionId && item.executionId === executionId)
+    rows.push({
+      id: 'agent:' + (agent.agentId || '') + ':' + executionId,
+      kind: 'agent',
+      title: shortTitle(message && message.text ? message.text : agent.agentId),
+      status: resolvedStatus(agent.status, executionId),
+      agent,
+      message,
+      executionId
+    })
+    if (executionId) {
+      covered.add(executionId)
+    }
+  }
+  for (const message of messages.value) {
+    if (!message.executionId || covered.has(message.executionId)) {
+      continue
+    }
+    rows.push({
+      id: 'exec:' + message.executionId,
+      kind: 'execution',
+      title: shortTitle(message.text),
+      status: resolvedStatus(message.status, message.executionId),
+      agent: null,
+      message,
+      executionId: message.executionId
+    })
+  }
+  const groups = [
+    { id: 'active', label: '进行中', rows: [] },
+    { id: 'review', label: '待看', rows: [] },
+    { id: 'done', label: '完成', rows: [] }
+  ]
+  for (const row of rows) {
+    const group = groups.find((item) => item.id === taskBucket(row.status))
+    if (group) {
+      group.rows.push(row)
+    }
+  }
+  return groups.filter((group) => group.rows.length)
+})
 
 onMounted(async () => {
   await loadProfile()
@@ -355,6 +458,93 @@ onBeforeUnmount(() => {
 function selectRailTab(id) {
   railTab.value = id
   drawerMenu.value = false
+}
+
+function normalizeStatus(status) {
+  return String(status || '').toUpperCase()
+}
+
+function knownExecutionStatus(id) {
+  const message = messages.value.find((item) => item.executionId === id)
+  if (message && message.status) {
+    return normalizeStatus(message.status)
+  }
+  if (id && id === detailExecutionId.value && detail.value && detail.value.status) {
+    return normalizeStatus(detail.value.status)
+  }
+  return ''
+}
+
+function resolvedStatus(fallback, id) {
+  return knownExecutionStatus(id) || normalizeStatus(fallback)
+}
+
+function taskBucket(status) {
+  const value = normalizeStatus(status)
+  if (LIVE_STATUS.has(value)) {
+    return 'active'
+  }
+  if (DONE_STATUS.has(value)) {
+    return 'done'
+  }
+  if (REVIEW_STATUS.has(value) || !value) {
+    return 'review'
+  }
+  return 'review'
+}
+
+function agentIsLive(agent) {
+  return taskBucket(resolvedStatus(agent.status, agent.executionId)) === 'active'
+}
+
+function shortTitle(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!text) {
+    return '未命名'
+  }
+  if (text.length <= 28) {
+    return text
+  }
+  return text.slice(0, 28) + '…'
+}
+
+function taskSummary(row) {
+  const lines = []
+  if (row.agent) {
+    lines.push([row.agent.agentId, row.agent.role, row.status].filter(Boolean).join(' '))
+  } else if (row.status) {
+    lines.push(row.status)
+  }
+  if (row.message && row.message.errorCode) {
+    lines.push(row.message.errorCode)
+  }
+  const output = row.message && row.message.output ? String(row.message.output).replace(/\s+/g, ' ').trim() : ''
+  if (output) {
+    lines.push(output.length > 80 ? output.slice(0, 80) + '…' : output)
+  }
+  if (row.executionId) {
+    lines.push(row.executionId)
+  }
+  return lines.join('\n')
+}
+
+function toggleAgentList() {
+  agentListOpen.value = !agentListOpen.value
+}
+
+function pickAgent(agent) {
+  agentListOpen.value = false
+  openAgent(agent)
+}
+
+function toggleTask(row) {
+  openTaskId.value = openTaskId.value === row.id ? '' : row.id
+  if (!row.executionId) {
+    return
+  }
+  executionId.value = row.executionId
+  queryExecution().catch(() => {})
+  loadTimeline(row.executionId).catch(() => {})
 }
 
 function toggleDrawerMenu() {
@@ -482,6 +672,8 @@ async function createSession() {
 
 async function switchSession(sessionId) {
   activeSessionId.value = sessionId
+  agentListOpen.value = false
+  openTaskId.value = ''
   const stored = await api('/api/sessions/' + sessionId)
   activeTitle.value = stored.title || ''
   messages.value = stored.messages || []
@@ -495,6 +687,7 @@ async function switchSession(sessionId) {
     await queryExecution()
   } catch {
     detail.value = {}
+    detailExecutionId.value = ''
   }
   await loadTurnTimelines()
   await loadContext()
@@ -511,8 +704,11 @@ async function removeSession(sessionId) {
     timeline.value = []
     timelines.value = {}
     detail.value = {}
+    detailExecutionId.value = ''
     executionId.value = ''
     logs.value = ''
+    agentListOpen.value = false
+    openTaskId.value = ''
   }
   await loadSessions()
 }
@@ -638,7 +834,9 @@ async function queryExecution() {
   if (!executionId.value) {
     return
   }
-  detail.value = await api('/api/executions/' + executionId.value)
+  const id = executionId.value
+  detail.value = await api('/api/executions/' + id)
+  detailExecutionId.value = id
   const logBody = await api('/api/executions/' + executionId.value + '/logs')
   logs.value = logBody.logs || detail.value.logs || ''
   await refreshMessageOutputs()

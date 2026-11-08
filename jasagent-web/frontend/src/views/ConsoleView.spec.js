@@ -51,7 +51,11 @@ function resetState() {
   state.session = {
     title: '检查会话',
     messages: [{ role: 'user', text: '请给出时间', executionId: 'exec-1', status: 'SUSPENDED', output: '' }],
-    agents: [{ agentId: 'sub-1', role: 'SUB', status: 'QUEUED', executionId: 'exec-1' }],
+    agents: [
+      { agentId: 'sub-1', role: 'SUB', status: 'RUNNING', executionId: 'exec-live' },
+      { agentId: 'sub-old', role: 'SUB', status: 'QUEUED', executionId: 'exec-1' },
+      { agentId: 'sub-done', role: 'SUB', status: 'SUCCEEDED', executionId: 'exec-done' }
+    ],
     corrections: [{ noteId: 'n1', source: 'USER', text: '不要编造数字' }]
   }
   state.timeline = {
@@ -177,7 +181,7 @@ async function openDrawer(wrapper, name) {
 }
 
 describe('会话页三列布局', () => {
-  it('左栏放工作区和会话，中间是消息，右栏默认展开', async () => {
+  it('左栏放工作区和会话，中间是消息，右栏默认是任务', async () => {
     const wrapper = await mountConsole()
     const root = wrapper.get('.console-layout')
     expect(root.attributes('data-panels-open')).toBe('true')
@@ -196,8 +200,15 @@ describe('会话页三列布局', () => {
     const rail = wrapper.get('.right-rail')
     expect(wrapper.get('.chat-head').classes()).toContain('chrome-bar')
     expect(wrapper.get('.sidebar-top').classes()).toContain('chrome-bar')
-    expect(rail.findAll('[role="tab"]').map((tab) => tab.text())).toEqual(['Trace', '工具', '上下文', '日志'])
-    expect(rail.get('[role="tab"][aria-selected="true"]').text()).toBe('Trace')
+    expect(wrapper.find('.agent-dock').exists()).toBe(false)
+    expect(rail.findAll('[role="tab"]').map((tab) => tab.text())).toEqual(['任务', 'Trace', '工具', '上下文', '日志'])
+    expect(rail.get('[role="tab"][aria-selected="true"]').text()).toBe('任务')
+    expect(rail.get('[role="tab"][aria-selected="true"]').attributes('data-tab')).toBe('tasks')
+    expect(rail.get('[data-pane="tasks"] .empty-line').text()).toBe('未选会话。')
+    expect(rail.find('[data-pane="trace"]').exists()).toBe(false)
+    expect(rail.find('[data-pane="logs"]').exists()).toBe(false)
+    expect(rail.find('[data-pane="tools"]').exists()).toBe(false)
+    expect(rail.find('[data-pane="context"]').exists()).toBe(false)
     expect(rule(css, '.rail-tab[aria-selected="true"]')).toMatch(/background:\s*#1b1b18/)
     expect(rule(css, '.rail-tab[aria-selected="true"]')).toMatch(/color:\s*#fff/)
     expect(rail.find('.rail-summary').exists()).toBe(false)
@@ -216,7 +227,28 @@ describe('会话页三列布局', () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
     const rail = wrapper.get('.right-rail')
-    expect(rail.get('[role="tabpanel"]').attributes('data-pane')).toBe('trace')
+    expect(rail.get('[role="tabpanel"]').attributes('data-pane')).toBe('tasks')
+    expect(rail.find('[data-pane="trace"]').exists()).toBe(false)
+    expect(rail.find('[data-pane="logs"]').exists()).toBe(false)
+    expect(rail.findAll('[data-task-group]').map((group) => group.attributes('data-task-group'))).toEqual(['active', 'review', 'done'])
+    expect(rail.get('[data-task-group="active"] .task-group-label').text()).toBe('进行中')
+    expect(rail.get('[data-task-group="review"] .task-group-label').text()).toBe('待看')
+    expect(rail.get('[data-task-group="done"] .task-group-label').text()).toBe('完成')
+    expect(rail.get('[data-task-group="active"] .task-title').text()).toBe('sub-1')
+    expect(rail.get('[data-task-group="review"] .task-title').text()).toBe('请给出时间')
+    expect(rail.get('[data-task-group="done"] .task-title').text()).toBe('sub-done')
+    expect(rail.find('.task-summary').exists()).toBe(false)
+    await rail.get('[data-task-group="review"] .task-row').trigger('click')
+    const summary = rail.get('.task-summary')
+    expect(summary.text()).toContain('sub-old')
+    expect(summary.text()).toContain('SUSPENDED')
+    expect(summary.text()).toContain('exec-1')
+    expect(rail.get('[data-pane="tasks"]').text()).not.toContain('2026-11-08T00:00:00Z')
+    expect(rail.get('[data-task-group="review"] .task-row').attributes('aria-expanded')).toBe('true')
+
+    await rail.get('[data-tab="trace"]').trigger('click')
+    expect(rail.get('[role="tab"][aria-selected="true"]').text()).toBe('Trace')
+    expect(rail.find('[data-pane="tasks"]').exists()).toBe(false)
     expect(rail.get('[data-pane="trace"]').text()).toContain('2026-11-08T00:00:00Z')
     expect(rail.get('[data-pane="trace"]').text()).not.toContain('溯源')
     expect(rail.get('[data-pane="trace"]').text()).not.toContain('评估')
@@ -271,8 +303,14 @@ describe('会话页三列布局', () => {
       retrievals: [],
       evaluations: []
     }
+    state.session = { title: '检查会话', messages: [], agents: [], corrections: [] }
     const wrapper = await mountConsole()
     await openSession(wrapper)
+    expect(wrapper.get('[data-pane="tasks"] .empty-line').text()).toBe('无任务。')
+    expect(wrapper.get('.agent-live .empty-line').text()).toBe('无正在执行。')
+    await wrapper.get('[data-agent-list]').trigger('click')
+    expect(wrapper.get('[role="listbox"] .empty-line').text()).toBe('无子 agent。')
+    await wrapper.get('[data-tab="trace"]').trigger('click')
     expect(wrapper.get('[data-pane="trace"] .empty-line').text()).toBe('无 Trace。')
     await wrapper.get('[data-tab="tools"]').trigger('click')
     expect(wrapper.findAll('[data-pane="tools"] .empty-line').map((node) => node.text())).toEqual(['无工具。', '无插件。'])
@@ -311,7 +349,7 @@ describe('会话页三列布局', () => {
     expect(rule(css, '.right-rail')).toMatch(/overflow-x:\s*hidden/)
   })
 
-  it('工具结果折进这一轮，右侧 Trace 再展示一次', async () => {
+  it('工具结果折进这一轮，点开 Trace 后再展示一次', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
     const turn = wrapper.get('.session-main .turn')
@@ -324,6 +362,8 @@ describe('会话页三列布局', () => {
     expect(replyAt).toBeGreaterThan(toolAt)
     expect(turn.get('.turn-trace summary').text()).toContain('Trace')
     expect(turn.get('.turn-trace').text()).toContain('clock')
+    expect(wrapper.find('.right-rail [data-timeline="langgraph"]').exists()).toBe(false)
+    await wrapper.get('.right-rail [data-tab="trace"]').trigger('click')
     expect(wrapper.get('.right-rail [data-timeline="langgraph"]').text()).toContain('2026-11-08T00:00:00Z')
     wrapper.unmount()
   })
@@ -343,21 +383,50 @@ describe('会话页三列布局', () => {
     wrapper.unmount()
   })
 
-  it('子 agent 和纠正 note 留在左栏，不进消息区', async () => {
+  it('正在执行的子 agent 挂在对话上方，历史的要打开列表才看见', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
+    const main = wrapper.get('.session-main')
+    const html = main.element.innerHTML
+    expect(html.indexOf('agent-dock')).toBeGreaterThanOrEqual(0)
+    expect(html.indexOf('class="messages"')).toBeGreaterThan(html.indexOf('agent-dock'))
+    const live = wrapper.get('.agent-live')
+    expect(live.text()).toContain('sub-1')
+    expect(live.text()).not.toContain('sub-old')
+    expect(live.text()).not.toContain('sub-done')
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
     const meta = wrapper.get('.session-column .session-meta')
-    expect(meta.text()).toContain('子 agent')
-    expect(meta.text()).toContain('sub-1')
+    expect(meta.text()).not.toContain('sub-1')
+    expect(meta.text()).not.toContain('sub-old')
     expect(meta.text()).toContain('纠正 note')
     expect(meta.text()).toContain('harness note')
     expect(meta.text()).toContain('不要编造数字')
     const messages = wrapper.get('.messages')
     expect(messages.text()).not.toContain('sub-1')
+    expect(messages.text()).not.toContain('sub-old')
     expect(messages.text()).not.toContain('不要编造数字')
     expect(messages.text()).not.toContain('harness note')
     expect(rule(css, '.session-meta')).not.toMatch(/position:\s*(absolute|fixed)/)
+    expect(rule(css, '.agent-dock')).not.toMatch(/position:\s*(absolute|fixed)/)
+    await wrapper.get('[data-agent-list]').trigger('click')
+    const list = wrapper.get('[role="listbox"]')
+    expect(list.attributes('aria-label')).toBe('子 agent')
+    expect(wrapper.get('[data-agent-list]').attributes('aria-expanded')).toBe('true')
+    for (const id of ['sub-1', 'sub-old', 'sub-done']) {
+      expect(list.text()).toContain(id)
+    }
     wrapper.unmount()
+  })
+
+  it('任务行和子 agent 列表保持浅色和 8px 圆角', () => {
+    expect(rule(css, '.task-row')).toMatch(/border-radius:\s*8px/)
+    expect(rule(css, '.task-row')).toMatch(/color:\s*#1b1b18/)
+    expect(rule(css, '.task-title')).toMatch(/text-overflow:\s*ellipsis/)
+    expect(rule(css, '.task-title')).toMatch(/white-space:\s*nowrap/)
+    expect(rule(css, '.agent-listbox')).toMatch(/border-radius:\s*8px/)
+    expect(rule(css, '.agent-listbox')).toMatch(/background:\s*#fff/)
+    expect(rule(css, '.right-rail')).not.toMatch(/background:\s*#000/)
+    expect(css).not.toMatch(/neon|scanline|#00ffff|#39ff14/)
   })
 })
 
@@ -590,11 +659,14 @@ describe('会话页交互动效', () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)/)
   })
 
-  it('右栏默认停在 Trace，抽屉收起，拖动分隔时标记按压', async () => {
+  it('右栏默认停在任务，抽屉收起，拖动分隔时标记按压', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
     expect(wrapper.findAll('.right-rail details.rail-block')).toHaveLength(0)
-    expect(wrapper.get('.right-rail [role="tab"][aria-selected="true"]').attributes('data-tab')).toBe('trace')
+    expect(wrapper.get('.right-rail [role="tab"][aria-selected="true"]').attributes('data-tab')).toBe('tasks')
+    expect(wrapper.find('.right-rail [data-pane="trace"]').exists()).toBe(false)
+    expect(wrapper.find('.right-rail [data-pane="logs"]').exists()).toBe(false)
+    expect(wrapper.get('.agent-live').text()).toContain('sub-1')
     expect(wrapper.find('.console-drawer').exists()).toBe(false)
     expect(wrapper.get('.turn-trace').element.tagName).toBe('DETAILS')
     expect(wrapper.get('.turn-trace').element.hasAttribute('open')).toBe(false)
