@@ -1,7 +1,16 @@
 package dev.jasagent.api.exception;
 
 public enum ErrorCode {
+    LLM,
+    TOOL,
+    PLUGIN,
+    MCP,
+    RAG,
+    WORKFLOW,
+    PERSIST,
     AUTH,
+    INTERRUPTED,
+    CANCELLED,
     INTERNAL,
-    LLM
+    WORKFLOW_MAX_STEPS
 }
