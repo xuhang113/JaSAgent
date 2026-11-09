@@ -64,8 +64,9 @@
 
     <section class="session-main">
       <header class="chat-head chrome-bar">
-        <span class="eyebrow">对话</span>
-        <h2>{{ activeTitle || '会话' }}</h2>
+        <button v-if="focusedExecutionId" type="button" class="rail-tool" data-back-main @click="showMainSession">返回主会话</button>
+        <span class="eyebrow">{{ focusedExecutionId ? '子会话' : '对话' }}</span>
+        <h2>{{ focusedTitle || activeTitle || '会话' }}</h2>
         <span v-if="activeSessionId" class="session-model" data-session-model>{{ currentModelLabel }}</span>
         <div class="drawer-launcher">
           <button type="button" class="rail-tool" data-drawer-menu aria-haspopup="menu" aria-label="抽屉" :aria-expanded="drawerMenu ? 'true' : 'false'" @click="toggleDrawerMenu">···</button>
@@ -90,7 +91,7 @@
             type="button"
             class="agent-row"
             data-agent-live
-            @click="openAgent(agent)"
+            @click="openSubSession(agent)"
           >
             <strong>{{ agent.agentId }}</strong>
             <span>{{ resolvedStatus(agent.status, agent.executionId) }}</span>
@@ -129,7 +130,7 @@
         >
           <p v-if="!activeSessionId" class="empty-thread">从左侧选择一个会话。</p>
           <p v-else-if="messages.length === 0" class="empty-thread">在下面输入，开始这一会话。</p>
-          <article v-for="(message, index) in messages" :key="message.executionId || index" class="turn">
+          <article v-for="(message, index) in visibleMessages" :key="message.executionId || index" class="turn">
             <div class="bubble user">
               <strong>用户</strong>
               <div>{{ message.text }}</div>
@@ -202,21 +203,23 @@
       <div class="rail-stage">
         <div v-if="railTab === 'tasks'" class="rail-pane" role="tabpanel" data-pane="tasks">
           <p v-if="!activeSessionId" class="muted empty-line">未选会话。</p>
-          <p v-else-if="taskGroups.length === 0" class="muted empty-line">无任务。</p>
-          <section v-for="group in taskGroups" :key="group.id" class="task-group" :data-task-group="group.id">
-            <p class="task-group-label">{{ group.label }}</p>
-            <div v-for="row in group.rows" :key="row.id" class="task-item">
-              <button
-                type="button"
-                class="task-row"
-                :aria-expanded="openTaskId === row.id ? 'true' : 'false'"
-                @click="toggleTask(row)"
-              >
-                <span class="task-title">{{ row.title }}</span>
-              </button>
-              <p v-if="openTaskId === row.id" class="task-summary">{{ taskSummary(row) }}</p>
-            </div>
-          </section>
+          <div v-else class="task-tree" data-task-tree>
+            <button type="button" class="task-row task-main" data-task-main @click="showMainSession">
+              <span class="task-title">{{ activeTitle || '主会话' }}</span>
+              <span v-if="mainStatusLabel" class="task-status">{{ mainStatusLabel }}</span>
+            </button>
+            <button
+              v-for="agent in agents"
+              :key="agent.agentId + agent.executionId"
+              type="button"
+              class="task-row task-child"
+              data-task-child
+              @click="openSubSession(agent)"
+            >
+              <span class="task-title">{{ subTitle(agent) }}</span>
+              <span class="task-status">{{ statusLabel(resolvedStatus(agent.status, agent.executionId)) }}</span>
+            </button>
+          </div>
         </div>
         <div v-else-if="railTab === 'trace'" class="rail-pane" role="tabpanel" data-pane="trace">
           <p v-if="traceTurns.length === 0" class="muted empty-line">无 Trace。</p>
@@ -429,6 +432,8 @@ const drawerMenu = ref(false)
 const agentListOpen = ref(false)
 /** 展开摘要的任务行编号。空字符串表示都收着。 */
 const openTaskId = ref('')
+/** 正在看的子执行。空字符串表示主会话。 */
+const focusedExecutionId = ref('')
 /** detail 对应的执行编号，避免把别的执行状态套到当前行上。 */
 const detailExecutionId = ref('')
 /** 收起 details 的定时器，离开页面时清掉。 */
@@ -499,6 +504,32 @@ const retrievalRows = computed(() => {
 })
 /** 仍在执行的子 agent，挂在对话上方。 */
 const liveAgents = computed(() => agents.value.filter((agent) => agentIsLive(agent)))
+/** 主会话显示全部消息；点进子任务后只留那一次执行。 */
+const visibleMessages = computed(() => {
+  if (!focusedExecutionId.value) {
+    return messages.value
+  }
+  return messages.value.filter((message) => message.executionId === focusedExecutionId.value)
+})
+/** 子会话顶栏标题，用这一轮的用户原话。 */
+const focusedTitle = computed(() => {
+  const message = messages.value.find((item) => item.executionId === focusedExecutionId.value)
+  return message && message.text ? shortTitle(message.text) : ''
+})
+/** 主会话状态：有子任务在跑就是进行中，有失败且没有在跑就是失败，否则完成。 */
+const mainStatusLabel = computed(() => {
+  const labels = agents.value.map((agent) => statusLabel(resolvedStatus(agent.status, agent.executionId)))
+  if (labels.includes('进行中')) {
+    return '进行中'
+  }
+  if (labels.includes('失败')) {
+    return '失败'
+  }
+  if (!messages.value.length && !agents.value.length) {
+    return ''
+  }
+  return '完成'
+})
 /** 右栏 Trace。每一轮默认收起，里面是思考、工具和回复步骤。 */
 const traceTurns = computed(() => {
   const turns = []
@@ -716,7 +747,7 @@ function toggleAgentList() {
  */
 function pickAgent(agent) {
   agentListOpen.value = false
-  openAgent(agent)
+  openSubSession(agent)
 }
 
 /**
@@ -833,7 +864,59 @@ function turnRows(message) {
  * @return 要不要渲染思考
  */
 function showThinking(message, index) {
-  return index === messages.value.length - 1 && !!turnThinking(message)
+  return index === visibleMessages.value.length - 1 && !!turnThinking(message)
+}
+
+/**
+ * 把执行状态收成右栏用的三个词。
+ *
+ * @param status 已解析的大写状态
+ * @return 进行中、完成或失败
+ */
+function statusLabel(status) {
+  const value = normalizeStatus(status)
+  if (value === 'FAILED' || value === 'CANCELLED') {
+    return '失败'
+  }
+  if (taskBucket(value) === 'done') {
+    return '完成'
+  }
+  return '进行中'
+}
+
+/**
+ * 子任务标题。优先用这一轮的用户原话，否则用子 agent 编号。
+ *
+ * @param agent 子 agent
+ * @return 一行标题
+ */
+function subTitle(agent) {
+  const titled = agent && agent.title ? String(agent.title) : ''
+  if (titled.trim()) {
+    return shortTitle(titled)
+  }
+  const message = messages.value.find((item) => agent && item.executionId && item.executionId === agent.executionId)
+  if (message && message.text) {
+    return shortTitle(message.text)
+  }
+  return agent && agent.agentId ? agent.agentId : '子任务'
+}
+
+/** 回到主会话，中间栏重新显示全部轮次。 */
+function showMainSession() {
+  focusedExecutionId.value = ''
+}
+
+/**
+ * 进入子 agent 的这一次执行，中间栏只留它的对话和结果。
+ *
+ * @param agent 子 agent
+ */
+function openSubSession(agent) {
+  focusedExecutionId.value = agent && agent.executionId ? agent.executionId : ''
+  if (agent) {
+    openAgent(agent)
+  }
 }
 
 /**
@@ -1282,6 +1365,7 @@ async function commitRename(item) {
  */
 async function switchSession(sessionId) {
   activeSessionId.value = sessionId
+  focusedExecutionId.value = ''
   railTab.value = 'tasks'
   agentListOpen.value = false
   openTaskId.value = ''

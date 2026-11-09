@@ -222,7 +222,7 @@ class ConsoleSessionPageTest {
     }
 
     /**
-     * 向会话发一条 answer-with-tool 后，会话详情里要有角色为 SUB 的代理。
+     * 要工作区结果的消息会记下子 agent；问候不会。
      * 副作用：选择工作区、创建会话并提交消息。断言失败则测试失败。
      */
     @Test
@@ -230,10 +230,25 @@ class ConsoleSessionPageTest {
         String cookie = login("agent-user");
         selectWorkspace(cookie);
         String sessionId = sessionId(post("/api/sessions", cookie, Map.of("title", "子代理")));
-        post("/api/sessions/" + sessionId + "/messages", cookie, Map.of("text", "调度一次", "workflowId", "answer-with-tool"));
+        post("/api/sessions/" + sessionId + "/messages", cookie, Map.of("text", "工作区内有多少文件", "workflowId", "answer-with-tool"));
         String body = get("/api/sessions/" + sessionId, cookie).getBody();
         assertNotNull(body);
         assertTrue(body.contains("\"role\":\"SUB\""), body);
+    }
+
+    /**
+     * 问候留在主会话，详情里没有子 agent。
+     * 副作用：创建会话并提交「你好」。断言失败则测试失败。
+     */
+    @Test
+    void greetingDoesNotOpenSubAgent() throws Exception {
+        String cookie = login("hello-user");
+        selectWorkspace(cookie);
+        String sessionId = sessionId(post("/api/sessions", cookie, Map.of("title", "问候")));
+        post("/api/sessions/" + sessionId + "/messages", cookie, Map.of("text", "你好", "workflowId", "answer-with-tool"));
+        String body = get("/api/sessions/" + sessionId, cookie).getBody();
+        assertNotNull(body);
+        assertFalse(body.contains("\"role\":\"SUB\""), body);
     }
 
     /**

@@ -752,8 +752,16 @@ h3 {
   min-width: 0;
 }
 
+.task-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .task-row {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   margin: 0;
   padding: 6px 8px;
@@ -761,10 +769,21 @@ h3 {
   border-radius: 8px;
   background: transparent;
   color: #1b1b18;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
+}
+
+.task-child {
+  width: calc(100% - 16px);
+  margin-left: 16px;
+}
+
+.task-status {
+  flex: none;
+  color: #667085;
+  font-size: 12px;
 }
 
 .task-row:hover {
@@ -777,6 +796,8 @@ h3 {
 
 .task-title {
   display: block;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

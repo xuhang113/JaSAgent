@@ -266,21 +266,24 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         String text = input == null ? "" : input;
         exec.pendingWorkflow = workflowId;
         exec.pendingInput = text;
-        scheduler.enqueue(new WorkItem(id, id, sessionKey, workflowId, text, workflowId, text))
-                .toCompletableFuture()
-                .join();
-        ScheduleBatch batch = scheduler.scheduleOnce().toCompletableFuture().join();
-        for (TaskSnapshot snap : batch.assigned()) {
-            if (snap.item() == null || !sessionKey.equals(snap.item().sessionId()) || snap.role() != AgentRole.SUB) {
-                continue;
+        if (SubAgentNeed.required(text)) {
+            scheduler.enqueue(new WorkItem(id, id, sessionKey, workflowId, text, workflowId, text))
+                    .toCompletableFuture()
+                    .join();
+            ScheduleBatch batch = scheduler.scheduleOnce().toCompletableFuture().join();
+            for (TaskSnapshot snap : batch.assigned()) {
+                if (snap.item() == null || !sessionKey.equals(snap.item().sessionId()) || snap.role() != AgentRole.SUB) {
+                    continue;
+                }
+                Map<String, Object> agent = new LinkedHashMap<>();
+                agent.put("agentId", snap.agentId());
+                agent.put("role", snap.role().name());
+                agent.put("executionId", snap.item().executionId());
+                agent.put("status", snap.status());
+                agent.put("title", text);
+                exec.agents.add(agent);
+                exec.queue.add(snap.agentId() + ": " + workflowId);
             }
-            Map<String, Object> agent = new LinkedHashMap<>();
-            agent.put("agentId", snap.agentId());
-            agent.put("role", snap.role().name());
-            agent.put("executionId", snap.item().executionId());
-            agent.put("status", snap.status());
-            exec.agents.add(agent);
-            exec.queue.add(snap.agentId() + ": " + workflowId);
         }
         if (exec.queue.isEmpty()) {
             exec.queue.add("main: " + workflowId);
