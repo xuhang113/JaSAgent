@@ -377,6 +377,31 @@ describe('会话页三列布局', () => {
   it('页面空状态不写还没有', () => {
     const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), './ConsoleView.vue'), 'utf8')
     expect(source).not.toMatch(/还没有/)
+    expect(source).not.toContain('harness note')
+    expect(source).not.toContain('纠正 note')
+    expect(source).not.toContain('无消息。')
+  })
+
+  it('空会话在中部用一句说明', async () => {
+    state.timeline = { executionId: 'exec-1', messages: [] }
+    state.session = {
+      title: '检查会话',
+      model: 'deepseek-flash',
+      modelProvider: 'deepseek',
+      messages: [],
+      agents: [],
+      corrections: []
+    }
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    const thread = wrapper.get('.thread.is-empty')
+    expect(thread.get('.empty-thread').text()).toBe('在下面输入，开始这一会话。')
+    expect(thread.text()).not.toContain('无消息')
+    expect(rule(css, '.messages')).toMatch(/display:\s*flex/)
+    expect(rule(css, '.thread.is-empty')).toMatch(/justify-content:\s*center/)
+    expect(rule(css, '.thread.is-empty')).toMatch(/align-items:\s*center/)
+    expect(rule(css, '.empty-thread')).toMatch(/text-align:\s*center/)
+    wrapper.unmount()
   })
 
   it('输入框排在消息区之后，并钉在中间列', async () => {
@@ -452,9 +477,11 @@ describe('会话页三列布局', () => {
     const meta = wrapper.get('.session-column .session-meta')
     expect(meta.text()).not.toContain('sub-1')
     expect(meta.text()).not.toContain('sub-old')
-    expect(meta.text()).toContain('纠正 note')
-    expect(meta.text()).toContain('harness note')
+    expect(meta.text()).toContain('纠正')
+    expect(meta.text()).toContain('追加纠正')
     expect(meta.text()).toContain('不要编造数字')
+    expect(meta.text()).not.toContain('harness')
+    expect(meta.text()).not.toContain('纠正 note')
     const messages = wrapper.get('.messages')
     expect(messages.text()).not.toContain('sub-1')
     expect(messages.text()).not.toContain('sub-old')
@@ -591,7 +618,13 @@ describe('会话页按钮对齐 llgraph', () => {
   it('会话行、子 agent 和 skill 按钮只改颜色、字号、圆角', () => {
     expect(rule(css, '.console-layout .session-switch')).toMatch(/font-size:\s*13px/)
     expect(rule(css, '.console-layout .session-switch')).toMatch(/color:\s*#1b1b18/)
-    expect(rule(css, '.console-layout .session-switch')).toMatch(/padding:\s*6px 12px/)
+    expect(rule(css, '.console-layout .session-switch')).toMatch(/padding:\s*0 8px/)
+    expect(rule(css, '.console-layout .session-switch')).toMatch(/display:\s*flex/)
+    expect(rule(css, '.console-layout .session-title')).toMatch(/white-space:\s*nowrap/)
+    expect(rule(css, '.console-layout .session-title')).toMatch(/text-overflow:\s*ellipsis/)
+    expect(rule(css, '.console-layout .session-row')).toMatch(/height:\s*28px/)
+    expect(rule(css, '.console-layout .session-tools')).toMatch(/height:\s*28px/)
+    expect(rule(css, '.console-layout .session-rename')).toMatch(/height:\s*22px/)
     expect(rule(css, '.console-layout .session-row.active')).toMatch(/background:\s*#dcdcd7/)
     expect(rule(css, '.console-layout .session-row:hover')).toMatch(/background:\s*#e3e3de/)
     const agent = rule(css, '.console-layout .agent-row')
@@ -870,9 +903,26 @@ describe('会话模型', () => {
     expect(wrapper.get('[data-session-model]').text()).toBe('deepseek-flash')
     expect(select.findAll('option').map((item) => item.text())).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
     expect(select.text()).not.toContain('ai-gateway')
+    const actions = wrapper.get('.composer-actions')
+    const actionHtml = actions.element.innerHTML
+    expect(actionHtml.indexOf('data-model-select')).toBeGreaterThanOrEqual(0)
+    expect(actionHtml.indexOf('data-model-select')).toBeLessThan(actionHtml.indexOf('发送'))
+    expect(actionHtml.indexOf('发送')).toBeLessThan(actionHtml.indexOf('中止'))
+    expect(actionHtml.indexOf('中止')).toBeLessThan(actionHtml.indexOf('恢复'))
+    expect(rule(css, '.console-layout .composer-actions')).toMatch(/flex-wrap:\s*nowrap/)
+    expect(rule(css, '.console-layout .composer-actions')).toMatch(/align-items:\s*center/)
     const chrome = rule(css, '.console-layout .model-select .el-select__wrapper')
+    expect(chrome).toMatch(/height:\s*28px/)
+    expect(chrome).toMatch(/min-height:\s*28px/)
+    expect(chrome).toMatch(/font-size:\s*12px/)
     expect(chrome).toMatch(/border-radius:\s*8px/)
     expect(chrome).toMatch(/color:\s*#1b1b18/)
+    const send = rule(css, '.console-layout .composer-actions .el-button.cursor-btn-primary')
+    expect(send).toMatch(/height:\s*28px/)
+    expect(send).toMatch(/font-size:\s*12px/)
+    expect(send).toMatch(/border-radius:\s*8px/)
+    expect(send).toMatch(/padding:\s*0 10px/)
+    expect(rule(css, '.console-layout .el-button.cursor-btn-primary')).toMatch(/background:\s*#1b1b18/)
     expect(rule(css, '.chat-head .session-model')).toMatch(/border-radius:\s*8px/)
     expect(rule(css, '.chat-head .session-model')).toMatch(/color:\s*#1b1b18/)
     wrapper.unmount()

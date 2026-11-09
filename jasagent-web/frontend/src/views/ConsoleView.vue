@@ -44,17 +44,20 @@
             <strong class="session-title" @click.stop="beginRename(item)">{{ item.title }}</strong>
             <small class="mono-num">{{ item.sessionId.slice(0, 8) }}</small>
           </button>
-          <button type="button" class="session-rename" @click.stop="beginRename(item)">改名</button>
-          <el-button size="small" text type="danger" class="cursor-session-delete" @click="removeSession(item.sessionId)">删除</el-button>
+          <div class="session-tools">
+            <button type="button" class="session-rename" @click.stop="beginRename(item)">改名</button>
+            <el-button size="small" text type="danger" class="cursor-session-delete" @click="removeSession(item.sessionId)">删除</el-button>
+          </div>
         </div>
       </div>
       <div class="session-meta">
-        <h3>纠正 note <small>harness note</small></h3>
-        <p v-if="!activeSessionId" class="muted">未选会话。</p>
-        <p v-else-if="corrections.length === 0" class="muted">无纠正。</p>
-        <p v-for="note in corrections" :key="note.noteId" class="note-line">{{ note.source }} {{ note.text }}</p>
-        <el-input v-model="noteText" placeholder="纠正 note" />
-        <el-button size="small" class="cursor-btn-ghost" @click="addNote">追加纠正</el-button>
+        <span class="field-label">纠正</span>
+        <p v-if="!activeSessionId" class="muted">先选择会话。</p>
+        <p v-for="note in corrections" :key="note.noteId" class="note-line">{{ note.text }}</p>
+        <div class="correction-compose">
+          <el-input v-model="noteText" placeholder="写下纠正" :disabled="!activeSessionId" />
+          <el-button size="small" class="cursor-btn-ghost" @click="addNote">追加纠正</el-button>
+        </div>
       </div>
     </aside>
     <div class="split-handle" :class="{ 'is-active': resizing === 'session' }" data-resize="session" @mousedown.prevent="startResize($event, 'session')"></div>
@@ -118,9 +121,14 @@
         </div>
       </div>
       <div class="messages">
-        <div class="thread" :key="activeSessionId || 'none'" :data-thread="activeSessionId || 'none'">
-          <p v-if="!activeSessionId" class="muted">未选会话。</p>
-          <p v-else-if="messages.length === 0" class="muted">无消息。</p>
+        <div
+          class="thread"
+          :class="{ 'is-empty': !activeSessionId || messages.length === 0 }"
+          :key="activeSessionId || 'none'"
+          :data-thread="activeSessionId || 'none'"
+        >
+          <p v-if="!activeSessionId" class="empty-thread">从左侧选择一个会话。</p>
+          <p v-else-if="messages.length === 0" class="empty-thread">在下面输入，开始这一会话。</p>
           <article v-for="(message, index) in messages" :key="message.executionId || index" class="turn">
             <div class="bubble user">
               <strong>用户</strong>
@@ -157,7 +165,7 @@
             </button>
           </div>
           <el-input v-model="draft" type="textarea" :rows="2" placeholder="输入 / 选择 skill" @keydown.enter.exact.prevent="sendMessage" />
-          <div class="row">
+          <div class="row composer-actions">
             <el-select
               v-model="sessionModel"
               class="model-select"
@@ -925,7 +933,7 @@ async function sendMessage() {
 
 async function addNote() {
   if (!activeSessionId.value || !noteText.value.trim()) {
-    ElMessage.warning('先选择会话并写下纠正 note')
+    ElMessage.warning('先选择会话，再写纠正')
     return
   }
   await api('/api/sessions/' + activeSessionId.value + '/corrections', {
@@ -934,7 +942,7 @@ async function addNote() {
   })
   noteText.value = ''
   await switchSession(activeSessionId.value)
-  ElMessage.success('已追加纠正 note')
+  ElMessage.success('已追加纠正')
 }
 
 async function loadContext() {

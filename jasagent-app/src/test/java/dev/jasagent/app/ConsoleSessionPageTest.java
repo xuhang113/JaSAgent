@@ -128,10 +128,12 @@ class ConsoleSessionPageTest {
     }
 
     @Test
-    void consoleShowsHarnessNote() {
+    void consoleShowsCorrectionEntry() {
         String script = consoleScript();
-        assertTrue(script.contains("纠正 note"));
-        assertTrue(script.contains("harness note"));
+        assertTrue(script.contains("写下纠正"), scriptSnippet(script, "纠正"));
+        assertTrue(script.contains("追加纠正"), script);
+        assertFalse(script.contains("harness note"), script);
+        assertFalse(script.contains("纠正 note"), script);
     }
 
     @Test
