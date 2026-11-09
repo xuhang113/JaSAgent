@@ -775,15 +775,54 @@ h3 {
   cursor: pointer;
 }
 
+.task-main {
+  font-weight: 600;
+  background: #f4f4f0;
+}
+
+.task-children {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 14px;
+  padding-left: 12px;
+  border-left: 2px solid #c8c8c3;
+}
+
 .task-child {
-  width: calc(100% - 16px);
-  margin-left: 16px;
+  width: 100%;
+  margin-left: 0;
+  background: #fff;
 }
 
 .task-status {
   flex: none;
   color: #667085;
   font-size: 12px;
+}
+
+.task-badge {
+  border-radius: 8px;
+  padding: 1px 6px;
+  background: #ecece8;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.task-badge[data-status='进行中'] {
+  background: #e7eefc;
+  color: #1b1b18;
+}
+
+.task-badge[data-status='完成'] {
+  background: #e7f6ee;
+  color: #1b1b18;
+}
+
+.task-badge[data-status='失败'] {
+  background: #fdecec;
+  color: #b42318;
 }
 
 .task-row:hover {

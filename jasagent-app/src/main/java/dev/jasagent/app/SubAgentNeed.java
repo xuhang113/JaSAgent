@@ -14,6 +14,7 @@ public final class SubAgentNeed {
             "文件|目录|工作区|仓库|读取|读一下|列出|查找|搜索|检索|统计|pom\\.xml|readme|有多少|几个文件|源码|代码里|grep|glob|list_directory",
             Pattern.CASE_INSENSITIVE);
 
+    /** 只通过静态方法使用，不构造实例。 */
     private SubAgentNeed() {
     }
 

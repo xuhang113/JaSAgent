@@ -206,19 +206,21 @@
           <div v-else class="task-tree" data-task-tree>
             <button type="button" class="task-row task-main" data-task-main @click="showMainSession">
               <span class="task-title">{{ activeTitle || '主会话' }}</span>
-              <span v-if="mainStatusLabel" class="task-status">{{ mainStatusLabel }}</span>
+              <span v-if="mainStatusLabel" class="task-status task-badge" :data-status="mainStatusLabel">{{ mainStatusLabel }}</span>
             </button>
-            <button
-              v-for="agent in agents"
-              :key="agent.agentId + agent.executionId"
-              type="button"
-              class="task-row task-child"
-              data-task-child
-              @click="openSubSession(agent)"
-            >
-              <span class="task-title">{{ subTitle(agent) }}</span>
-              <span class="task-status">{{ statusLabel(resolvedStatus(agent.status, agent.executionId)) }}</span>
-            </button>
+            <div v-if="agents.length" class="task-children">
+              <button
+                v-for="agent in agents"
+                :key="agent.agentId + agent.executionId"
+                type="button"
+                class="task-row task-child"
+                data-task-child
+                @click="openSubSession(agent)"
+              >
+                <span class="task-title">{{ subTitle(agent) }}</span>
+                <span class="task-status task-badge" :data-status="statusLabel(resolvedStatus(agent.status, agent.executionId))">{{ statusLabel(resolvedStatus(agent.status, agent.executionId)) }}</span>
+              </button>
+            </div>
           </div>
         </div>
         <div v-else-if="railTab === 'trace'" class="rail-pane" role="tabpanel" data-pane="trace">
