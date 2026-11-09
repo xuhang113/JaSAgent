@@ -755,22 +755,76 @@ h3 {
 .task-tree {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+}
+
+.task-section {
+  margin: 0;
+}
+
+.task-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 2px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.task-section-head::-webkit-details-marker {
+  display: none;
+}
+
+.task-section-head::before {
+  content: '▸';
+  width: 12px;
+  color: #98a2b3;
+  font-size: 11px;
+}
+
+.task-section[open] > .task-section-head::before {
+  content: '▾';
+}
+
+.task-section-count {
+  margin-left: auto;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #ecece8;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  text-align: center;
+}
+
+.task-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
 }
 
 .task-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
+  height: 28px;
   margin: 0;
-  padding: 6px 8px;
+  padding: 0 6px;
   border: 0;
   border-radius: 8px;
   background: transparent;
   color: #1b1b18;
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 28px;
   text-align: left;
   cursor: pointer;
 }
@@ -780,12 +834,60 @@ h3 {
   background: #f4f4f0;
 }
 
+.task-icon {
+  position: relative;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 1.5px solid #1b1b18;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.task-icon[data-status='进行中'] {
+  background:
+    radial-gradient(circle at center, #1b1b18 0 2px, transparent 2.5px);
+}
+
+.task-icon[data-status='完成'] {
+  border-color: #1b1b18;
+  background: #1b1b18;
+}
+
+.task-icon[data-status='完成']::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 3px;
+  height: 6px;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.task-icon[data-status='失败'] {
+  border-color: #b42318;
+  background: #b42318;
+}
+
+.task-icon[data-status='失败']::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  width: 1.5px;
+  height: 6px;
+  background: #fff;
+}
+
 .task-children {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-left: 14px;
-  padding-left: 12px;
+  gap: 2px;
+  margin-left: 16px;
+  padding-left: 10px;
   border-left: 2px solid #c8c8c3;
 }
 

@@ -204,23 +204,40 @@
         <div v-if="railTab === 'tasks'" class="rail-pane" role="tabpanel" data-pane="tasks">
           <p v-if="!activeSessionId" class="muted empty-line">未选会话。</p>
           <div v-else class="task-tree" data-task-tree>
-            <button type="button" class="task-row task-main" data-task-main @click="showMainSession">
-              <span class="task-title">{{ activeTitle || '主会话' }}</span>
-              <span v-if="mainStatusLabel" class="task-status task-badge" :data-status="mainStatusLabel">{{ mainStatusLabel }}</span>
-            </button>
-            <div v-if="agents.length" class="task-children">
-              <button
-                v-for="agent in agents"
-                :key="agent.agentId + agent.executionId"
-                type="button"
-                class="task-row task-child"
-                data-task-child
-                @click="openSubSession(agent)"
-              >
-                <span class="task-title">{{ subTitle(agent) }}</span>
-                <span class="task-status task-badge" :data-status="statusLabel(resolvedStatus(agent.status, agent.executionId))">{{ statusLabel(resolvedStatus(agent.status, agent.executionId)) }}</span>
-              </button>
-            </div>
+            <details
+              v-for="group in taskSections"
+              :key="group.id"
+              class="task-section"
+              :data-task-group="group.id"
+              :open="sectionIsOpen(group.id, group.count)"
+              @toggle="rememberSection(group.id, $event)"
+            >
+              <summary class="task-section-head">
+                <span class="task-section-label">{{ group.label }}</span>
+                <span class="task-section-count">{{ group.count }}</span>
+              </summary>
+              <div v-for="session in group.sessions" :key="session.id" class="task-branch">
+                <button type="button" class="task-row task-main" data-task-main @click="showMainSession">
+                  <span class="task-icon" :data-status="session.status" aria-hidden="true"></span>
+                  <span class="task-title">{{ session.title }}</span>
+                  <span v-if="session.status" class="task-status task-badge" :data-status="session.status">{{ session.status }}</span>
+                </button>
+                <div v-if="session.children.length" class="task-children">
+                  <button
+                    v-for="agent in session.children"
+                    :key="agent.agentId + agent.executionId"
+                    type="button"
+                    class="task-row task-child"
+                    data-task-child
+                    @click="openSubSession(agent)"
+                  >
+                    <span class="task-icon" :data-status="statusLabel(resolvedStatus(agent.status, agent.executionId))" aria-hidden="true"></span>
+                    <span class="task-title">{{ subTitle(agent) }}</span>
+                    <span class="task-status task-badge" :data-status="statusLabel(resolvedStatus(agent.status, agent.executionId))">{{ statusLabel(resolvedStatus(agent.status, agent.executionId)) }}</span>
+                  </button>
+                </div>
+              </div>
+            </details>
           </div>
         </div>
         <div v-else-if="railTab === 'trace'" class="rail-pane" role="tabpanel" data-pane="trace">
@@ -436,6 +453,8 @@ const agentListOpen = ref(false)
 const openTaskId = ref('')
 /** 正在看的子执行。空字符串表示主会话。 */
 const focusedExecutionId = ref('')
+/** 用户手动展开或收起的任务组。没动过的组：有内容就展开。 */
+const sectionChoice = ref({})
 /** detail 对应的执行编号，避免把别的执行状态套到当前行上。 */
 const detailExecutionId = ref('')
 /** 收起 details 的定时器，离开页面时清掉。 */
@@ -548,52 +567,35 @@ const traceTurns = computed(() => {
   })
   return turns
 })
-/** 右栏任务。按进行中、待看、完成分组，没有行的组不显示。 */
-const taskGroups = computed(() => {
-  const rows = []
-  const covered = new Set()
-  for (const agent of agents.value) {
-    const executionId = agent.executionId || ''
-    const message = messages.value.find((item) => executionId && item.executionId === executionId)
-    rows.push({
-      id: 'agent:' + (agent.agentId || '') + ':' + executionId,
-      kind: 'agent',
-      title: shortTitle(message && message.text ? message.text : agent.agentId),
-      status: resolvedStatus(agent.status, executionId),
-      agent,
-      message,
-      executionId
-    })
-    if (executionId) {
-      covered.add(executionId)
-    }
-  }
-  for (const message of messages.value) {
-    if (!message.executionId || covered.has(message.executionId)) {
-      continue
-    }
-    rows.push({
-      id: 'exec:' + message.executionId,
-      kind: 'execution',
-      title: shortTitle(message.text),
-      status: resolvedStatus(message.status, message.executionId),
-      agent: null,
-      message,
-      executionId: message.executionId
-    })
-  }
-  const groups = [
-    { id: 'active', label: '进行中', rows: [] },
-    { id: 'review', label: '待看', rows: [] },
-    { id: 'done', label: '完成', rows: [] }
+/**
+ * 右栏任务按状态分成三组。主会话算一组里的一行，子任务缩在它下面，不另占一组。
+ * 数量是这一组里能看见的行数。
+ */
+const taskSections = computed(() => {
+  const status = mainStatusLabel.value || '待看'
+  const groupId = status === '进行中' ? 'active' : status === '完成' ? 'done' : 'review'
+  const children = agents.value.slice()
+  const sessions = activeSessionId.value
+    ? [{
+        id: activeSessionId.value,
+        title: activeTitle.value || '主会话',
+        status: mainStatusLabel.value,
+        children
+      }]
+    : []
+  const sections = [
+    { id: 'active', label: '进行中', sessions: [] },
+    { id: 'review', label: '待看', sessions: [] },
+    { id: 'done', label: '完成', sessions: [] }
   ]
-  for (const row of rows) {
-    const group = groups.find((item) => item.id === taskBucket(row.status))
-    if (group) {
-      group.rows.push(row)
-    }
+  const section = sections.find((item) => item.id === groupId)
+  if (section) {
+    section.sessions = sessions
   }
-  return groups.filter((group) => group.rows.length)
+  return sections.map((item) => ({
+    ...item,
+    count: item.sessions.reduce((sum, session) => sum + 1 + session.children.length, 0)
+  }))
 })
 
 /** 进入页面时读取登录信息、模型、工作流、skill 和会话。地址上有执行编号就接着查它。 */
@@ -624,6 +626,34 @@ onBeforeUnmount(() => {
 function selectRailTab(id) {
   railTab.value = id
   drawerMenu.value = false
+}
+
+/**
+ * 任务组默认：有行就展开。用户点过之后记住选择。
+ *
+ * @param id 组编号 active、review、done
+ * @param count 这一组的行数
+ * @return 是否展开
+ */
+function sectionIsOpen(id, count) {
+  if (Object.prototype.hasOwnProperty.call(sectionChoice.value, id)) {
+    return sectionChoice.value[id]
+  }
+  return count > 0
+}
+
+/**
+ * 记下用户把这一组展开还是收起。
+ *
+ * @param id 组编号
+ * @param event details 的 toggle 事件
+ */
+function rememberSection(id, event) {
+  const open = !!(event.currentTarget && event.currentTarget.open)
+  if (sectionChoice.value[id] === open) {
+    return
+  }
+  sectionChoice.value = { ...sectionChoice.value, [id]: open }
 }
 
 /**
