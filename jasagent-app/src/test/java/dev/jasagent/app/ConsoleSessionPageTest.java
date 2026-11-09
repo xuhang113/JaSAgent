@@ -52,6 +52,64 @@ class ConsoleSessionPageTest {
     }
 
     @Test
+    void anonymousModelListIs401() {
+        ResponseEntity<String> response = http.getForEntity("/api/models", String.class);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertTrue(response.getBody().contains("AUTH"));
+    }
+
+    @Test
+    void consoleShowsModelSelect() {
+        String script = consoleScript();
+        assertTrue(script.contains("data-model-select"), scriptSnippet(script, "model"));
+        assertTrue(script.contains("data-session-model"), script);
+        String css = consoleCss();
+        assertTrue(css.contains("model-select"), css);
+        assertTrue(css.contains("#1b1b18"), css);
+        assertTrue(css.contains("8px"), css);
+    }
+
+    @Test
+    void sessionRemembersDeepseekFlash() throws Exception {
+        String cookie = login("model-user");
+        String first = sessionId(post("/api/sessions", cookie, Map.of("title", "甲")));
+        String second = sessionId(post("/api/sessions", cookie, Map.of("title", "乙")));
+        String firstBody = get("/api/sessions/" + first, cookie).getBody();
+        String secondBody = get("/api/sessions/" + second, cookie).getBody();
+        assertTrue(firstBody.contains("\"model\":\"deepseek-flash\""), firstBody);
+        assertTrue(firstBody.contains("\"modelProvider\":\"deepseek\""), firstBody);
+        assertTrue(secondBody.contains("\"model\":\"deepseek-flash\""), secondBody);
+        assertTrue(get("/api/sessions/" + first, cookie).getBody().contains("\"model\":\"deepseek-flash\""));
+    }
+
+    @Test
+    void unknownModelIsRejected() throws Exception {
+        String cookie = login("model-reject");
+        String sessionId = sessionId(post("/api/sessions", cookie, Map.of("title", "拒绝")));
+        ResponseEntity<String> response = exchange(
+                "/api/sessions/" + sessionId,
+                HttpMethod.PATCH,
+                cookie,
+                Map.of("model", "not-a-real-model", "modelProvider", "deepseek"));
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertTrue(response.getBody().contains("WORKFLOW"), response.getBody());
+        assertTrue(get("/api/sessions/" + sessionId, cookie).getBody().contains("\"model\":\"deepseek-flash\""));
+    }
+
+    @Test
+    void modelListUsesDeepseekDefault() throws Exception {
+        String cookie = login("model-list");
+        String body = get("/api/models", cookie).getBody();
+        assertNotNull(body);
+        assertTrue(body.contains("\"defaultModel\":\"deepseek-flash\""), body);
+        if (System.getenv("JASAGENT_GATEWAY_BASE_URL") == null
+                || System.getenv("JASAGENT_GATEWAY_API_KEY") == null
+                || System.getenv("JASAGENT_GATEWAY_MODEL") == null) {
+            assertFalse(body.contains("ai-gateway"), body);
+        }
+    }
+
+    @Test
     void anonymousSessionListIs401() {
         ResponseEntity<String> response = http.getForEntity("/api/sessions", String.class);
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());

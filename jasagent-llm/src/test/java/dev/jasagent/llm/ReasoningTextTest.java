@@ -94,6 +94,56 @@ class ReasoningTextTest {
     }
 
     @Test
+    void selectedModelIsPostedToTheDeepSeekEndpoint() throws Exception {
+        AtomicReference<String> seen = new AtomicReference<>("");
+        AtomicReference<String> path = new AtomicReference<>("");
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/chat/completions", exchange -> {
+            path.set(exchange.getRequestURI().getPath());
+            seen.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] body = completion("答案", "\"reasoning_content\":\"先想一步\"").getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+        try {
+            int port = server.getAddress().getPort();
+            OpenAiCallConfig config = new OpenAiCallConfig(
+                    "http://127.0.0.1:" + port,
+                    "placeholder-key",
+                    "deepseek-flash",
+                    Duration.ofSeconds(10),
+                    0,
+                    false,
+                    false,
+                    Map.of("thinking", Map.of("type", "enabled")),
+                    true);
+            LangChain4jLlmClient client = LangChain4jLlmClient.from(config);
+            LlmChatResponse response = client.chat(new LlmChatRequest(
+                            "exec-1",
+                            LlmTask.REACT,
+                            "deepseek",
+                            List.of(new LlmMessage("user", "hi")),
+                            1,
+                            "deepseek-v4-pro"))
+                    .toCompletableFuture()
+                    .join();
+            assertEquals("答案", response.text());
+            assertEquals("/chat/completions", path.get());
+            String compact = seen.get().replace(" ", "").replace("\n", "");
+            assertTrue(compact.contains("\"model\":\"deepseek-v4-pro\""), seen.get());
+            assertFalse(compact.contains("deepseek-flash"), seen.get());
+            assertTrue(compact.contains("\"type\":\"enabled\""), seen.get());
+            assertFalse(seen.get().contains("placeholder-key"), seen.get());
+            assertEquals("https://api.deepseek.com", OpenAiCallConfig.DEEPSEEK_BASE_URL);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void responseWithoutReasoningLeavesThinkingEmpty() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/chat/completions", exchange -> {

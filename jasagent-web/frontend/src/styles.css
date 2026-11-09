@@ -277,6 +277,38 @@ h3 {
   background: #fff;
 }
 
+.chat-head .session-model {
+  margin-left: auto;
+  color: #1b1b18;
+  border: 1px solid #c8c8c3;
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 20px;
+  background: #fff;
+}
+
+.chat-head .session-model + .drawer-launcher {
+  margin-left: 8px;
+}
+
+.console-layout .model-select {
+  width: 220px;
+  max-width: 100%;
+  flex: none;
+}
+
+.console-layout .model-select .el-select__wrapper {
+  border-radius: 8px;
+  color: #1b1b18;
+  box-shadow: 0 0 0 1px #c8c8c3 inset;
+}
+
+.model-popper.el-select__popper,
+.model-popper .el-select-dropdown {
+  border-radius: 8px;
+}
+
 .agent-dock {
   position: relative;
   flex: none;

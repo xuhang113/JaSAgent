@@ -66,9 +66,27 @@ public class ConsoleController {
         return console.createSession(session(request).login(), body.get("title"));
     }
 
+    @GetMapping("/api/models")
+    public Map<String, Object> models(HttpServletRequest request) {
+        return console.models(session(request).login());
+    }
+
     @PatchMapping("/api/sessions/{id}")
-    public Map<String, Object> renameSession(@PathVariable("id") String id, @RequestBody Map<String, String> body, HttpServletRequest request) {
-        return console.renameSession(session(request).login(), id, body.get("title"));
+    public Map<String, Object> patchSession(@PathVariable("id") String id, @RequestBody Map<String, String> body, HttpServletRequest request) {
+        String login = session(request).login();
+        boolean hasModel = body.get("model") != null && !body.get("model").isBlank();
+        boolean hasTitle = body.containsKey("title");
+        Map<String, Object> result = null;
+        if (hasModel) {
+            result = console.updateModel(login, id, body.get("model"), body.get("modelProvider"));
+        }
+        if (hasTitle) {
+            result = console.renameSession(login, id, body.get("title"));
+        }
+        if (result == null) {
+            return console.renameSession(login, id, null);
+        }
+        return result;
     }
 
     @GetMapping("/api/sessions/{id}")
@@ -84,7 +102,14 @@ public class ConsoleController {
     @PostMapping("/api/sessions/{id}/messages")
     public Map<String, Object> message(@PathVariable("id") String id, @RequestBody Map<String, String> body, HttpServletRequest request) {
         Session session = session(request);
-        return console.appendMessage(session.login(), session.token(), id, body.get("text"), body.get("workflowId"));
+        return console.appendMessage(
+                session.login(),
+                session.token(),
+                id,
+                body.get("text"),
+                body.get("workflowId"),
+                body.get("model"),
+                body.get("modelProvider"));
     }
 
     @GetMapping("/api/sessions/{id}/context")

@@ -27,7 +27,8 @@ const state = {
   session: {},
   timeline: { messages: [] },
   execution: {},
-  context: {}
+  context: {},
+  models: []
 }
 
 function rule(source, selector) {
@@ -47,9 +48,15 @@ function declaresVisualChrome(body) {
 }
 
 function resetState() {
-  state.sessions = [{ sessionId: 's1', title: '检查会话' }]
+  state.sessions = [{ sessionId: 's1', title: '检查会话', model: 'deepseek-flash', modelProvider: 'deepseek' }]
+  state.models = [
+    { id: 'deepseek-flash', provider: 'deepseek', label: 'deepseek-flash' },
+    { id: 'deepseek-v4-pro', provider: 'deepseek', label: 'deepseek-v4-pro' }
+  ]
   state.session = {
     title: '检查会话',
+    model: 'deepseek-flash',
+    modelProvider: 'deepseek',
     messages: [{ role: 'user', text: '请给出时间', executionId: 'exec-1', status: 'SUSPENDED', output: '' }],
     agents: [
       { agentId: 'sub-1', role: 'SUB', status: 'RUNNING', executionId: 'exec-live' },
@@ -96,6 +103,9 @@ beforeEach(() => {
     if (path === '/api/workspaces') {
       return { workspaces: ['/ws'], workspace: '/ws' }
     }
+    if (path === '/api/models') {
+      return { defaultModel: 'deepseek-flash', models: state.models }
+    }
     if (path === '/api/workflows') {
       return [{ id: 'answer-with-tool' }]
     }
@@ -124,13 +134,33 @@ beforeEach(() => {
       return state.sessions
     }
     if (method === 'PATCH' && String(path).startsWith('/api/sessions/')) {
-      const title = options.body && options.body.title
       const sessionId = String(path).split('/').pop()
+      if (options.body && options.body.model) {
+        state.session = {
+          ...state.session,
+          model: options.body.model,
+          modelProvider: options.body.modelProvider || 'deepseek'
+        }
+        state.sessions = state.sessions.map((item) => item.sessionId === sessionId ? { ...item, ...state.session } : item)
+        return { sessionId, title: state.session.title, model: state.session.model, modelProvider: state.session.modelProvider }
+      }
+      const title = options.body && options.body.title
       state.sessions = state.sessions.map((item) => item.sessionId === sessionId ? { ...item, title } : item)
       state.session = { ...state.session, title }
       return { sessionId, title }
     }
     if (String(path).startsWith('/api/sessions/')) {
+      const sessionId = String(path).split('/').pop()
+      if (sessionId === 's2') {
+        return {
+          title: '另一会话',
+          model: 'deepseek-v4-pro',
+          modelProvider: 'deepseek',
+          messages: [],
+          agents: [],
+          corrections: []
+        }
+      }
       return state.session
     }
     if (String(path).endsWith('/logs')) {
@@ -165,9 +195,26 @@ async function mountConsole() {
           props: ['type', 'size', 'text', 'loading', 'nativeType'],
           template: '<button type="button" class="el-button" :class="[type && `el-button--${type}`, text && \'is-text\']"><slot /></button>'
         },
-        'el-input': { template: '<textarea class="el-input" />' },
-        'el-select': { template: '<div class="el-select workspace-select"><slot /></div>' },
-        'el-option': { template: '<div class="el-option" />' },
+        'el-input': {
+          props: ['modelValue'],
+          emits: ['update:modelValue'],
+          template: '<textarea class="el-input" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />'
+        },
+        'el-select': {
+          props: ['modelValue', 'disabled'],
+          emits: ['update:modelValue', 'change'],
+          template: '<select class="el-select" :disabled="disabled" :value="modelValue" @change="onChange($event)"><slot /></select>',
+          methods: {
+            onChange(event) {
+              this.$emit('update:modelValue', event.target.value)
+              this.$emit('change', event.target.value)
+            }
+          }
+        },
+        'el-option': {
+          props: ['label', 'value'],
+          template: '<option :value="value">{{ label }}</option>'
+        },
         'el-tag': { template: '<span class="el-tag"><slot /></span>' }
       }
     }
@@ -808,6 +855,73 @@ describe('会话标题', () => {
     expect(rule(css, '.console-layout .session-title-input')).toMatch(/color:\s*#1b1b18/)
     expect(rule(css, '.console-layout .session-rename')).toMatch(/border-radius:\s*8px/)
     expect(rule(css, '.console-layout .session-rename')).toMatch(/color:\s*#1b1b18/)
+    wrapper.unmount()
+  })
+})
+
+describe('会话模型', () => {
+  it('输入区能看到当前模型，列表只有接口返回的模型', async () => {
+    const wrapper = await mountConsole()
+    expect(wrapper.get('.composer-dock [data-model-select]').attributes('disabled')).toBeDefined()
+    await openSession(wrapper)
+    const select = wrapper.get('.composer-dock [data-model-select]')
+    expect(select.attributes('disabled')).toBeUndefined()
+    expect(select.element.value).toBe('deepseek|deepseek-flash')
+    expect(wrapper.get('[data-session-model]').text()).toBe('deepseek-flash')
+    expect(select.findAll('option').map((item) => item.text())).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
+    expect(select.text()).not.toContain('ai-gateway')
+    const chrome = rule(css, '.console-layout .model-select .el-select__wrapper')
+    expect(chrome).toMatch(/border-radius:\s*8px/)
+    expect(chrome).toMatch(/color:\s*#1b1b18/)
+    expect(rule(css, '.chat-head .session-model')).toMatch(/border-radius:\s*8px/)
+    expect(rule(css, '.chat-head .session-model')).toMatch(/color:\s*#1b1b18/)
+    wrapper.unmount()
+  })
+
+  it('换模型只改这一会话，再打开仍然是保存的模型', async () => {
+    state.sessions = [
+      { sessionId: 's1', title: '检查会话', model: 'deepseek-flash', modelProvider: 'deepseek' },
+      { sessionId: 's2', title: '另一会话', model: 'deepseek-v4-pro', modelProvider: 'deepseek' }
+    ]
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    const select = wrapper.get('[data-model-select]')
+    await select.setValue('deepseek|deepseek-v4-pro')
+    await flushPromises()
+    expect(api).toHaveBeenCalledWith('/api/sessions/s1', {
+      method: 'PATCH',
+      body: { model: 'deepseek-v4-pro', modelProvider: 'deepseek' }
+    })
+    expect(wrapper.get('[data-session-model]').text()).toBe('deepseek-v4-pro')
+
+    await wrapper.findAll('.session-switch')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-session-model]').text()).toBe('deepseek-v4-pro')
+    expect(wrapper.get('[data-model-select]').element.value).toBe('deepseek|deepseek-v4-pro')
+
+    await wrapper.findAll('.session-switch')[0].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-model-select]').element.value).toBe('deepseek|deepseek-v4-pro')
+    expect(wrapper.get('[data-session-model]').text()).toBe('deepseek-v4-pro')
+    wrapper.unmount()
+  })
+
+  it('发送时带上这一会话当前的模型', async () => {
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    const input = wrapper.get('.composer-dock textarea')
+    await input.setValue('现在几点')
+    await buttonByText(wrapper, '发送').trigger('click')
+    await flushPromises()
+    expect(api).toHaveBeenCalledWith('/api/sessions/s1/messages', {
+      method: 'POST',
+      body: {
+        text: '现在几点',
+        workflowId: 'answer-with-tool',
+        model: 'deepseek-flash',
+        modelProvider: 'deepseek'
+      }
+    })
     wrapper.unmount()
   })
 })

@@ -80,6 +80,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     private final double compressAt;
     private final boolean modelReady;
     private final ChatModel workflowChat;
+    private final SessionModelCatalog catalog;
     private final ExecutionJournal journal;
     private final SavedTraceTracer traces = new SavedTraceTracer();
     private final Map<String, String> environment;
@@ -93,13 +94,18 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     public LocalRuntime(LocalAuthService auth, Map<String, String> configuration) {
+        this(auth, configuration, SessionModelCatalog.fromEnvironment());
+    }
+
+    LocalRuntime(LocalAuthService auth, Map<String, String> configuration, SessionModelCatalog catalog) {
         this.auth = auth;
+        this.catalog = catalog;
         this.passGate = PassSettings.create(configuration, userId -> auth.directories().userDirectory(userId));
         SubAgentRunner runner = item -> CompletableFuture.completedFuture(null);
         this.scheduler = new QueueAgentScheduler(configuration, runner);
         this.compressAt = ContextWindow.compressAt(configuration);
         this.modelReady = WorkflowModels.configured();
-        this.workflowChat = WorkflowModels.chat(configuration);
+        this.workflowChat = WorkflowModels.chat(configuration, this::modelFor);
         this.environment = environment(configuration);
         ExecutionJournal opened = null;
         try {
@@ -134,6 +140,17 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     private Map<String, Object> submit(String userId, String token, String workflowId, String input, String sessionId) {
+        return submit(userId, token, workflowId, input, sessionId, "", "");
+    }
+
+    private Map<String, Object> submit(
+            String userId,
+            String token,
+            String workflowId,
+            String input,
+            String sessionId,
+            String provider,
+            String model) {
         requireJournal();
         Session session = auth.authenticate(token).toCompletableFuture().join();
         if (session.workspace() == null || session.workspace().isBlank()) {
@@ -144,6 +161,11 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         Exec exec = new Exec(id, userId, workspace, session.token());
         String sessionKey = sessionId == null || sessionId.isBlank() ? id : sessionId;
         exec.sessionId = sessionKey;
+        exec.selectedProvider = provider == null ? "" : provider;
+        exec.selectedModel = model == null ? "" : model;
+        if (!exec.selectedModel.isBlank()) {
+            exec.append("model " + exec.selectedProvider + " " + exec.selectedModel);
+        }
         exec.traceId = hex(32);
         exec.rootSpanId = hex(16);
         traces.assign(id, exec.traceId, exec.rootSpanId);
@@ -723,6 +745,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         boolean automatic = automaticTitle(requested);
         stored.put("title", automatic ? "新会话" : limitTitle(requested, 80));
         stored.put("titleCustom", !automatic);
+        stored.put("model", SessionModelCatalog.DEFAULT_MODEL);
+        stored.put("modelProvider", SessionModelCatalog.DEEPSEEK);
         stored.put("createdAt", Instant.now().toString());
         stored.put("messages", new ArrayList<>());
         writeJson(conversationFile(userId, sessionId), stored);
@@ -744,6 +768,33 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     @Override
+    public Map<String, Object> updateModel(String userId, String sessionId, String model, String provider) {
+        Path file = conversationFile(userId, sessionId);
+        Map<String, Object> stored = readOwned(userId, file);
+        SessionModelCatalog.ModelChoice choice = catalog.require(model, provider);
+        stored.put("model", choice.id());
+        stored.put("modelProvider", choice.provider());
+        writeJson(file, stored);
+        return sessionSummary(stored);
+    }
+
+    @Override
+    public Map<String, Object> models(String userId) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (SessionModelCatalog.ModelChoice choice : catalog.available()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", choice.id());
+            row.put("provider", choice.provider());
+            row.put("label", choice.label());
+            rows.add(row);
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("defaultModel", SessionModelCatalog.DEFAULT_MODEL);
+        body.put("models", rows);
+        return body;
+    }
+
+    @Override
     public Map<String, Object> deleteSession(String userId, String sessionId) {
         Path file = conversationFile(userId, sessionId);
         Map<String, Object> stored = readOwned(userId, file);
@@ -762,6 +813,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     public Map<String, Object> session(String userId, String sessionId) {
         Map<String, Object> stored = readOwned(userId, conversationFile(userId, sessionId));
         Map<String, Object> body = new LinkedHashMap<>(stored);
+        body.put("model", SessionModelCatalog.model(stored));
+        body.put("modelProvider", SessionModelCatalog.provider(stored));
         body.put("corrections", corrections(userId, sessionId));
         body.putIfAbsent("agents", List.of());
         return body;
@@ -769,14 +822,39 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
 
     @Override
     public Map<String, Object> appendMessage(String userId, String token, String sessionId, String text, String workflowId) {
+        return appendMessage(userId, token, sessionId, text, workflowId, null, null);
+    }
+
+    @Override
+    public Map<String, Object> appendMessage(
+            String userId,
+            String token,
+            String sessionId,
+            String text,
+            String workflowId,
+            String model,
+            String provider) {
         if (text == null || text.isBlank()) {
             throw new AgentException(ErrorCode.WORKFLOW, "消息不能为空");
         }
         Path file = conversationFile(userId, sessionId);
         Map<String, Object> stored = readOwned(userId, file);
+        if (model != null && !model.isBlank()) {
+            SessionModelCatalog.ModelChoice choice = catalog.require(model, provider);
+            stored.put("model", choice.id());
+            stored.put("modelProvider", choice.provider());
+            writeJson(file, stored);
+        }
         boolean first = messages(stored).isEmpty();
         String chosen = workflowId == null || workflowId.isBlank() ? "answer-with-tool" : workflowId;
-        Map<String, Object> created = submit(userId, token, chosen, text, sessionId);
+        Map<String, Object> created = submit(
+                userId,
+                token,
+                chosen,
+                text,
+                sessionId,
+                SessionModelCatalog.provider(stored),
+                SessionModelCatalog.model(stored));
         Map<String, Object> message = new LinkedHashMap<>();
         message.put("role", "user");
         message.put("text", text);
@@ -1110,6 +1188,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("sessionId", stored.get("sessionId"));
         row.put("title", stored.get("title"));
+        row.put("model", SessionModelCatalog.model(stored));
+        row.put("modelProvider", SessionModelCatalog.provider(stored));
         row.put("createdAt", stored.get("createdAt"));
         return row;
     }
@@ -1181,6 +1261,14 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             return title;
         }
         return title.substring(0, max);
+    }
+
+    private WorkflowModels.Choice modelFor(String executionId) {
+        Exec exec = executions.get(executionId);
+        if (exec == null || exec.selectedModel == null || exec.selectedModel.isBlank()) {
+            return null;
+        }
+        return new WorkflowModels.Choice(exec.selectedProvider, exec.selectedModel);
     }
 
     private CheckpointRunControl controlFor(Exec exec) {
@@ -1432,6 +1520,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         private String traceId = "";
         private String rootSpanId = "";
         private String sessionId = "";
+        private String selectedProvider = "";
+        private String selectedModel = "";
         private volatile String status = "ACCEPTED";
         private volatile String output = "";
         private volatile String thinking = "";
@@ -1461,6 +1551,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             body.put("workspace", workspace);
             body.put("token", token);
             body.put("sessionId", sessionId);
+            body.put("selectedProvider", selectedProvider);
+            body.put("selectedModel", selectedModel);
             body.put("traceId", traceId);
             body.put("rootSpanId", rootSpanId);
             body.put("status", status);
@@ -1494,6 +1586,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                     row.workspacePath(),
                     text(state.get("token")));
             exec.sessionId = row.sessionId();
+            exec.selectedProvider = text(state.get("selectedProvider"));
+            exec.selectedModel = text(state.get("selectedModel"));
             exec.traceId = row.otelTraceId() == null ? text(state.get("traceId")) : row.otelTraceId();
             exec.rootSpanId = row.otelRootSpanId() == null ? text(state.get("rootSpanId")) : row.otelRootSpanId();
             exec.status = row.status();

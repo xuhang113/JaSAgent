@@ -52,6 +52,9 @@ public final class LlmRouter implements LlmClient {
     }
 
     private LlmChatResponse chatBlocking(LlmChatRequest request) {
+        if (!isBlank(request.model())) {
+            return chatChosen(request);
+        }
         if (!isBlank(request.provider())) {
             return chatPinned(request, request.provider());
         }
@@ -70,6 +73,23 @@ public final class LlmRouter implements LlmClient {
             throw fail(request, "deepseek 不可用", null);
         }
         return invokeWithTimeoutRetry(request, deepseek, "deepseek", OpenAiCallConfig.DEEPSEEK_MODEL, false);
+    }
+
+    private LlmChatResponse chatChosen(LlmChatRequest request) {
+        String provider = isBlank(request.provider()) ? "deepseek" : request.provider();
+        if ("deepseek".equals(provider)) {
+            if (!deepseekUsable()) {
+                throw fail(request, "deepseek 不可用", null);
+            }
+            return invokeWithTimeoutRetry(request, deepseek, "deepseek", request.model(), false);
+        }
+        if ("ai-gateway".equals(provider)) {
+            if (!gatewayUsable()) {
+                throw fail(request, "ai-gateway 不可用", null);
+            }
+            return invokeWithTimeoutRetry(request, gateway, "ai-gateway", request.model(), false);
+        }
+        throw fail(request, "不支持的供应方", null);
     }
 
     private LlmChatResponse chatPinned(LlmChatRequest request, String provider) {

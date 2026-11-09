@@ -63,6 +63,7 @@
       <header class="chat-head chrome-bar">
         <span class="eyebrow">对话</span>
         <h2>{{ activeTitle || '会话' }}</h2>
+        <span v-if="activeSessionId" class="session-model" data-session-model>{{ currentModelLabel }}</span>
         <div class="drawer-launcher">
           <button type="button" class="rail-tool" data-drawer-menu aria-haspopup="menu" aria-label="抽屉" :aria-expanded="drawerMenu ? 'true' : 'false'" @click="toggleDrawerMenu">···</button>
           <div v-if="drawerMenu" class="drawer-menu" role="menu" aria-label="抽屉">
@@ -157,6 +158,23 @@
           </div>
           <el-input v-model="draft" type="textarea" :rows="2" placeholder="输入 / 选择 skill" @keydown.enter.exact.prevent="sendMessage" />
           <div class="row">
+            <el-select
+              v-model="sessionModel"
+              class="model-select"
+              data-model-select
+              popper-class="model-popper"
+              aria-label="模型"
+              :disabled="!activeSessionId"
+              placeholder="模型"
+              @change="saveModel"
+            >
+              <el-option
+                v-for="item in models"
+                :key="item.provider + '|' + item.id"
+                :label="item.label"
+                :value="item.provider + '|' + item.id"
+              />
+            </el-select>
             <el-button type="primary" size="small" class="cursor-btn-primary" @click="sendMessage">发送</el-button>
             <el-button size="small" class="cursor-composer-stop" @click="interruptExecution">中止</el-button>
             <el-button size="small" class="cursor-btn-ghost" @click="resumeExecution">恢复</el-button>
@@ -347,6 +365,8 @@ const executionId = ref('')
 const logs = ref('')
 const sseLines = ref([])
 const draft = ref('')
+const models = ref([])
+const sessionModel = ref('deepseek|deepseek-flash')
 const noteText = ref('')
 const messages = ref([])
 const detail = ref({})
@@ -370,6 +390,13 @@ let poll = 0
 const layoutStyle = computed(() => ({
   gridTemplateColumns: sessionWidth.value + 'px 8px minmax(0, 1fr) 8px ' + railWidth.value + 'px'
 }))
+const currentModelLabel = computed(() => {
+  const match = models.value.find((item) => item.provider + '|' + item.id === sessionModel.value)
+  if (match) {
+    return match.label
+  }
+  return splitModel(sessionModel.value).id
+})
 const sseText = computed(() => sseLines.value.join('\n'))
 const slashQuery = computed(() => {
   const matched = draft.value.match(/(?:^|\s)\/([^\s]*)$/)
@@ -462,6 +489,7 @@ const taskGroups = computed(() => {
 
 onMounted(async () => {
   await loadProfile()
+  await loadModels()
   await Promise.all([loadWorkflows(), loadSkills(), loadSessions()])
   if (route.params.id) {
     executionId.value = String(route.params.id)
@@ -707,6 +735,62 @@ async function loadSessions() {
   sessions.value = await api('/api/sessions')
 }
 
+async function loadModels() {
+  try {
+    const body = await api('/api/models')
+    models.value = Array.isArray(body.models) ? body.models : []
+  } catch {
+    models.value = []
+  }
+}
+
+function splitModel(value) {
+  const text = String(value || '')
+  const cut = text.indexOf('|')
+  if (cut < 0) {
+    return { provider: 'deepseek', id: text || 'deepseek-flash' }
+  }
+  return { provider: text.slice(0, cut) || 'deepseek', id: text.slice(cut + 1) || 'deepseek-flash' }
+}
+
+function defaultModelKey() {
+  const flash = models.value.find((item) => item.provider === 'deepseek' && item.id === 'deepseek-flash')
+  if (flash) {
+    return 'deepseek|deepseek-flash'
+  }
+  if (models.value.length) {
+    return models.value[0].provider + '|' + models.value[0].id
+  }
+  return 'deepseek|deepseek-flash'
+}
+
+function rememberModel(stored) {
+  const key = (stored.modelProvider || 'deepseek') + '|' + (stored.model || 'deepseek-flash')
+  const known = models.value.some((item) => item.provider + '|' + item.id === key)
+  sessionModel.value = known ? key : defaultModelKey()
+}
+
+async function saveModel(value) {
+  if (!activeSessionId.value) {
+    return
+  }
+  const chosen = splitModel(value)
+  try {
+    const saved = await api('/api/sessions/' + activeSessionId.value, {
+      method: 'PATCH',
+      body: { model: chosen.id, modelProvider: chosen.provider }
+    })
+    rememberModel(saved)
+  } catch (error) {
+    ElMessage.error(error.message)
+    try {
+      rememberModel(await api('/api/sessions/' + activeSessionId.value))
+    } catch {
+      rememberModel({ model: 'deepseek-flash', modelProvider: 'deepseek' })
+    }
+  }
+}
+
 async function createSession() {
   const created = await api('/api/sessions', { method: 'POST', body: { title: '新会话' } })
   await loadSessions()
@@ -767,6 +851,7 @@ async function switchSession(sessionId) {
   openTaskId.value = ''
   const stored = await api('/api/sessions/' + sessionId)
   activeTitle.value = stored.title || ''
+  rememberModel(stored)
   messages.value = stored.messages || []
   agents.value = stored.agents || []
   corrections.value = stored.corrections || []
@@ -789,6 +874,7 @@ async function removeSession(sessionId) {
   if (activeSessionId.value === sessionId) {
     activeSessionId.value = ''
     activeTitle.value = ''
+    sessionModel.value = defaultModelKey()
     messages.value = []
     agents.value = []
     corrections.value = []
@@ -821,9 +907,10 @@ async function sendMessage() {
   const text = draft.value
   draft.value = ''
   try {
+    const chosen = splitModel(sessionModel.value)
     const message = await api('/api/sessions/' + activeSessionId.value + '/messages', {
       method: 'POST',
-      body: { text, workflowId: workflowId.value }
+      body: { text, workflowId: workflowId.value, model: chosen.id, modelProvider: chosen.provider }
     })
     messages.value.push(message)
     executionId.value = message.executionId

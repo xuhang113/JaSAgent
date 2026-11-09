@@ -117,7 +117,11 @@ public final class LangChain4jLlmClient implements LlmClient {
                 messages.add(toMessage(message, request.executionId()));
             }
         }
-        return ChatRequest.builder().messages(messages).build();
+        ChatRequest.Builder builder = ChatRequest.builder().messages(messages);
+        if (request.model() != null && !request.model().isBlank()) {
+            builder.modelName(request.model());
+        }
+        return builder.build();
     }
 
     private static ChatMessage toMessage(LlmMessage message, String executionId) {

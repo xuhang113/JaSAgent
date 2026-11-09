@@ -34,6 +34,10 @@ final class WorkflowModels {
     }
 
     static ChatModel chat(Map<String, String> configuration) {
+        return chat(configuration, executionId -> null);
+    }
+
+    static ChatModel chat(Map<String, String> configuration, ExecutionModel executionModel) {
         if (!configured()) {
             return request -> CompletableFuture.failedFuture(
                     new AgentException(ErrorCode.LLM, "模型未配置", request.executionId(), null));
@@ -52,16 +56,26 @@ final class WorkflowModels {
                 gateway,
                 call -> CompletableFuture.completedFuture(null),
                 (executionId, line) -> CompletableFuture.completedFuture(null));
-        return request -> router.chat(new LlmChatRequest(
-                        request.executionId(),
-                        LlmTask.REACT,
-                        null,
-                        messages(request.messages()),
-                        1))
-                .thenApply(response -> new ChatModel.ModelReply(
-                        response.text() == null ? "" : response.text(),
-                        List.of(),
-                        response.thinking() == null ? "" : response.thinking()));
+        return request -> {
+            Choice choice = executionModel == null ? null : executionModel.choose(request.executionId());
+            String provider = choice == null ? null : blankToNull(choice.provider());
+            String model = choice == null ? null : blankToNull(choice.model());
+            return router.chat(new LlmChatRequest(
+                            request.executionId(),
+                            LlmTask.REACT,
+                            provider,
+                            messages(request.messages()),
+                            1,
+                            model))
+                    .thenApply(response -> new ChatModel.ModelReply(
+                            response.text() == null ? "" : response.text(),
+                            List.of(),
+                            response.thinking() == null ? "" : response.thinking()));
+        };
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     static LlmSettings applyThinking(LlmSettings settings, Map<String, String> configuration) {
@@ -96,6 +110,13 @@ final class WorkflowModels {
 
     private static boolean present(String value) {
         return value != null && !value.isBlank();
+    }
+
+    interface ExecutionModel {
+        Choice choose(String executionId);
+    }
+
+    record Choice(String provider, String model) {
     }
 
     private static final class UnavailableClient implements LlmClient {

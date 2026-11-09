@@ -14,11 +14,24 @@ public interface ConsoleApi {
 
     Map<String, Object> renameSession(String userId, String sessionId, String title);
 
+    Map<String, Object> updateModel(String userId, String sessionId, String model, String provider);
+
+    Map<String, Object> models(String userId);
+
     Map<String, Object> deleteSession(String userId, String sessionId);
 
     Map<String, Object> session(String userId, String sessionId);
 
     Map<String, Object> appendMessage(String userId, String token, String sessionId, String text, String workflowId);
+
+    Map<String, Object> appendMessage(
+            String userId,
+            String token,
+            String sessionId,
+            String text,
+            String workflowId,
+            String model,
+            String provider);
 
     Map<String, Object> context(String userId, String token, String sessionId);
 

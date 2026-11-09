@@ -398,6 +398,39 @@ class LlmRouterTest {
     }
 
     @Test
+    void chosenDeepSeekModelSkipsHealthyGateway() {
+        Fixture fixture = open(configured(false), () -> true);
+        LlmChatResponse response = join(fixture.router.chat(chat(LlmTask.REACT, "deepseek", "deepseek-v4-pro", 1)));
+        assertEquals("deepseek", response.provider());
+        assertEquals("deepseek-v4-pro", response.model());
+        assertFalse(response.fallback());
+        assertEquals(1, fixture.deepseek.chats.size());
+        assertEquals("deepseek-v4-pro", fixture.deepseek.chats.get(0).model());
+        assertEquals(0, fixture.gateway.chats.size());
+    }
+
+    @Test
+    void chosenGatewayModelDoesNotCallDeepSeek() {
+        Fixture fixture = open(configured(false), () -> true);
+        LlmChatResponse response = join(fixture.router.chat(chat(LlmTask.REACT, "ai-gateway", GATEWAY_MODEL, 1)));
+        assertEquals("ai-gateway", response.provider());
+        assertEquals(GATEWAY_MODEL, response.model());
+        assertEquals(0, fixture.deepseek.chats.size());
+        assertEquals(1, fixture.gateway.chats.size());
+        assertEquals(GATEWAY_MODEL, fixture.gateway.chats.get(0).model());
+    }
+
+    @Test
+    void unavailableGatewayChoiceFailsWithoutFallingBack() {
+        Fixture fixture = open(blankGateway(), () -> false);
+        AgentException error = assertThrows(AgentException.class,
+                () -> join(fixture.router.chat(chat(LlmTask.REACT, "ai-gateway", GATEWAY_MODEL, 1))));
+        assertEquals(ErrorCode.LLM, error.code());
+        assertEquals(0, fixture.deepseek.chats.size());
+        assertEquals(0, fixture.gateway.chats.size());
+    }
+
+    @Test
     void deepSeekClientRejectsEmbed() {
         LangChain4jLlmClient client = LangChain4jLlmClient.deepSeek(configured(false));
         AgentException error = assertThrows(AgentException.class,
@@ -424,6 +457,10 @@ class LlmRouterTest {
 
     private static LlmChatRequest chat(LlmTask task, String provider, int remainingSteps) {
         return new LlmChatRequest("exec-1", task, provider, List.of(new LlmMessage("user", "hello")), remainingSteps);
+    }
+
+    private static LlmChatRequest chat(LlmTask task, String provider, String model, int remainingSteps) {
+        return new LlmChatRequest("exec-1", task, provider, List.of(new LlmMessage("user", "hello")), remainingSteps, model);
     }
 
     private static LlmSettings blankGateway() {
