@@ -76,12 +76,20 @@ public class ExecutionController {
         Thread.ofVirtual().start(() -> {
             try {
                 String previous = "";
+                String previousThinking = null;
                 while (open.get()) {
                     Map<String, Object> detail = executions.detail(session.login(), id);
                     String status = String.valueOf(detail.get("status"));
-                    String signature = status + "\n" + detail.get("logs") + "\n" + detail.get("output");
+                    String thinking = detail.get("thinking") == null ? "" : String.valueOf(detail.get("thinking"));
+                    String signature = status + "\n" + detail.get("logs") + "\n" + detail.get("output") + "\n" + thinking;
                     if (!signature.equals(previous)) {
                         emitter.send(SseEmitter.event().name("status").data(detail));
+                        if (previousThinking == null || !thinking.equals(previousThinking)) {
+                            if (!thinking.isEmpty() || (previousThinking != null && !previousThinking.isEmpty())) {
+                                emitter.send(SseEmitter.event().name("thinking").data(thinking));
+                            }
+                            previousThinking = thinking;
+                        }
                         previous = signature;
                     }
                     if (terminal(status)) {

@@ -142,7 +142,9 @@ class ConsoleSessionPageTest {
         assertTrue(script.contains("data-panels-open\":\"true\""), scriptSnippet(script, "data-panels-open"));
         assertTrue(script.contains("console-layout"), script);
         assertTrue(script.contains("right-rail"), script);
-        assertTrue(script.contains("turn-trace"), script);
+        assertTrue(script.contains("trace-turn"), script);
+        assertFalse(script.contains("turn-trace"), script);
+        assertFalse(script.contains("执行过程"), script);
         assertFalse(script.contains("data-default-panels\":\"hidden\""), script);
         assertFalse(script.contains("data-panels-open\":\"false\""), script);
     }

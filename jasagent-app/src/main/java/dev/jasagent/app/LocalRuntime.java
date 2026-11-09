@@ -41,6 +41,7 @@ import dev.jasagent.api.trace.TraceWriter;
 import dev.jasagent.persist.CheckpointStores;
 import dev.jasagent.persist.ExecutionRow;
 import dev.jasagent.plugin.PluginToolCatalog;
+import dev.jasagent.llm.ThinkingLive;
 import dev.jasagent.tool.WorkspaceTools;
 import dev.jasagent.workflow.ChatModel;
 import dev.jasagent.workflow.Evaluator;
@@ -70,6 +71,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
@@ -106,7 +108,20 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         this.scheduler = new QueueAgentScheduler(configuration, runner);
         this.compressAt = ContextWindow.compressAt(configuration);
         this.modelReady = WorkflowModels.configured();
-        this.workflowChat = WorkflowModels.chat(configuration, this::modelFor);
+        ChatModel delegated = WorkflowModels.chat(configuration, this::modelFor);
+        this.workflowChat = request -> {
+            Exec current = request == null ? null : executions.get(request.executionId());
+            int mark = 0;
+            if (current != null) {
+                synchronized (current) {
+                    mark = current.thinking == null ? 0 : current.thinking.length();
+                }
+            }
+            long started = System.nanoTime();
+            int start = mark;
+            return delegated.complete(request).whenComplete((reply, error) -> noteModelReply(current, reply, start, elapsed(started)));
+        };
+        ThinkingLive.bind(this::acceptThinking);
         this.environment = environment(configuration);
         ExecutionJournal opened = null;
         try {
@@ -468,9 +483,62 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     private static void rememberThinking(Exec exec, WorkflowRun result) {
-        if (result != null && result.thinking() != null && !result.thinking().isBlank()) {
-            exec.thinking = result.thinking().trim();
+        if (result == null || result.thinking() == null || result.thinking().isBlank()) {
+            return;
         }
+        String next = result.thinking().trim();
+        String current = exec.thinking == null ? "" : exec.thinking;
+        if (current.isBlank()) {
+            exec.thinking = next;
+            return;
+        }
+        if (!current.contains(next)) {
+            exec.thinking = current.stripTrailing() + "\n\n" + next;
+        }
+    }
+
+    private void acceptThinking(String executionId, String delta) {
+        if (executionId == null || delta == null || delta.isEmpty()) {
+            return;
+        }
+        Exec exec = executions.get(executionId);
+        if (exec == null) {
+            return;
+        }
+        synchronized (exec) {
+            exec.thinking = exec.thinking == null || exec.thinking.isEmpty() ? delta : exec.thinking + delta;
+        }
+    }
+
+    private void noteModelReply(Exec exec, ChatModel.ModelReply reply, int mark, long elapsedMs) {
+        if (exec == null || reply == null || reply.thinking() == null || reply.thinking().isBlank()) {
+            return;
+        }
+        String thought = reply.thinking().trim();
+        synchronized (exec) {
+            String current = exec.thinking == null ? "" : exec.thinking;
+            int cut = Math.min(Math.max(mark, 0), current.length());
+            String prior = current.substring(0, cut);
+            String streamed = current.substring(cut);
+            if (streamed.equals(thought) || streamed.strip().equals(thought)) {
+                exec.thinking = joinThought(prior, thought);
+            } else if (!current.contains(thought)) {
+                exec.thinking = joinThought(current, thought);
+            }
+            recordThinking(exec, thought, elapsedMs);
+        }
+    }
+
+    private static String joinThought(String prior, String thought) {
+        String head = prior == null ? "" : prior.stripTrailing();
+        if (head.isEmpty()) {
+            return thought;
+        }
+        return head + "\n\n" + thought;
+    }
+
+    private static long elapsed(long started) {
+        return Math.max(0, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
     }
 
     private void recordAi(Exec exec, String content) {
@@ -486,12 +554,24 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         }
     }
 
-    private void recordTool(Exec exec, String name, String result) {
+    private void recordThinking(Exec exec, String thought, long elapsedMs) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("type", "thinking");
+        row.put("content", thought == null ? "" : thought);
+        row.put("elapsedMs", elapsedMs);
+        synchronized (exec.timeline) {
+            exec.timeline.add(row);
+        }
+    }
+
+    private void recordTool(Exec exec, String name, String result, long elapsedMs, String arguments) {
         Map<String, Object> tool = new LinkedHashMap<>();
         tool.put("type", "tool");
         tool.put("name", name);
         tool.put("tool_call_id", name + "-" + exec.toolSequence.incrementAndGet());
         tool.put("content", result == null ? "" : result);
+        tool.put("arguments", arguments == null ? "" : arguments);
+        tool.put("elapsedMs", elapsedMs);
         synchronized (exec.timeline) {
             exec.timeline.add(tool);
         }
@@ -557,6 +637,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     private CompletionStage<String> callTool(Exec exec, String name, String arguments) {
+        long started = System.nanoTime();
         if (!"clock".equals(name)) {
             Map<String, Object> recorded = findPass(exec, name, "tool");
             if (recorded == null) {
@@ -566,7 +647,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             exec.append("pass " + name + " " + recorded.get("decision"));
             String decision = String.valueOf(recorded.get("decision"));
             if (PassDecision.DENY.name().equals(decision)) {
-                recordTool(exec, name, "denied");
+                recordTool(exec, name, "denied", elapsed(started), arguments);
                 return CompletableFuture.completedFuture("denied");
             }
             boolean waiting = PassDecision.PENDING.name().equals(decision);
@@ -576,7 +657,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                     exec.suspended = true;
                     exec.status = "SUSPENDED";
                 }
-                recordTool(exec, name, "approval-required");
+                recordTool(exec, name, "approval-required", elapsed(started), arguments);
                 return CompletableFuture.completedFuture("approval-required");
             }
         }
@@ -593,7 +674,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         } else {
             result = "未知工具 " + name;
         }
-        recordTool(exec, name, result);
+        recordTool(exec, name, result, elapsed(started), arguments);
         return CompletableFuture.completedFuture(result);
     }
 

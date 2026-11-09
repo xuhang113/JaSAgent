@@ -428,22 +428,54 @@ describe('会话页三列布局', () => {
     expect(rule(css, '.right-rail')).toMatch(/overflow-x:\s*hidden/)
   })
 
-  it('工具结果折进这一轮，点开 Trace 后再展示一次', async () => {
+  it('工具结果只出现在右栏 Trace，对话里不放执行过程', async () => {
     const wrapper = await mountConsole()
     await openSession(wrapper)
-    const turn = wrapper.get('.session-main .turn')
-    const html = turn.element.innerHTML
-    const userAt = html.indexOf('请给出时间')
-    const toolAt = html.indexOf('2026-11-08T00:00:00Z')
-    const replyAt = html.indexOf('模型未配置')
-    expect(userAt).toBeGreaterThanOrEqual(0)
-    expect(toolAt).toBeGreaterThan(userAt)
-    expect(replyAt).toBeGreaterThan(toolAt)
-    expect(turn.get('.turn-trace summary').text()).toContain('Trace')
-    expect(turn.get('.turn-trace').text()).toContain('clock')
+    const main = wrapper.get('.session-main')
+    expect(main.text()).toContain('请给出时间')
+    expect(main.text()).toContain('模型未配置')
+    expect(main.text()).not.toContain('2026-11-08T00:00:00Z')
+    expect(main.text()).not.toContain('执行过程')
+    expect(main.text()).not.toContain('exec-1')
+    expect(wrapper.find('.turn-trace').exists()).toBe(false)
     expect(wrapper.find('.right-rail [data-timeline="langgraph"]').exists()).toBe(false)
     await wrapper.get('.right-rail [data-tab="trace"]').trigger('click')
-    expect(wrapper.get('.right-rail [data-timeline="langgraph"]').text()).toContain('2026-11-08T00:00:00Z')
+    const step = wrapper.get('.trace-step[data-kind="tool"]')
+    expect(step.element.open).toBe(false)
+    expect(step.get('summary').text()).toContain('clock')
+    expect(step.get('.trace-step-body').text()).toContain('2026-11-08T00:00:00Z')
+    expect(wrapper.get('.right-rail [role="tab"][aria-selected="true"]').text()).toBe('Trace')
+    wrapper.unmount()
+  })
+
+  it('文件全文收在工具步骤里，时间线一行只留摘要', async () => {
+    const file = Array.from({ length: 30 }, (_, index) => '<dep>artifact-' + index + '</dep>').join('\n')
+    state.timeline.messages = [
+      { type: 'human', content: '读 pom' },
+      {
+        type: 'tool',
+        name: 'read_file',
+        tool_call_id: 'read-1',
+        arguments: '{"path":"pom.xml"}',
+        elapsedMs: 42,
+        content: file
+      }
+    ]
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    expect(wrapper.get('.session-main').text()).not.toContain('artifact-20')
+    expect(wrapper.get('.session-main').text()).not.toContain('pom.xml')
+    await wrapper.get('[data-tab="trace"]').trigger('click')
+    const turn = wrapper.get('.trace-turn')
+    expect(turn.element.open).toBe(false)
+    const step = wrapper.get('.trace-step[data-kind="tool"]')
+    expect(step.element.open).toBe(false)
+    const summary = step.get('summary').text()
+    expect(summary).toContain('read_file')
+    expect(summary).toContain('42 ms')
+    expect(summary).not.toContain('artifact-20')
+    expect(step.get('.trace-step-body').text()).toContain('artifact-20')
+    expect(step.get('.trace-step-body').text()).toContain('pom.xml')
     wrapper.unmount()
   })
 
@@ -708,11 +740,13 @@ describe('会话页交互动效', () => {
   })
 
   it('折叠的 Trace 用 0.2s 展开，右栏改用 tab 指示', () => {
-    const fold = blocks(css, '.turn-trace::details-content').join('\n')
+    const fold = blocks(css, '.trace-step::details-content').join('\n')
     expect(fold).toMatch(/height 0\.2s ease/)
     expect(fold).toMatch(/opacity 0\.2s ease/)
-    expect(blocks(css, '.turn-trace[open]::details-content').join('\n')).toMatch(/height:\s*auto/)
-    expect(blocks(css, '.turn-trace[open]::details-content').join('\n')).toMatch(/opacity:\s*1/)
+    expect(css).toMatch(/\.trace-step\[open\]::details-content[\s\S]*?height:\s*auto/)
+    expect(css).toMatch(/\.trace-step\[open\]::details-content[\s\S]*?opacity:\s*1/)
+    expect(blocks(css, '.trace-turn::details-content').join('\n')).toMatch(/height 0\.2s ease/)
+    expect(css).not.toMatch(/\.turn-trace::details-content/)
     expect(css).not.toMatch(/\.rail-block::details-content/)
     expect(blocks(css, '.rail-tab').join('\n')).toMatch(/0\.15s ease/)
     expect(blocks(css, '.rail-tab[aria-selected="true"]').join('\n')).toMatch(/#1b1b18/)
@@ -755,8 +789,13 @@ describe('会话页交互动效', () => {
     expect(wrapper.find('.right-rail [data-pane="logs"]').exists()).toBe(false)
     expect(wrapper.get('.agent-live').text()).toContain('sub-1')
     expect(wrapper.find('.console-drawer').exists()).toBe(false)
-    expect(wrapper.get('.turn-trace').element.tagName).toBe('DETAILS')
-    expect(wrapper.get('.turn-trace').element.hasAttribute('open')).toBe(false)
+    expect(wrapper.find('.turn-trace').exists()).toBe(false)
+    expect(wrapper.get('.session-main').text()).not.toContain('执行过程')
+    await wrapper.get('[data-tab="trace"]').trigger('click')
+    const fold = wrapper.get('.trace-turn')
+    expect(fold.element.tagName).toBe('DETAILS')
+    expect(fold.element.hasAttribute('open')).toBe(false)
+    expect(wrapper.get('.trace-step').element.hasAttribute('open')).toBe(false)
     expect(wrapper.get('.thread').attributes('data-thread')).toBe('s1')
 
     const handle = wrapper.get('[data-resize="session"]')
@@ -779,8 +818,13 @@ describe('助手回复上的思考', () => {
     return style
   }
 
-  it('有思考内容时在气泡里显示可折叠的灰色小字，默认收起', async () => {
+  it('有思考内容时只留在最后一轮正文上面，灰色小字默认收起', async () => {
+    state.session.messages = [
+      { role: 'user', text: '上一问', executionId: 'exec-old', status: 'SUCCEEDED', output: '上一答', thinking: '旧的思考' },
+      { role: 'user', text: '请给出时间', executionId: 'exec-1', status: 'SUSPENDED', output: '模型未配置', thinking: '先核对时钟再回答' }
+    ]
     state.execution.thinking = '先核对时钟再回答'
+    state.execution.output = '模型未配置'
     state.timeline.messages = [
       { type: 'system', content: 'rules', rules: [], skills: [] },
       { type: 'human', content: '请给出时间' },
@@ -790,22 +834,29 @@ describe('助手回复上的思考', () => {
     const style = paint()
     const wrapper = await mountConsole()
     await openSession(wrapper)
-    const bubble = wrapper.get('.bubble.assistant')
-    const block = bubble.get('.thinking')
+    const turns = wrapper.findAll('.session-main .turn')
+    expect(turns).toHaveLength(2)
+    expect(turns[0].find('.thinking').exists()).toBe(false)
+    expect(turns[0].text()).not.toContain('思考')
+    expect(turns[0].text()).not.toContain('旧的思考')
+    const turn = turns[1]
+    const block = turn.get('.thinking')
     expect(block.element.tagName).toBe('DETAILS')
     expect(block.element.hasAttribute('open')).toBe(false)
     expect(block.get('summary').text()).toBe('思考')
     expect(block.get('.thinking-body').text()).toBe('先核对时钟再回答')
-    const html = bubble.element.innerHTML
+    const html = turn.element.innerHTML
+    const bubble = turn.get('.bubble.assistant')
     expect(bubble.get('.assistant-text').text()).toBe('模型未配置')
-    expect(html.indexOf('模型未配置')).toBeLessThan(html.indexOf('思考'))
-    expect(html.indexOf('assistant-text')).toBeLessThan(html.indexOf('thinking'))
-    expect(bubble.text()).not.toContain('执行输出')
+    expect(html.indexOf('thinking')).toBeLessThan(html.indexOf('assistant-text'))
+    expect(html.indexOf('思考')).toBeLessThan(html.indexOf('模型未配置'))
+    expect(bubble.text()).not.toContain('执行过程')
     expect(bubble.text()).not.toContain('exec-1')
     expect(bubble.text()).not.toContain('SUSPENDED')
-    expect(wrapper.find('.right-rail .thinking').exists()).toBe(false)
+    expect(wrapper.find('.session-main .turn-trace').exists()).toBe(false)
     await wrapper.get('[data-tab="trace"]').trigger('click')
-    expect(wrapper.get('.right-rail').text()).not.toContain('先核对时钟再回答')
+    expect(wrapper.get('.right-rail').text()).toContain('先核对时钟再回答')
+    expect(wrapper.get('.trace-turn').element.open).toBe(false)
 
     const thinkingStyle = getComputedStyle(block.element)
     const bubbleStyle = getComputedStyle(bubble.element)
@@ -838,6 +889,55 @@ describe('助手回复上的思考', () => {
     expect(wrapper.find('.bubble.assistant').exists()).toBe(true)
     expect(wrapper.find('.thinking').exists()).toBe(false)
     expect(wrapper.get('.bubble.assistant').text()).not.toContain('思考')
+    wrapper.unmount()
+  })
+
+  it('SSE 的 thinking 事件在正文出现前就写进最后一轮', async () => {
+    state.execution.output = ''
+    state.execution.thinking = ''
+    state.timeline.messages = [{ type: 'human', content: '请给出时间' }]
+    const sources = []
+    class FakeEventSource {
+      constructor(url) {
+        this.url = url
+        this.listeners = {}
+        sources.push(this)
+      }
+      addEventListener(type, fn) {
+        this.listeners[type] = fn
+      }
+      close() {
+        this.closed = true
+      }
+    }
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    await wrapper.get('.composer-dock textarea').setValue('工作区内有多少文件')
+    await buttonByText(wrapper, '发送').trigger('click')
+    await flushPromises()
+    const source = sources[sources.length - 1]
+    expect(source.url).toContain('/api/executions/exec-1/events')
+    expect(wrapper.find('.thinking').exists()).toBe(false)
+    expect(wrapper.find('.assistant-text').exists()).toBe(false)
+    source.listeners.thinking({ data: '先数' })
+    await flushPromises()
+    expect(wrapper.get('.thinking').element.open).toBe(false)
+    expect(wrapper.get('.thinking-body').text()).toBe('先数')
+    expect(wrapper.find('.assistant-text').exists()).toBe(false)
+    source.listeners.thinking({ data: '先数目录里的文件' })
+    await flushPromises()
+    expect(wrapper.get('.thinking-body').text()).toBe('先数目录里的文件')
+    expect(wrapper.find('.session-main .turn-trace').exists()).toBe(false)
+    state.execution.output = '一共 12 个文件'
+    state.execution.thinking = '先数目录里的文件'
+    source.listeners.status({ data: '{"status":"SUCCEEDED"}' })
+    await flushPromises()
+    expect(wrapper.get('.assistant-text').text()).toBe('一共 12 个文件')
+    expect(wrapper.get('.thinking-body').text()).toBe('先数目录里的文件')
+    const html = wrapper.get('.session-main .turn').element.innerHTML
+    expect(html.indexOf('thinking')).toBeLessThan(html.indexOf('assistant-text'))
+    vi.unstubAllGlobals()
     wrapper.unmount()
   })
 })

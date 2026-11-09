@@ -525,7 +525,9 @@ h3 {
 }
 
 .thinking {
-  margin: 8px 0 0;
+  align-self: flex-start;
+  max-width: min(36rem, 100%);
+  margin: 0;
   color: #98a2b3;
   font-size: 12px;
   line-height: 1.4;
@@ -554,17 +556,79 @@ h3 {
   white-space: pre-wrap;
 }
 
-.turn-trace {
-  align-self: stretch;
-  min-width: 0;
-  background: #fff;
+.trace-turn {
   border: 1px solid #e4e4df;
   border-radius: 8px;
-  padding: 6px 10px;
+  background: #fafaf8;
+  color: #1b1b18;
+  font-size: 12px;
 }
 
-.turn-trace summary {
+.trace-turn > summary {
+  padding: 6px 8px;
   cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1b1b18;
+  list-style: none;
+}
+
+.trace-turn > summary::-webkit-details-marker,
+.trace-step summary::-webkit-details-marker {
+  display: none;
+}
+
+.trace-step {
+  margin: 0 8px 6px;
+  border: 1px solid #e4e4df;
+  border-radius: 8px;
+  background: #fff;
+  color: #1b1b18;
+  font-size: 12px;
+}
+
+.trace-step summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 8px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+}
+
+.trace-step-name {
+  flex: none;
+  font-weight: 600;
+  color: #1b1b18;
+}
+
+.trace-step-meta {
+  flex: none;
+  color: #667085;
+}
+
+.trace-step-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #667085;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-step-body {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 6px 8px 8px;
+  border-top: 1px solid #e4e4df;
+  color: #1b1b18;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .composer-dock {
@@ -827,22 +891,9 @@ h3 {
 
 .lg-timeline li {
   min-width: 0;
-  border-left: 3px solid #94a3b8;
-  background: #f8fafc;
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
-.lg-timeline li[data-type='human'] {
-  border-color: #2563eb;
-}
-
-.lg-timeline li[data-type='ai'] {
-  border-color: #16a34a;
-}
-
-.lg-timeline li[data-type='tool'] {
-  border-color: #d97706;
+  border: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .lg-type {
@@ -998,19 +1049,22 @@ h3 {
   transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
-.turn-trace summary {
+.trace-turn > summary,
+.trace-step summary {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.turn-trace summary:hover {
+.trace-turn > summary:hover,
+.trace-step summary:hover {
   background-color: #f2f4f7;
 }
 
-.turn-trace {
+.trace-turn,
+.trace-step {
   interpolate-size: allow-keywords;
 }
 
-.turn-trace::details-content {
+.trace-turn::details-content {
   height: 0;
   overflow: clip;
   opacity: 0;
@@ -1019,12 +1073,23 @@ h3 {
   transition: height 0.2s ease, opacity 0.2s ease;
 }
 
-.turn-trace[open]::details-content {
+.trace-step::details-content {
+  height: 0;
+  overflow: clip;
+  opacity: 0;
+  content-visibility: visible;
+  interpolate-size: allow-keywords;
+  transition: height 0.2s ease, opacity 0.2s ease;
+}
+
+.trace-turn[open]::details-content,
+.trace-step[open]::details-content {
   height: auto;
   opacity: 1;
 }
 
-.turn-trace.is-closing::details-content {
+.trace-turn.is-closing::details-content,
+.trace-step.is-closing::details-content {
   height: 0;
   opacity: 0;
 }
@@ -1055,11 +1120,14 @@ h3 {
   .rail-tool,
   .drawer-menu button,
   .console-drawer,
-  .turn-trace summary,
+  .trace-turn > summary,
+  .trace-step summary,
   .turn,
   .lg-timeline,
-  .turn-trace::details-content,
-  .turn-trace[open]::details-content {
+  .trace-turn::details-content,
+  .trace-step::details-content,
+  .trace-turn[open]::details-content,
+  .trace-step[open]::details-content {
     transition: none;
     animation: none;
   }

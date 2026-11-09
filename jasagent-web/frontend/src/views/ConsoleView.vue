@@ -134,19 +134,12 @@
               <strong>用户</strong>
               <div>{{ message.text }}</div>
             </div>
-            <details v-if="turnTools(message).length" class="turn-trace">
-              <summary @click="foldDetails">▶ Trace / 执行过程</summary>
-              <div v-for="tool in turnTools(message)" :key="tool.tool_call_id || tool.name" class="tool-result">
-                <strong>{{ tool.name }}</strong>
-                <pre>{{ tool.content }}</pre>
-              </div>
+            <details v-if="showThinking(message, index)" class="thinking">
+              <summary @click="foldDetails">思考</summary>
+              <div class="thinking-body">{{ turnThinking(message) }}</div>
             </details>
-            <div v-if="turnReply(message) || turnThinking(message) || message.errorCode" class="bubble assistant">
+            <div v-if="turnReply(message) || message.errorCode" class="bubble assistant">
               <div v-if="turnReply(message)" class="assistant-text">{{ turnReply(message) }}</div>
-              <details v-if="turnThinking(message)" class="thinking">
-                <summary @click="foldDetails">思考</summary>
-                <div class="thinking-body">{{ turnThinking(message) }}</div>
-              </details>
               <small v-if="message.errorCode" class="execution-error">{{ message.errorCode }}</small>
             </div>
           </article>
@@ -225,19 +218,22 @@
           </section>
         </div>
         <div v-else-if="railTab === 'trace'" class="rail-pane" role="tabpanel" data-pane="trace">
-          <p v-if="timeline.length === 0" class="muted empty-line">无 Trace。</p>
-          <ol v-else class="lg-timeline" :key="executionId || 'none'" data-timeline="langgraph">
-            <li v-for="(message, index) in timeline" :key="index" :data-type="message.type">
-              <div class="lg-type">{{ message.type }}</div>
-              <div v-if="message.type === 'system'" class="lg-meta">
-                <p v-for="rule in message.rules || []" :key="rule.id">rule {{ rule.id }} {{ rule.description }}</p>
-                <p v-for="skill in message.skills || []" :key="skill.name">skill {{ skill.name }} {{ skill.description }}</p>
-              </div>
-              <pre class="lg-content">{{ message.content }}</pre>
-              <p v-for="call in message.tool_calls || []" :key="call.id || call.name" class="muted">{{ call.name }} {{ call.args || call.arguments }}</p>
-              <small v-if="message.name" class="muted mono-num">{{ message.name }} {{ message.tool_call_id }}</small>
-            </li>
-          </ol>
+          <p v-if="traceTurns.length === 0" class="muted empty-line">无 Trace。</p>
+          <details v-for="turn in traceTurns" :key="turn.id" class="trace-turn">
+            <summary @click="foldDetails">{{ turn.title }}</summary>
+            <ol class="lg-timeline" data-timeline="langgraph">
+              <li v-for="(step, index) in turn.steps" :key="turn.id + ':' + index">
+                <details class="trace-step" :data-kind="step.kind">
+                  <summary @click="foldDetails">
+                    <span class="trace-step-name">{{ step.name }}</span>
+                    <span v-if="step.elapsed" class="trace-step-meta">{{ step.elapsed }}</span>
+                    <span class="trace-step-summary">{{ step.summary }}</span>
+                  </summary>
+                  <pre class="trace-step-body">{{ step.body }}</pre>
+                </details>
+              </li>
+            </ol>
+          </details>
         </div>
         <div v-else-if="railTab === 'tools'" class="rail-pane" role="tabpanel" data-pane="tools">
           <div class="pane-block">
@@ -446,6 +442,21 @@ const retrievalRows = computed(() => {
   return rows
 })
 const liveAgents = computed(() => agents.value.filter((agent) => agentIsLive(agent)))
+const traceTurns = computed(() => {
+  const turns = []
+  messages.value.forEach((message, index) => {
+    const steps = absorbLive(traceSteps(turnRows(message)), message && message.thinking)
+    if (!steps.length) {
+      return
+    }
+    turns.push({
+      id: message.executionId || 'turn-' + index,
+      title: shortTitle(message.text),
+      steps
+    })
+  })
+  return turns
+})
 const taskGroups = computed(() => {
   const rows = []
   const covered = new Set()
@@ -669,8 +680,151 @@ function turnRows(message) {
   return timelines.value[message.executionId] || []
 }
 
-function turnTools(message) {
-  return turnRows(message).filter((row) => row.type === 'tool')
+function showThinking(message, index) {
+  return index === messages.value.length - 1 && !!turnThinking(message)
+}
+
+function brief(text, limit = 72) {
+  const flat = String(text || '').replace(/\s+/g, ' ').trim()
+  if (!flat) {
+    return ''
+  }
+  if (flat.length <= limit) {
+    return flat
+  }
+  return flat.slice(0, limit) + '…'
+}
+
+function formatElapsed(value) {
+  if (value == null || value === '') {
+    return ''
+  }
+  const ms = Number(value)
+  if (!Number.isFinite(ms) || ms < 0) {
+    return ''
+  }
+  if (ms < 1000) {
+    return Math.round(ms) + ' ms'
+  }
+  const seconds = ms / 1000
+  if (seconds < 10) {
+    return seconds.toFixed(1) + ' s'
+  }
+  return Math.round(seconds) + ' s'
+}
+
+function toolBody(row) {
+  const args = String((row && row.arguments) || '').trim()
+  const content = String((row && row.content) || '')
+  if (!args) {
+    return content
+  }
+  return '参数\n' + args + '\n\n结果\n' + content
+}
+
+function thinkingStep(text, elapsed) {
+  return {
+    kind: 'thinking',
+    name: '思考',
+    elapsed: elapsed || '',
+    summary: brief(text),
+    body: text
+  }
+}
+
+function traceSteps(rows) {
+  const steps = []
+  let sawThinking = false
+  for (const row of rows || []) {
+    if (!row || !row.type) {
+      continue
+    }
+    if (row.type === 'thinking') {
+      const body = cleanThinking(row.content)
+      if (!body) {
+        continue
+      }
+      sawThinking = true
+      steps.push(thinkingStep(body, formatElapsed(row.elapsedMs)))
+    } else if (row.type === 'tool') {
+      steps.push({
+        kind: 'tool',
+        name: row.name || 'tool',
+        elapsed: formatElapsed(row.elapsedMs),
+        summary: brief(row.content) || '无结果',
+        body: toolBody(row)
+      })
+    } else if (row.type === 'ai') {
+      const thought = cleanThinking(row.thinking)
+      if (thought && !sawThinking) {
+        sawThinking = true
+        steps.push(thinkingStep(thought, ''))
+      }
+      const reply = String(row.content || '').trim()
+      if (reply) {
+        steps.push({
+          kind: 'reply',
+          name: '回复',
+          elapsed: '',
+          summary: brief(reply),
+          body: String(row.content || '')
+        })
+      }
+    }
+  }
+  return steps
+}
+
+function absorbLive(steps, live) {
+  const text = cleanThinking(live)
+  if (!text) {
+    return steps
+  }
+  const thoughts = []
+  for (const step of steps) {
+    if (step.kind === 'thinking' && step.body) {
+      thoughts.push(step.body)
+    }
+  }
+  const joined = thoughts.join('\n\n')
+  if (!joined) {
+    return steps.concat([thinkingStep(text, '')])
+  }
+  if (text === joined || joined.startsWith(text)) {
+    return steps
+  }
+  if (text.startsWith(joined)) {
+    const extra = text.slice(joined.length).replace(/^\n+/, '')
+    if (!extra) {
+      return steps
+    }
+    return steps.concat([thinkingStep(extra, '')])
+  }
+  if (thoughts.includes(text)) {
+    return steps
+  }
+  return steps.concat([thinkingStep(text, '')])
+}
+
+function messageForExecution(id) {
+  for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+    if (id && messages.value[index].executionId === id) {
+      return messages.value[index]
+    }
+  }
+  return messages.value[messages.value.length - 1] || null
+}
+
+function applyThinking(raw) {
+  const text = raw == null ? '' : String(raw)
+  if (!text.trim()) {
+    return
+  }
+  const message = messageForExecution(executionId.value)
+  if (!message) {
+    return
+  }
+  message.thinking = text
 }
 
 function turnThinking(message) {
@@ -858,6 +1012,7 @@ async function commitRename(item) {
 
 async function switchSession(sessionId) {
   activeSessionId.value = sessionId
+  railTab.value = 'tasks'
   agentListOpen.value = false
   openTaskId.value = ''
   const stored = await api('/api/sessions/' + sessionId)
@@ -1067,6 +1222,9 @@ function watchExecution(id) {
   closeStream()
   sseLines.value = []
   source = new EventSource('/api/executions/' + id + '/events')
+  source.addEventListener('thinking', (event) => {
+    applyThinking(event.data)
+  })
   source.addEventListener('status', (event) => {
     sseLines.value.push(event.data)
     queryExecution().catch(() => {})
@@ -1097,7 +1255,9 @@ async function refreshMessageOutputs() {
       message.status = row.status
       message.errorCode = row.errorCode || ''
       message.output = row.output
-      message.thinking = row.thinking || ''
+      if (row.thinking) {
+        message.thinking = row.thinking
+      }
     } catch {
       // 执行可能还不属于这次登录。
     }

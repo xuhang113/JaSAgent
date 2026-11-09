@@ -19,9 +19,12 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.response.PartialThinking;
+import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatResponseMetadata;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,15 +34,19 @@ import dev.langchain4j.model.output.TokenUsage;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 
 public final class LangChain4jLlmClient implements LlmClient {
     private static final ObjectMapper JSON = new ObjectMapper();
     private final ChatModel chatModel;
+    private final StreamingChatModel streamingModel;
     private final EmbeddingModel embeddingModel;
 
-    private LangChain4jLlmClient(ChatModel chatModel, EmbeddingModel embeddingModel) {
+    private LangChain4jLlmClient(ChatModel chatModel, StreamingChatModel streamingModel, EmbeddingModel embeddingModel) {
         this.chatModel = chatModel;
+        this.streamingModel = streamingModel;
         this.embeddingModel = embeddingModel;
     }
 
@@ -48,7 +55,7 @@ public final class LangChain4jLlmClient implements LlmClient {
     }
 
     static LangChain4jLlmClient from(OpenAiCallConfig config) {
-        return new LangChain4jLlmClient(LangChain4jModels.chat(config), null);
+        return new LangChain4jLlmClient(LangChain4jModels.chat(config), LangChain4jModels.streaming(config), null);
     }
 
     public static LangChain4jLlmClient gateway(LlmSettings settings) {
@@ -56,7 +63,8 @@ public final class LangChain4jLlmClient implements LlmClient {
         if (settings.gatewayEmbeddings() && !isBlank(settings.gatewayEmbeddingModel())) {
             embedding = LangChain4jModels.embedding(OpenAiCallConfig.gatewayEmbed(settings));
         }
-        return new LangChain4jLlmClient(LangChain4jModels.chat(OpenAiCallConfig.gatewayChat(settings)), embedding);
+        OpenAiCallConfig chat = OpenAiCallConfig.gatewayChat(settings);
+        return new LangChain4jLlmClient(LangChain4jModels.chat(chat), LangChain4jModels.streaming(chat), embedding);
     }
 
     @Override
@@ -74,47 +82,97 @@ public final class LangChain4jLlmClient implements LlmClient {
             throw new AgentException(ErrorCode.LLM, "没有聊天模型", request.executionId(), null);
         }
         try {
-            ChatResponse response = chatModel.chat(toRequest(request));
-            String text = "";
-            String thinking = "";
-            List<LlmToolCall> calls = new ArrayList<>();
-            if (response.aiMessage() != null) {
-                if (response.aiMessage().text() != null) {
-                    text = response.aiMessage().text();
-                }
-                if (response.aiMessage().thinking() != null) {
-                    thinking = response.aiMessage().thinking();
-                }
-                if (response.aiMessage().hasToolExecutionRequests()) {
-                    for (ToolExecutionRequest call : response.aiMessage().toolExecutionRequests()) {
-                        calls.add(new LlmToolCall(
-                                call.id() == null ? "" : call.id(),
-                                call.name() == null ? "" : call.name(),
-                                call.arguments() == null ? "{}" : call.arguments()));
-                    }
-                }
+            if (streamingModel != null && ThinkingLive.active()) {
+                return invokeStreaming(request);
             }
-            if (thinking.isBlank()) {
-                thinking = reasoningFrom(response);
-            }
-            if (calls.isEmpty()) {
-                calls.addAll(ToolCallText.fromCompletionJson(rawBody(response)));
-            }
-            if (calls.isEmpty()) {
-                List<LlmToolCall> written = ToolCallText.parse(text);
-                if (!written.isEmpty()) {
-                    calls.addAll(written);
-                    text = "";
-                }
-            }
-            TokenUsage usage = response.tokenUsage();
-            int prompt = count(usage == null ? null : usage.inputTokenCount());
-            int completion = count(usage == null ? null : usage.outputTokenCount());
-            int total = usage == null || usage.totalTokenCount() == null ? prompt + completion : usage.totalTokenCount();
-            return new LlmChatResponse("", "", text, prompt, completion, total, false, thinking, calls);
+            return toResponse(chatModel.chat(toRequest(request)), "", request.executionId(), false);
         } catch (RuntimeException ex) {
             throw failure(request.executionId(), ex);
         }
+    }
+
+    private LlmChatResponse invokeStreaming(LlmChatRequest request) {
+        CompletableFuture<ChatResponse> done = new CompletableFuture<>();
+        StringBuilder streamed = new StringBuilder();
+        streamingModel.chat(toRequest(request), new StreamingChatResponseHandler() {
+            @Override
+            public void onPartialThinking(PartialThinking partial) {
+                if (partial == null || partial.text() == null || partial.text().isEmpty()) {
+                    return;
+                }
+                streamed.append(partial.text());
+                ThinkingLive.delta(request.executionId(), partial.text());
+            }
+
+            @Override
+            public void onCompleteResponse(ChatResponse response) {
+                done.complete(response);
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                if (error instanceof RuntimeException runtime) {
+                    done.completeExceptionally(runtime);
+                    return;
+                }
+                done.completeExceptionally(new IllegalStateException(error == null ? "模型流中断" : error.getMessage(), error));
+            }
+        });
+        try {
+            return toResponse(done.join(), streamed.toString(), request.executionId(), true);
+        } catch (CompletionException ex) {
+            Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+            if (cause instanceof RuntimeException runtime) {
+                throw failure(request.executionId(), runtime);
+            }
+            throw failure(request.executionId(), new IllegalStateException(cause));
+        }
+    }
+
+    private LlmChatResponse toResponse(ChatResponse response, String streamedThinking, String executionId, boolean live) {
+        String text = "";
+        String thinking = "";
+        List<LlmToolCall> calls = new ArrayList<>();
+        if (response != null && response.aiMessage() != null) {
+            if (response.aiMessage().text() != null) {
+                text = response.aiMessage().text();
+            }
+            if (response.aiMessage().thinking() != null) {
+                thinking = response.aiMessage().thinking();
+            }
+            if (response.aiMessage().hasToolExecutionRequests()) {
+                for (ToolExecutionRequest call : response.aiMessage().toolExecutionRequests()) {
+                    calls.add(new LlmToolCall(
+                            call.id() == null ? "" : call.id(),
+                            call.name() == null ? "" : call.name(),
+                            call.arguments() == null ? "{}" : call.arguments()));
+                }
+            }
+        }
+        if (thinking.isBlank()) {
+            thinking = reasoningFrom(response);
+        }
+        if (thinking.isBlank() && streamedThinking != null) {
+            thinking = streamedThinking;
+        }
+        if (live && (streamedThinking == null || streamedThinking.isBlank()) && !thinking.isBlank()) {
+            ThinkingLive.delta(executionId, thinking);
+        }
+        if (calls.isEmpty()) {
+            calls.addAll(ToolCallText.fromCompletionJson(rawBody(response)));
+        }
+        if (calls.isEmpty()) {
+            List<LlmToolCall> written = ToolCallText.parse(text);
+            if (!written.isEmpty()) {
+                calls.addAll(written);
+                text = "";
+            }
+        }
+        TokenUsage usage = response == null ? null : response.tokenUsage();
+        int prompt = count(usage == null ? null : usage.inputTokenCount());
+        int completion = count(usage == null ? null : usage.outputTokenCount());
+        int total = usage == null || usage.totalTokenCount() == null ? prompt + completion : usage.totalTokenCount();
+        return new LlmChatResponse("", "", text, prompt, completion, total, false, thinking, calls);
     }
 
     private LlmEmbedResponse invokeEmbed(LlmEmbedRequest request) {
@@ -134,6 +192,9 @@ public final class LangChain4jLlmClient implements LlmClient {
     }
 
     private static String rawBody(ChatResponse response) {
+        if (response == null) {
+            return "";
+        }
         if (response.metadata() instanceof OpenAiChatResponseMetadata metadata
                 && metadata.rawHttpResponse() != null) {
             return metadata.rawHttpResponse().body();
