@@ -797,9 +797,9 @@ describe('助手回复上的思考', () => {
     expect(block.get('summary').text()).toBe('思考')
     expect(block.get('.thinking-body').text()).toBe('先核对时钟再回答')
     const html = bubble.element.innerHTML
-    expect(html.indexOf('thinking')).toBeGreaterThanOrEqual(0)
-    expect(html.indexOf('思考')).toBeLessThan(html.indexOf('模型未配置'))
-    expect(html.indexOf('thinking')).toBeLessThan(html.indexOf('模型未配置'))
+    expect(bubble.get('.assistant-text').text()).toBe('模型未配置')
+    expect(html.indexOf('模型未配置')).toBeLessThan(html.indexOf('思考'))
+    expect(html.indexOf('assistant-text')).toBeLessThan(html.indexOf('thinking'))
     expect(bubble.text()).not.toContain('执行输出')
     expect(bubble.text()).not.toContain('exec-1')
     expect(bubble.text()).not.toContain('SUSPENDED')
