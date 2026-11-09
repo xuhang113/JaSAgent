@@ -14,9 +14,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * 按令牌预算组装上下文；占用达到压缩线时，只摘要较早的非工具轮次，并在仍然放不下时折叠旧工具结果和技能正文。
+ * 按令牌预算组装上下文；占用达到压缩线时，只摘要较早的非工具轮次，并在仍然放不下时把旧工具结果收成短摘要，没有要点就删掉。
  */
 public final class ContextWindow {
     /**
@@ -36,9 +38,13 @@ public final class ContextWindow {
      */
     private static final int RECENT_TURNS = 4;
     /**
-     * 旧工具结果放不进预算时替换成的占位文本。
+     * 从工具结果里认出目录列举的文件总数。
      */
-    private static final String COLLAPSED_TOOL = "tool: [collapsed]";
+    private static final Pattern FILE_COUNT = Pattern.compile("文件总数是\\s*(\\d+)|fileCount:\\s*(\\d+)");
+    /**
+     * 摘要里关键结果最多保留的字数，避免摘要自己又撑破预算。
+     */
+    private static final int DIGEST_RESULT_CAP = 32;
 
     private final ChatModel model;
     private final double compressAt;
@@ -236,7 +242,7 @@ public final class ContextWindow {
     }
 
     /**
-     * 用保留的工具消息、最近轮次和摘要重新渲染；仍超过预算时先把旧工具结果换成占位，再不行就去掉技能正文。
+     * 用保留的工具消息、最近轮次和摘要重新渲染；仍超过预算时先把旧工具结果收成短摘要，没有要点就删掉，再不行就去掉技能正文。
      *
      * @param input 提供角色、规则、任务板、订正、当前用户和执行标识
      * @param keptTools 最近轮次之前留下来的工具消息
@@ -257,11 +263,7 @@ public final class ContextWindow {
         conversation.addAll(keptTools);
         conversation.addAll(recent);
         if (estimate(render(input, conversation, skills, summary)) > budget) {
-            for (int index = 0; index < keptTools.size(); index++) {
-                if ("tool".equals(conversation.get(index).role())) {
-                    conversation.set(index, ChatMessage.text("tool", COLLAPSED_TOOL));
-                }
-            }
+            conversation = digestOldTools(input, conversation, keptTools.size(), skills, summary, budget);
         }
         if (estimate(render(input, conversation, skills, summary)) > budget) {
             List<SkillText> shrunk = new ArrayList<>();
@@ -272,6 +274,144 @@ public final class ContextWindow {
         }
         String kept = summary == null ? "" : summary;
         return new ContextPrepared(render(input, conversation, skills, kept), kept);
+    }
+
+    /**
+     * 旧工具结果放不进预算时，逐条换成短摘要；摘要再放不下或没有要点就删掉这条。
+     *
+     * @param input 提供系统提示和订正
+     * @param conversation 旧工具在前、最近轮次在后
+     * @param oldCount 开头有多少条来自旧工具
+     * @param skills 当前技能
+     * @param summary 已有摘要
+     * @param budget 令牌上限
+     * @return 去掉或换过摘要的对话
+     */
+    private static List<ChatMessage> digestOldTools(
+            ContextInput input,
+            List<ChatMessage> conversation,
+            int oldCount,
+            List<SkillText> skills,
+            String summary,
+            int budget) {
+        List<ChatMessage> oldTools = new ArrayList<>();
+        List<ChatMessage> rest = new ArrayList<>();
+        for (int index = 0; index < conversation.size(); index++) {
+            ChatMessage message = conversation.get(index);
+            if (index < oldCount && message != null && "tool".equals(message.role())) {
+                oldTools.add(message);
+            } else if (message != null) {
+                rest.add(message);
+            }
+        }
+        List<ChatMessage> kept = new ArrayList<>();
+        for (ChatMessage tool : oldTools) {
+            String digest = fitDigest(toolDigest(tool.content()), budget);
+            if (!digest.isEmpty()) {
+                kept.add(ChatMessage.text("tool", digest));
+            }
+        }
+        if (estimate(render(input, rest, skills, summary)) > budget) {
+            return join(kept, rest);
+        }
+        List<ChatMessage> combined = join(kept, rest);
+        while (!kept.isEmpty() && !fits(input, combined, skills, summary, budget)) {
+            kept.remove(0);
+            combined = join(kept, rest);
+        }
+        return combined;
+    }
+
+    /**
+     * 把工具结果收成「工具名：做了什么。结果：关键结果」。没有可读要点时返回空串。
+     *
+     * @param content 工具结果原文
+     * @return 短摘要；空白或只剩重复字符时为空
+     */
+    static String toolDigest(String content) {
+        if (content == null) {
+            return "";
+        }
+        String raw = content.trim();
+        if (raw.isEmpty()) {
+            return "";
+        }
+        Matcher count = FILE_COUNT.matcher(raw);
+        if (count.find()) {
+            String number = count.group(1) != null ? count.group(1) : count.group(2);
+            return "list_directory：列出目录。结果：文件总数 " + number;
+        }
+        String compact = raw.replaceAll("\\s+", " ").replaceAll("(.)\\1{3,}", "").trim();
+        if (compact.isEmpty()) {
+            return "";
+        }
+        if (compact.length() > DIGEST_RESULT_CAP) {
+            compact = compact.substring(0, DIGEST_RESULT_CAP);
+        }
+        return "工具：保留要点。结果：" + compact;
+    }
+
+    /**
+     * 把摘要裁到剩余令牌能放下的长度。剩下的位置不够写一句摘要时返回空串。
+     *
+     * @param digest 已经收好的摘要
+     * @param roomTokens 预算里还剩的令牌
+     * @return 能放进剩余预算的摘要；放不下时为空
+     */
+    private static String fitDigest(String digest, int roomTokens) {
+        if (digest == null || digest.isBlank() || roomTokens < 1) {
+            return "";
+        }
+        int maxChars = roomTokens * 4;
+        if (maxChars < 8) {
+            return "";
+        }
+        if (digest.length() <= maxChars) {
+            return digest;
+        }
+        return digest.substring(0, maxChars);
+    }
+
+    /**
+     * 判断这组对话渲染后是否不超过预算。
+     *
+     * @param input 系统提示和订正
+     * @param turns 对话
+     * @param skills 技能
+     * @param summary 摘要
+     * @param budget 令牌上限
+     * @return 不超过预算时为真
+     */
+    private static boolean fits(ContextInput input, List<ChatMessage> turns, List<SkillText> skills, String summary, int budget) {
+        return estimate(render(input, turns, skills, summary)) <= budget;
+    }
+
+    /**
+     * 在已保留的摘要后面再放一条，并接上最近轮次。
+     *
+     * @param kept 已经留下的工具摘要
+     * @param digest 这一条摘要
+     * @param rest 最近轮次
+     * @return 新的对话列表
+     */
+    private static List<ChatMessage> append(List<ChatMessage> kept, String digest, List<ChatMessage> rest) {
+        List<ChatMessage> trial = new ArrayList<>(kept);
+        trial.add(ChatMessage.text("tool", digest));
+        trial.addAll(rest);
+        return trial;
+    }
+
+    /**
+     * 把两组消息接成一个新列表。
+     *
+     * @param head 前面的消息
+     * @param tail 后面的消息
+     * @return 新列表
+     */
+    private static List<ChatMessage> join(List<ChatMessage> head, List<ChatMessage> tail) {
+        List<ChatMessage> combined = new ArrayList<>(head);
+        combined.addAll(tail);
+        return combined;
     }
 
     /**

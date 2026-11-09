@@ -156,7 +156,7 @@ class ContextCorrectionTest {
     }
 
     /**
-     * 没有可摘要的旧对话时不调用模型；只剩技能正文超预算时去掉正文，只剩旧工具结果时换成占位。断言失败则本测试失败。
+     * 没有可摘要的旧对话时不调用模型；只剩技能正文超预算时去掉正文，只剩旧工具结果时收成短摘要。断言失败则本测试失败。
      */
     @Test
     void noSummaryCallWhenNothingOld() {
@@ -182,12 +182,13 @@ class ContextCorrectionTest {
         oldTool.add(ChatMessage.text("assistant", "RECENT-4"));
         String collapsed = joinText(join(new ContextWindow(toolsOnly).prepare(input(40, oldTool, shortSkill("BODY")))).messages());
         assertEquals(0, toolsOnly.requests.size());
-        assertTrue(collapsed.contains("tool: [collapsed]"));
-        assertFalse(collapsed.contains("OLD-TOOL-BODY"));
+        assertFalse(collapsed.contains("tool: [collapsed]"));
+        assertTrue(collapsed.contains("工具：保留要点。结果：OLD-TOOL-BODY"));
+        assertFalse(collapsed.contains("X".repeat(20)));
     }
 
     /**
-     * 摘要后仍超预算时，最近轮次之前的工具结果都换成占位，最近轮次保留。断言失败则本测试失败。
+     * 摘要后仍超预算时，最近轮次之前的工具结果都收成短摘要，最近轮次保留。断言失败则本测试失败。
      */
     @Test
     void oldToolResultsCollapse() {
@@ -200,13 +201,17 @@ class ContextCorrectionTest {
         turns.add(ChatMessage.text("user", "RECENT-3"));
         turns.add(ChatMessage.text("assistant", "RECENT-4"));
         List<ChatMessage> messages = join(new ContextWindow(script("X".repeat(400))).prepare(input(40, turns, longSkill()))).messages();
-        assertEquals(2, messages.stream().filter(message -> "tool: [collapsed]".equals(message.content())).count());
-        assertFalse(joinText(messages).contains("OLD-TOOL-BODY"));
+        String joinedTools = joinText(messages);
+        assertFalse(joinedTools.contains("tool: [collapsed]"));
+        assertTrue(joinedTools.contains("工具：保留要点。结果：OLD-TOOL-BODY-A-"));
+        assertTrue(joinedTools.contains("工具：保留要点。结果：OLD-TOOL-BODY-B-"));
+        assertFalse(joinedTools.contains("Z".repeat(20)));
+        assertFalse(joinedTools.contains("Y".repeat(20)));
         assertTrue(joinText(messages).contains("RECENT-1"));
     }
 
     /**
-     * 落在最近轮次里的工具结果保持原文，更早的工具结果换成占位。断言失败则本测试失败。
+     * 落在最近轮次里的工具结果保持原文，更早的工具结果收成短摘要。断言失败则本测试失败。
      */
     @Test
     void recentToolResultsStay() {
@@ -219,8 +224,9 @@ class ContextCorrectionTest {
         turns.add(ChatMessage.text("tool", "RECENT-TOOL-BODY"));
         String joined = joinText(join(new ContextWindow(script("S")).prepare(input(50, turns, shortSkill("BODY")))).messages());
         assertTrue(joined.contains("RECENT-TOOL-BODY"));
-        assertTrue(joined.contains("tool: [collapsed]"));
-        assertFalse(joined.contains("OLD-TOOL-BODY"));
+        assertFalse(joined.contains("tool: [collapsed]"));
+        assertTrue(joined.contains("工具：保留要点。结果：OLD-TOOL-BODY"));
+        assertFalse(joined.contains("X".repeat(20)));
     }
 
     /**
@@ -235,7 +241,7 @@ class ContextCorrectionTest {
     }
 
     /**
-     * 旧工具结果换成占位后已经放进预算时，技能正文继续保留。断言失败则本测试失败。
+     * 旧工具结果收成短摘要后已经放进预算时，技能正文继续保留。断言失败则本测试失败。
      */
     @Test
     void skillsStayWhenCollapseFits() {
@@ -248,8 +254,44 @@ class ContextCorrectionTest {
         turns.add(ChatMessage.text("assistant", "4"));
         String joined = joinText(join(new ContextWindow(script("S")).prepare(input(40, turns, shortSkill("BODY")))).messages());
         assertTrue(joined.contains("BODY"));
-        assertTrue(joined.contains("tool: [collapsed]"));
+        assertFalse(joined.contains("tool: [collapsed]"));
+        assertTrue(joined.contains("工具：保留要点。结果：T"));
         assertFalse(joined.contains("X".repeat(50)));
+    }
+
+    /**
+     * 只有重复字符的旧工具结果没有要点，压缩时直接删掉，不留占位。
+     */
+    @Test
+    void paddingOnlyToolIsDropped() {
+        List<ChatMessage> turns = new ArrayList<>();
+        turns.add(ChatMessage.text("tool", "Z".repeat(400)));
+        turns.add(ChatMessage.text("user", "RECENT-1"));
+        turns.add(ChatMessage.text("assistant", "RECENT-2"));
+        turns.add(ChatMessage.text("user", "RECENT-3"));
+        turns.add(ChatMessage.text("assistant", "RECENT-4"));
+        String joined = joinText(join(new ContextWindow(script("S")).prepare(input(40, turns, shortSkill("BODY")))).messages());
+        assertFalse(joined.contains("tool: [collapsed]"));
+        assertFalse(joined.contains("工具："));
+        assertFalse(joined.contains("Z".repeat(20)));
+        assertTrue(joined.contains("RECENT-1"));
+    }
+
+    /**
+     * 目录列举的长结果收成工具名、动作和文件总数。
+     */
+    @Test
+    void directoryListingDigestKeepsFileCount() {
+        List<ChatMessage> turns = new ArrayList<>();
+        turns.add(ChatMessage.text("tool", "文件总数是 12。\nfileCount: 12\nentries:\n" + "pom.xml\n".repeat(40)));
+        turns.add(ChatMessage.text("user", "RECENT-1"));
+        turns.add(ChatMessage.text("assistant", "RECENT-2"));
+        turns.add(ChatMessage.text("user", "RECENT-3"));
+        turns.add(ChatMessage.text("assistant", "RECENT-4"));
+        String joined = joinText(join(new ContextWindow(script("S")).prepare(input(40, turns, shortSkill("BODY")))).messages());
+        assertTrue(joined.contains("list_directory：列出目录。结果：文件总数 12"));
+        assertFalse(joined.contains("pom.xml"));
+        assertFalse(joined.contains("tool: [collapsed]"));
     }
 
     /**
