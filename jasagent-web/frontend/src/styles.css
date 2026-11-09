@@ -548,6 +548,10 @@ h3 {
   display: none;
 }
 
+.thinking:not([open]) .thinking-body {
+  display: none;
+}
+
 .thinking-body {
   margin: 4px 0 0;
   color: #98a2b3;

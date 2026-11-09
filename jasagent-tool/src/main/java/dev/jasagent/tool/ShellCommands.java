@@ -9,21 +9,45 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 判断一条 shell 命令能不能当作只读命令，并在工作区里执行它、截断输出、去掉环境中的密钥。
+ */
 final class ShellCommands {
+    /**
+     * 一条命令最多运行的秒数，到点后强制结束。
+     */
     private static final int TIMEOUT_SECONDS = 20;
+    /**
+     * 保留的输出上限，按字节计，超出后停止继续读。
+     */
     private static final int MAX_OUTPUT = 12_000;
+    /**
+     * 允许出现在管道每一段开头的命令名。
+     */
     private static final Set<String> COMMANDS = Set.of(
             "ls", "find", "wc", "pwd", "echo", "stat", "file", "head", "tail",
             "rg", "grep", "egrep", "fgrep", "git", "cat", "cut", "sort", "uniq",
             "tr", "basename", "dirname", "realpath", "du", "df", "date", "uname",
             "which", "printf", "true", "false", "id", "whoami", "sed", "awk",
             "nl", "diff", "cmp", "comm", "column");
+    /**
+     * git 后面允许使用的只读子命令。
+     */
     private static final Set<String> GIT = Set.of(
             "status", "log", "diff", "show", "rev-parse", "ls-files", "blame", "shortlog", "describe");
 
+    /**
+     * 禁止实例化。检查和执行都通过静态方法完成。
+     */
     private ShellCommands() {
     }
 
+    /**
+     * 判断整条命令是不是由允许的只读命令用管道串起来。换行、命令替换、重定向、绝对路径，以及会改文件的 find 和 sed，都不算只读。
+     *
+     * @param command 待判断的命令文本
+     * @return 可以不经额外批准执行时为 true
+     */
     static boolean readOnly(String command) {
         if (command == null || command.isBlank() || command.length() > 4000) {
             return false;
@@ -52,6 +76,14 @@ final class ShellCommands {
         return true;
     }
 
+    /**
+     * 在工作区或其中的相对目录执行命令。空命令、高危命令和工作目录越界时返回错误说明；否则返回退出码和截断后的输出。
+     *
+     * @param workspace 工作区根目录
+     * @param command 要执行的命令
+     * @param relativeDir 相对工作区的工作目录；空白表示就在根目录
+     * @return 给模型看的退出码和输出，或一条错误说明
+     */
     static String run(Path workspace, String command, String relativeDir) {
         if (command == null || command.isBlank()) {
             return "错误: 命令是空的";
@@ -100,6 +132,12 @@ final class ShellCommands {
         }
     }
 
+    /**
+     * 判断管道中的一段是不是白名单里的单个命令，并拒绝会删文件或就地改文件的 find 和 sed 写法。
+     *
+     * @param segment 去掉两端空白后的一段命令
+     * @return 这一段可以放行时为 true
+     */
     private static boolean simple(String segment) {
         if (segment.isBlank()) {
             return false;
@@ -136,6 +174,12 @@ final class ShellCommands {
         return true;
     }
 
+    /**
+     * 判断命令里有没有以斜杠开头、因而会指向工作区外的路径。
+     *
+     * @param command 整条命令
+     * @return 出现这种绝对路径时为 true
+     */
     private static boolean outsideWorkspace(String command) {
         for (int index = 0; index < command.length(); index++) {
             if (command.charAt(index) != '/') {
@@ -152,6 +196,12 @@ final class ShellCommands {
         return false;
     }
 
+    /**
+     * 判断命令里有没有格式化磁盘、fork 炸弹或删除根目录这类高危写法。
+     *
+     * @param command 整条命令
+     * @return 含高危片段时为 true
+     */
     private static boolean catastrophic(String command) {
         String folded = command.toLowerCase(Locale.ROOT);
         return folded.contains("mkfs")
@@ -160,6 +210,11 @@ final class ShellCommands {
                 || folded.contains("rm -fr /");
     }
 
+    /**
+     * 从即将交给子进程的环境里去掉名称像密钥、口令或本项目配置的变量。
+     *
+     * @param environment 子进程环境，匹配的键会从中删除
+     */
     private static void stripSecrets(Map<String, String> environment) {
         environment.keySet().removeIf(key -> {
             String upper = key.toUpperCase(Locale.ROOT);
@@ -173,6 +228,12 @@ final class ShellCommands {
         });
     }
 
+    /**
+     * 在超时和输出上限内读取进程已经合并的输出。进程结束、时间到或输出写满时返回已经读到的字节。
+     *
+     * @param process 已经启动的进程
+     * @return 截断前读到的输出字节
+     */
     private static byte[] readUntilExit(Process process) throws Exception {
         InputStream input = process.getInputStream();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -201,6 +262,12 @@ final class ShellCommands {
         return output.toByteArray();
     }
 
+    /**
+     * 把输出字节按 UTF-8 收成文本。读满上限时在末尾加上截断说明。
+     *
+     * @param captured 已读到的输出
+     * @return 给模型看的文本
+     */
     private static String text(byte[] captured) {
         String value = new String(captured, StandardCharsets.UTF_8);
         if (captured.length >= MAX_OUTPUT) {

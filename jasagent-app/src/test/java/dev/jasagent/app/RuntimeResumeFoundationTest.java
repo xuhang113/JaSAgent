@@ -22,7 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 确认运行时关掉之后，用原来的执行编号恢复会到达新的挂起终态，而不是一直停在旧进程里。
+ */
 class RuntimeResumeFoundationTest {
+    /**
+     * 第一代运行时把 call-rag 跑到挂起并关闭。第二代在 15 秒内按原编号恢复，状态是 SUSPENDED，检索结果里还没有 sourceScope。
+     * 副作用：创建临时目录、用户和两代运行时。超时或断言失败则测试失败。
+     */
     @Test
     @Timeout(value = 30)
     void resumeAfterRuntimeCloseReachesNewTerminal() throws Exception {
@@ -68,6 +75,15 @@ class RuntimeResumeFoundationTest {
         }
     }
 
+    /**
+     * 每 50 毫秒读一次详情，最多 100 次，直到状态匹配。
+     *
+     * @param runtime 被观察的运行时
+     * @param userId 所有者登录名
+     * @param executionId 执行编号
+     * @param status 期望的状态名
+     * @return 匹配时的详情
+     */
     private static Map<String, Object> await(LocalRuntime runtime, String userId, String executionId, String status) throws Exception {
         Map<String, Object> detail = Map.of();
         for (int attempt = 0; attempt < 100; attempt++) {

@@ -39,11 +39,26 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 从 HTTP 和 SSE 核对执行能到成功、失败或离线，中止能打断正在跑的链接，插件工具能被会话叫到，上下文跨过阈值时也不发布半截摘要。
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ExecutionFoundationTest {
+    /**
+     * 本类共用的临时家目录。类加载时创建。
+     */
     private static final Path home = create("jasagent-foundation-home");
+    /**
+     * 本类共用的临时工作区。类加载时创建，工作流和链接测试都写在这里。
+     */
     private static final Path workspace = create("jasagent-foundation-ws");
+    /**
+     * 本类测试用户共用的口令，只用于夹具。
+     */
     private static final String PASSWORD = "test-password-1";
+    /**
+     * 估算大消息占用时使用的上下文预算，用来判断夹具有没有跨过 0.85。
+     */
     private static final int BUDGET_TOKENS = 8000;
 
     @LocalServerPort
@@ -55,6 +70,12 @@ class ExecutionFoundationTest {
     @Autowired
     LocalAuthService auth;
 
+    /**
+     * 把家目录、工作区白名单和 127.0.0.1 写进测试上下文。
+     * 副作用：后续请求都使用这套临时目录。
+     *
+     * @param registry 测试上下文的属性注册器
+     */
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("jasagent.home", () -> home.toString());
@@ -62,6 +83,10 @@ class ExecutionFoundationTest {
         registry.add("server.address", () -> "127.0.0.1");
     }
 
+    /**
+     * 允许 rag.search 后提交 call-rag。事件流里要有 status、执行编号和 SUCCEEDED。
+     * 副作用：写工作流和用户策略，并打开 SSE。断言失败则测试失败。
+     */
     @Test
     void sseReachesSucceeded() throws Exception {
         writeCallRag();
@@ -79,6 +104,10 @@ class ExecutionFoundationTest {
         assertTrue(body.contains("SUCCEEDED"), body);
     }
 
+    /**
+     * 没有模型时提交含 react 的 show-support。事件流含 FAILED 和执行编号，不能是成功状态。
+     * 副作用：写工作流并打开 SSE。断言失败则测试失败。
+     */
     @Test
     void sseReachesFailed() throws Exception {
         writeShowSupport();
@@ -92,6 +121,10 @@ class ExecutionFoundationTest {
         assertFalse(body.contains("\"status\":\"SUCCEEDED\""), body);
     }
 
+    /**
+     * 同一条缺模型的 show-support，事件流必须同时出现 OFFLINE 和 FAILED，不能是成功。
+     * 副作用：写工作流并打开 SSE。断言失败则测试失败。
+     */
     @Test
     void sseReachesOffline() throws Exception {
         writeShowSupport();
@@ -106,6 +139,10 @@ class ExecutionFoundationTest {
         assertFalse(body.contains("\"status\":\"SUCCEEDED\""), body);
     }
 
+    /**
+     * 缺模型时，执行详情最终是 FAILED，错误码是 OFFLINE，不能是成功。
+     * 副作用：写工作流并轮询详情。断言失败则测试失败。
+     */
     @Test
     void httpDetailIsOfflineWhenModelMissing() throws Exception {
         writeShowSupport();
@@ -117,6 +154,10 @@ class ExecutionFoundationTest {
         assertFalse(detail.contains("\"status\":\"SUCCEEDED\""), detail);
     }
 
+    /**
+     * rag.link 连到一个接受后不回应的本机端口。确认执行已是 RUNNING 后，3 秒内的中止必须返回 200 和 SUSPENDED，不能是成功。
+     * 副作用：占用本机端口、写工作流和策略，并发送中止请求。断言失败则测试失败。
+     */
     @Test
     @Timeout(value = 20)
     void httpInterruptStopsRunningExecution() throws Exception {
@@ -178,6 +219,10 @@ class ExecutionFoundationTest {
         }
     }
 
+    /**
+     * 在同一会话里依次调用 web.search、rag.link 和 github.link。详情或事件流要出现对应工具名，以及 local:jasagent、docId: note.txt、repository: acme/widgets。
+     * 副作用：写三条工作流、用户策略，并启动一个返回 note.txt 的本机服务。断言失败则测试失败。
+     */
     @Test
     @Timeout(value = 30)
     void sessionCallsWebSearchRagLinkAndGithubLink() throws Exception {
@@ -222,6 +267,10 @@ class ExecutionFoundationTest {
         }
     }
 
+    /**
+     * 空会话的占用低于 0.85，已发布摘要是空的，compressing 为 false。
+     * 副作用：创建用户和会话并读取上下文。断言失败则测试失败。
+     */
     @Test
     void contextBelowThresholdDoesNotCompress() throws Exception {
         String cookie = login("ratio-low");
@@ -235,6 +284,10 @@ class ExecutionFoundationTest {
         assertTrue(body.replace(" ", "").contains("\"compressing\":false"), "低于 0.85 时仍在压缩");
     }
 
+    /**
+     * 用大消息把估算占用推过 0.85 但不到 1。压缩没真正完成时，已发布摘要仍是空的，不能变成“模型未配置”或 PARTIAL，compressing 也是 false。
+     * 副作用：写 clock-only 工作流并追加多条消息。断言失败则测试失败。
+     */
     @Test
     @Timeout(value = 60)
     void contextAtThresholdKeepsPublishedSummary() throws Exception {
@@ -265,6 +318,17 @@ class ExecutionFoundationTest {
         assertTrue(body.replace(" ", "").contains("\"compressing\":false"), "压缩失败后仍处于压缩中");
     }
 
+    /**
+     * 往会话发一条消息，等到执行成功，并要求详情或事件流同时含有工具名和结果标记。
+     * 副作用：提交执行并读取 SSE。标记缺失时断言失败。
+     *
+     * @param cookie 登录 Cookie
+     * @param sessionId 会话编号
+     * @param workflowId 工作流编号
+     * @param text 发给工作流的文本或 JSON
+     * @param name 期望出现的工具名
+     * @param marker 期望出现的结果片段
+     */
     private void assertSessionTool(String cookie, String sessionId, String workflowId, String text, String name, String marker) throws Exception {
         ResponseEntity<String> sent = post("/api/sessions/" + sessionId + "/messages", cookie, Map.of(
                 "text", text,
@@ -278,6 +342,13 @@ class ExecutionFoundationTest {
         assertTrue(surface.contains(marker), surface);
     }
 
+    /**
+     * 用 Cookie 订阅这次执行的事件流，要求状态码 200。
+     *
+     * @param cookie 登录 Cookie
+     * @param executionId 执行编号
+     * @return 事件流全文
+     */
     private String sse(String cookie, String executionId) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/executions/" + executionId + "/events"))
                 .timeout(Duration.ofSeconds(20))
@@ -292,6 +363,13 @@ class ExecutionFoundationTest {
         return response.body();
     }
 
+    /**
+     * 确保用户存在后用本类口令登录，返回去掉属性后的会话 Cookie。
+     * 副作用：用户不存在时会建号。
+     *
+     * @param user 登录名
+     * @return Cookie 名值对
+     */
     private String login(String user) throws Exception {
         ensureUser(user);
         HttpHeaders headers = new HttpHeaders();
@@ -305,19 +383,49 @@ class ExecutionFoundationTest {
         return response.getHeaders().get(HttpHeaders.SET_COOKIE).get(0).split(";", 2)[0];
     }
 
+    /**
+     * 替该会话选中本类工作区，响应必须成功。
+     * 副作用：会话绑定到这个工作区。
+     *
+     * @param cookie 登录 Cookie
+     */
     private void selectWorkspace(String cookie) {
         ResponseEntity<String> response = post("/api/workspace", cookie, Map.of("path", workspace.toString()));
         assertTrue(response.getStatusCode().is2xxSuccessful(), response.getBody());
     }
 
+    /**
+     * 带 Cookie 发送 JSON POST。
+     *
+     * @param path 接口路径
+     * @param cookie 登录 Cookie
+     * @param body JSON 字段
+     * @return 响应
+     */
     private ResponseEntity<String> post(String path, String cookie, Map<String, String> body) {
         return exchange(path, HttpMethod.POST, cookie, body);
     }
 
+    /**
+     * 带 Cookie 发送 GET。
+     *
+     * @param path 接口路径
+     * @param cookie 登录 Cookie
+     * @return 响应
+     */
     private ResponseEntity<String> get(String path, String cookie) {
         return exchange(path, HttpMethod.GET, cookie, null);
     }
 
+    /**
+     * 带 Cookie 调用接口。有正文时声明 JSON。
+     *
+     * @param path 接口路径
+     * @param method HTTP 方法
+     * @param cookie 登录 Cookie
+     * @param body 请求字段，null 表示没有正文
+     * @return 响应
+     */
     private ResponseEntity<String> exchange(String path, HttpMethod method, String cookie, Map<String, String> body) {
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.COOKIE, cookie);
@@ -327,6 +435,12 @@ class ExecutionFoundationTest {
         return http.exchange(path, method, new HttpEntity<>(body, headers), String.class);
     }
 
+    /**
+     * 保证登录名可用。能登录就返回；否则建用户；已有用户时借用其中的管理员令牌。
+     * 副作用：可能在家目录新增用户。
+     *
+     * @param user 登录名
+     */
     private void ensureUser(String user) throws Exception {
         char[] secret = PASSWORD.toCharArray();
         try {
@@ -359,6 +473,14 @@ class ExecutionFoundationTest {
         throw new IllegalStateException("无法创建用户");
     }
 
+    /**
+     * 最多约 3 秒轮询执行详情，直到正文含有标记。
+     *
+     * @param cookie 登录 Cookie
+     * @param executionId 执行编号
+     * @param marker 详情里必须出现的片段
+     * @return 含标记的详情正文
+     */
     private String awaitBody(String cookie, String executionId, String marker) throws Exception {
         String body = "";
         for (int attempt = 0; attempt < 80; attempt++) {
@@ -372,34 +494,68 @@ class ExecutionFoundationTest {
         return body;
     }
 
+    /**
+     * 在共用工作区写入 call-rag，节点是 rag.search 然后结束。
+     * 副作用：覆盖 workflows/call-rag.json。
+     */
     private void writeCallRag() throws Exception {
         writeWorkflow("call-rag", """
                 {"id":"call-rag","nodes":[{"id":"search","type":"tool","tool":"rag.search"},{"id":"done","type":"end"}]}
                 """);
     }
 
+    /**
+     * 在共用工作区写入 show-support：先 clock，再一个没有工具的 react，然后结束。
+     * 副作用：覆盖 workflows/show-support.json。
+     */
     private void writeShowSupport() throws Exception {
         writeWorkflow("show-support", """
                 {"id":"show-support","nodes":[{"id":"now","type":"tool","tool":"clock"},{"id":"act","type":"react","maxSteps":2,"tools":[],"grounding":false},{"id":"done","type":"end"}]}
                 """);
     }
 
+    /**
+     * 把工作流原文写到共用工作区，文件名是编号加 .json。不改 JSON 正文。
+     * 副作用：创建 workflows 目录并覆盖文件。
+     *
+     * @param id 工作流编号
+     * @param json 工作流原文
+     */
     private void writeWorkflow(String id, String json) throws Exception {
         Path dir = workspace.resolve("jasagent").resolve("workflows");
         Files.createDirectories(dir);
         Files.writeString(dir.resolve(id + ".json"), json);
     }
 
+    /**
+     * 把通行证策略写到该用户家目录的 policies.yaml。YAML 原文保持不动。
+     * 副作用：创建 auth 目录并覆盖策略文件。
+     *
+     * @param user 登录名
+     * @param yaml 策略原文
+     */
     private void writeUserPolicy(String user, String yaml) throws Exception {
         Path file = home.resolve(user).resolve("jasagent").resolve("auth").resolve("policies.yaml");
         Files.createDirectories(file.getParent());
         Files.writeString(file, yaml);
     }
 
+    /**
+     * 上下文里的 summary 是否仍是空串或 null，用来确认没把未完成压缩发布出去。
+     *
+     * @param body 上下文接口的 JSON
+     * @return 摘要为空时为 true
+     */
     private static boolean emptySummary(String body) {
         return body.contains("\"summary\":\"\"") || body.contains("\"summary\":null");
     }
 
+    /**
+     * 从上下文 JSON 里解析 occupancy 数字。字段缺失或不是数字时断言失败。
+     *
+     * @param body 上下文接口的 JSON
+     * @return 占用比例
+     */
     private static double occupancy(String body) {
         String marker = "\"occupancy\":";
         int start = body.indexOf(marker);
@@ -413,16 +569,35 @@ class ExecutionFoundationTest {
         return Double.parseDouble(body.substring(from, end));
     }
 
+    /**
+     * 要求创建会话的响应是 200，再取出 sessionId。
+     *
+     * @param response 创建会话的响应
+     * @return 会话编号
+     */
     private static String sessionId(ResponseEntity<String> response) {
         assertEquals(HttpStatus.OK, response.getStatusCode(), response.getBody());
         return field(response.getBody(), "sessionId");
     }
 
+    /**
+     * 要求提交执行的响应是 202，再取出 executionId。
+     *
+     * @param response 提交执行的响应
+     * @return 执行编号
+     */
     private static String executionId(ResponseEntity<String> response) {
         assertEquals(HttpStatus.ACCEPTED, response.getStatusCode(), response.getBody());
         return field(response.getBody(), "executionId");
     }
 
+    /**
+     * 从 JSON 正文取出一个字符串字段。
+     *
+     * @param body 响应正文
+     * @param name 字段名
+     * @return 字段值
+     */
     private static String field(String body, String name) {
         String marker = "\"" + name + "\":\"";
         int start = body.indexOf(marker);
@@ -431,6 +606,13 @@ class ExecutionFoundationTest {
         return body.substring(start, body.indexOf('"', start));
     }
 
+    /**
+     * 创建带给定前缀的临时目录。
+     * 副作用：在系统临时目录留下这个文件夹。
+     *
+     * @param name 目录名前缀
+     * @return 新建目录
+     */
     private static Path create(String name) {
         try {
             return Files.createTempDirectory(name);

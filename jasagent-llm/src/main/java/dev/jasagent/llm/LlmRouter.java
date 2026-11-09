@@ -17,6 +17,9 @@ import dev.jasagent.api.llm.LlmTrace;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 按任务、指定供应方和网关健康状况在 DeepSeek 与网关之间选择，并记下调用和追踪。
+ */
 public final class LlmRouter implements LlmClient {
     private final LlmSettings settings;
     private final GatewayHealth health;
@@ -26,6 +29,16 @@ public final class LlmRouter implements LlmClient {
     private final LlmTrace trace;
     private final HashingEmbedder hashing = new HashingEmbedder();
 
+    /**
+     * 接上配置、健康检查、两条模型客户端、调用记录和追踪。本地哈希嵌入器在这里自己创建。
+     *
+     * @param settings DeepSeek、网关和超时配置
+     * @param health 网关当前是否健康
+     * @param deepseek DeepSeek 聊天客户端
+     * @param gateway 网关聊天和嵌入客户端
+     * @param store 保存每次模型调用的记录
+     * @param trace 写入执行追踪的出口
+     */
     public LlmRouter(LlmSettings settings, GatewayHealth health, LlmClient deepseek, LlmClient gateway, LlmCallStore store, LlmTrace trace) {
         this.settings = settings;
         this.health = health;
@@ -35,6 +48,12 @@ public final class LlmRouter implements LlmClient {
         this.trace = trace;
     }
 
+    /**
+     * 在虚拟线程上完成一次聊天路由。超时收成带执行编号、且说明已脱敏的模型错误。
+     *
+     * @param request 含任务、供应方、消息和剩余步数的聊天请求
+     * @return 完成后给出实际供应方和模型名的聊天结果
+     */
     @Override
     public CompletionStage<LlmChatResponse> chat(LlmChatRequest request) {
         return VirtualIo.supply(() -> {
@@ -46,11 +65,23 @@ public final class LlmRouter implements LlmClient {
         });
     }
 
+    /**
+     * 在虚拟线程上完成一次嵌入。网关嵌入可用时走网关，否则用本地哈希向量。
+     *
+     * @param request 含执行编号和待嵌入文本的请求
+     * @return 完成后给出来源名称和向量的阶段
+     */
     @Override
     public CompletionStage<LlmEmbedResponse> embed(LlmEmbedRequest request) {
         return VirtualIo.supply(() -> embedBlocking(request));
     }
 
+    /**
+     * 按请求选择聊天路径。写了模型名就按模型走，只钉了供应方就按供应方走。REACT 且网关可用时先试网关，失败再退回 DeepSeek；其他任务在 DeepSeek 可用时直接走 DeepSeek。
+     *
+     * @param request 聊天请求
+     * @return 已写上实际供应方、模型名和是否回退的响应
+     */
     private LlmChatResponse chatBlocking(LlmChatRequest request) {
         if (!isBlank(request.model())) {
             return chatChosen(request);
@@ -75,6 +106,12 @@ public final class LlmRouter implements LlmClient {
         return invokeWithTimeoutRetry(request, deepseek, "deepseek", OpenAiCallConfig.DEEPSEEK_MODEL, false);
     }
 
+    /**
+     * 按请求里的模型名调用对应供应方。供应方空白时当作 DeepSeek。不认识的供应方直接失败，不改走另一边。
+     *
+     * @param request 已经写了模型名的聊天请求
+     * @return 该模型的聊天结果
+     */
     private LlmChatResponse chatChosen(LlmChatRequest request) {
         String provider = isBlank(request.provider()) ? "deepseek" : request.provider();
         if ("deepseek".equals(provider)) {
@@ -92,6 +129,13 @@ public final class LlmRouter implements LlmClient {
         throw fail(request, "不支持的供应方", null);
     }
 
+    /**
+     * 按钉住的供应方调用它的默认模型。该供应方不可用时失败，不自动换到另一边。
+     *
+     * @param request 聊天请求
+     * @param provider 钉住的供应方，取 deepseek 或 ai-gateway
+     * @return 该供应方默认模型的聊天结果
+     */
     private LlmChatResponse chatPinned(LlmChatRequest request, String provider) {
         if ("deepseek".equals(provider)) {
             if (!deepseekUsable()) {
@@ -108,6 +152,16 @@ public final class LlmRouter implements LlmClient {
         throw fail(request, "不支持的供应方", null);
     }
 
+    /**
+     * 调用一次所选客户端。REACT 且剩余步数至少为 1 时，超时后对同一客户端再试一次。
+     *
+     * @param request 聊天请求
+     * @param client 实际发起调用的客户端
+     * @param provider 要写进结果的供应方名
+     * @param model 要写进结果的模型名
+     * @param fallback 这次是不是从网关退回 DeepSeek
+     * @return 成功的聊天结果；不能再重试的超时继续抛出
+     */
     private LlmChatResponse invokeWithTimeoutRetry(LlmChatRequest request, LlmClient client, String provider, String model, boolean fallback) {
         try {
             return invokeOnce(request, client, provider, model, fallback);
@@ -119,6 +173,16 @@ public final class LlmRouter implements LlmClient {
         }
     }
 
+    /**
+     * 调用客户端一次，记下耗时和 token，把供应方、模型名和是否回退写进响应，并保存一条调用记录。
+     *
+     * @param request 聊天请求
+     * @param client 实际发起调用的客户端
+     * @param provider 供应方名
+     * @param model 模型名
+     * @param fallback 是否属于回退调用
+     * @return 补齐供应方信息后的响应
+     */
     private LlmChatResponse invokeOnce(LlmChatRequest request, LlmClient client, String provider, String model, boolean fallback) {
         long start = System.nanoTime();
         LlmChatResponse raw = call(client, request);
@@ -148,6 +212,13 @@ public final class LlmRouter implements LlmClient {
         return response;
     }
 
+    /**
+     * 等待客户端的聊天结果。超时收成模型超时，已是业务异常的原样抛出，其余收成模型错误。
+     *
+     * @param client 被调用的客户端
+     * @param request 原聊天请求，超时时用来取执行编号
+     * @return 客户端返回的原始聊天结果
+     */
     private LlmChatResponse call(LlmClient client, LlmChatRequest request) {
         try {
             return Stages.join(client.chat(request));
@@ -164,6 +235,12 @@ public final class LlmRouter implements LlmClient {
         }
     }
 
+    /**
+     * 网关嵌入可用时走网关并记追踪，否则用哈希嵌入器。两条路径都保存一条嵌入调用记录。
+     *
+     * @param request 嵌入请求
+     * @return 带来源和向量的结果
+     */
     private LlmEmbedResponse embedBlocking(LlmEmbedRequest request) {
         if (embeddingsUsable()) {
             long start = System.nanoTime();
@@ -182,14 +259,33 @@ public final class LlmRouter implements LlmClient {
         return new LlmEmbedResponse("hashing", "hashing", vector);
     }
 
+    /**
+     * 保存一条嵌入调用记录。token 记 0，并且不标成回退。
+     *
+     * @param request 嵌入请求，提供执行编号
+     * @param provider 实际使用的嵌入来源
+     * @param model 嵌入模型名；哈希路径使用 hashing
+     * @param latency 这次嵌入花费的毫秒数
+     */
     private void saveEmbed(LlmEmbedRequest request, String provider, String model, long latency) {
         Stages.join(store.save(new LlmCall(request.executionId(), "embed", provider, model, latency, 0, 0, 0, false)));
     }
 
+    /**
+     * 写一行已经脱敏的执行追踪。
+     *
+     * @param executionId 这次执行的编号
+     * @param line 要写入的追踪文本，写入前会去掉授权信息
+     */
     private void trace(String executionId, String line) {
         Stages.join(trace.write(executionId, AuthorizationRedactor.redact(line)));
     }
 
+    /**
+     * 判断网关能不能用来聊天：地址、密钥和聊天模型都有，并且健康检查通过。
+     *
+     * @return 可以拿网关做聊天时为 true
+     */
     private boolean gatewayUsable() {
         return !isBlank(settings.gatewayBaseUrl())
                 && !isBlank(settings.gatewayApiKey())
@@ -197,10 +293,20 @@ public final class LlmRouter implements LlmClient {
                 && health.healthy();
     }
 
+    /**
+     * 判断 DeepSeek 密钥是否已配置。
+     *
+     * @return 密钥非空白时为 true
+     */
     private boolean deepseekUsable() {
         return !isBlank(settings.deepseekApiKey());
     }
 
+    /**
+     * 判断能不能走网关做嵌入：开关打开，地址、密钥和嵌入模型都有，并且健康检查通过。
+     *
+     * @return 可以走网关嵌入时为 true
+     */
     private boolean embeddingsUsable() {
         return settings.gatewayEmbeddings()
                 && !isBlank(settings.gatewayBaseUrl())
@@ -209,10 +315,24 @@ public final class LlmRouter implements LlmClient {
                 && health.healthy();
     }
 
+    /**
+     * 用脱敏后的说明建一条模型错误，执行编号取自这次聊天请求。
+     *
+     * @param request 失败所属的聊天请求
+     * @param message 失败说明，会先去掉授权信息
+     * @param cause 底层原因，可以为 null
+     * @return 带模型错误码的业务异常
+     */
     private static AgentException fail(LlmChatRequest request, String message, Throwable cause) {
         return new AgentException(ErrorCode.LLM, AuthorizationRedactor.redact(message), request.executionId(), cause);
     }
 
+    /**
+     * 判断文本是否缺失或只有空白。
+     *
+     * @param value 待检查的文本
+     * @return null 或空白时为 true
+     */
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }

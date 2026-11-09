@@ -20,8 +20,10 @@ vi.mock('element-plus', () => ({
 
 import { api } from '../api'
 
+/** 会话页样式原文，用来断言颜色、字号和折叠规则。 */
 const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../styles.css'), 'utf8')
 
+/** 接口替身返回的会话、时间线和执行。每个用例开始前由 resetState 填上。 */
 const state = {
   sessions: [],
   session: {},
@@ -31,6 +33,13 @@ const state = {
   models: []
 }
 
+/**
+ * 取出一条样式规则的声明。
+ *
+ * @param source 整份 CSS
+ * @param selector 选择器，按字面匹配
+ * @return 花括号里的声明
+ */
 function rule(source, selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const matched = source.match(new RegExp(escaped + '\\s*\\{([^}]*)\\}'))
@@ -38,15 +47,29 @@ function rule(source, selector) {
   return matched[1]
 }
 
+/**
+ * 取出同一选择器的每一段声明。分组选择器不会并进来。
+ *
+ * @param source 整份 CSS
+ * @param selector 选择器
+ * @return 每一段花括号里的声明
+ */
 function blocks(source, selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return [...source.matchAll(new RegExp(escaped + '\\s*\\{([^}]*)\\}', 'g'))].map((match) => match[1])
 }
 
+/**
+ * 这段声明是否改了颜色、字号、圆角、间距。动效用例用来确认按钮外观没被改掉。
+ *
+ * @param body 一段 CSS 声明
+ * @return 含这些属性时为 true
+ */
 function declaresVisualChrome(body) {
   return /(?:^|;)(?:color|background(?:-color)?|font-size|border-radius|padding|margin|gap)\s*:/.test(body)
 }
 
+/** 把接口替身恢复成一条挂起的会话，避免用例之间串数据。 */
 function resetState() {
   state.sessions = [{ sessionId: 's1', title: '检查会话', model: 'deepseek-flash', modelProvider: 'deepseek' }]
   state.models = [
@@ -179,6 +202,12 @@ beforeEach(() => {
   })
 })
 
+/**
+ * 挂上内存路由和简化过的 Element Plus 控件，返回会话页。
+ * 控件替身只保留测试要点的属性和插槽，不加载整套组件样式。
+ *
+ * @return 已挂到文档上的包装器
+ */
 async function mountConsole() {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -223,11 +252,22 @@ async function mountConsole() {
   return wrapper
 }
 
+/**
+ * 点开列表里的第一条会话，并等接口返回。
+ *
+ * @param wrapper 会话页包装器
+ */
 async function openSession(wrapper) {
   await wrapper.get('.session-switch').trigger('click')
   await flushPromises()
 }
 
+/**
+ * 从顶栏菜单打开一块抽屉。
+ *
+ * @param wrapper 会话页包装器
+ * @param name 抽屉编号
+ */
 async function openDrawer(wrapper, name) {
   await wrapper.get('[data-drawer-menu]').trigger('click')
   await wrapper.get(`[role="menu"] [data-open="${name}"]`).trigger('click')
@@ -543,6 +583,13 @@ describe('会话页三列布局', () => {
   })
 })
 
+/**
+ * 按可见文字找到按钮。找不到时测试失败。
+ *
+ * @param wrapper 会话页包装器
+ * @param text 按钮文字
+ * @return 按钮包装器
+ */
 function buttonByText(wrapper, text) {
   const found = wrapper.findAll('.el-button').find((node) => node.text() === text)
   expect(found, text).toBeTruthy()
@@ -811,6 +858,7 @@ describe('会话页交互动效', () => {
 })
 
 describe('助手回复上的思考', () => {
+  /** 把真实样式插进文档，方便断言收起后的 display。返回的节点由用例自己摘掉。 */
   function paint() {
     const style = document.createElement('style')
     style.textContent = css
@@ -843,6 +891,8 @@ describe('助手回复上的思考', () => {
     const block = turn.get('.thinking')
     expect(block.element.tagName).toBe('DETAILS')
     expect(block.element.hasAttribute('open')).toBe(false)
+    expect(block.element.open).toBe(false)
+    expect(getComputedStyle(block.get('.thinking-body').element).display).toBe('none')
     expect(block.get('summary').text()).toBe('思考')
     expect(block.get('.thinking-body').text()).toBe('先核对时钟再回答')
     const html = turn.element.innerHTML

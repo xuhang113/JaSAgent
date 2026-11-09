@@ -12,13 +12,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 
+/** 对执行、模型调用、任务和界面文档做异步读写。SQL 失败一律收成带执行编号的持久化异常。 */
 public final class ExecutionStore {
     private final ExecutionDatabase database;
 
+    /**
+     * 绑定已经迁移好的执行库。
+     *
+     * @param database 打开的执行库
+     */
     public ExecutionStore(ExecutionDatabase database) {
         this.database = database;
     }
 
+    /**
+     * 向 execution 表插入一行，记下用户、会话、工作区、状态和两条 OpenTelemetry 编号。数据库拒绝写入时阶段以持久化异常失败。
+     *
+     * @param row 要写入的执行
+     * @return 插入成功后结束的阶段，没有结果值
+     */
     public CompletionStage<Void> insertExecution(ExecutionRow row) {
         return VirtualIo.supply(() -> {
             String sql = """
@@ -43,6 +55,12 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 按执行编号读回一整行。没有这一行时阶段以持久化异常失败。
+     *
+     * @param executionId 执行编号
+     * @return 完成后得到该行
+     */
     public CompletionStage<ExecutionRow> findExecution(String executionId) {
         return VirtualIo.supply(() -> {
             String sql = """
@@ -64,6 +82,12 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 向 llm_call 表插入一次模型调用，记下供应商、模型、耗时和三段 token 数。
+     *
+     * @param row 要写入的调用
+     * @return 插入成功后结束的阶段，没有结果值
+     */
     public CompletionStage<Void> insertLlmCall(LlmCallRow row) {
         return VirtualIo.supply(() -> {
             String sql = """
@@ -89,6 +113,12 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 按调用编号读回模型调用。没有这一行时阶段以持久化异常失败。
+     *
+     * @param callId 模型调用编号
+     * @return 完成后得到该行
+     */
     public CompletionStage<LlmCallRow> findLlmCall(String callId) {
         return VirtualIo.supply(() -> {
             String sql = """
@@ -118,6 +148,13 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 把执行状态改成给定值。没有正好更新一行时视为执行不存在。
+     *
+     * @param executionId 执行编号
+     * @param status 新状态
+     * @return 更新成功后结束的阶段，没有结果值
+     */
     public CompletionStage<Void> updateStatus(String executionId, String status) {
         return VirtualIo.supply(() -> {
             try (Connection connection = database.connect();
@@ -135,6 +172,12 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 列出某个用户的全部执行，按执行编号排序。
+     *
+     * @param userId 用户编号
+     * @return 完成后得到该用户的执行列表，没有记录时为空列表
+     */
     public CompletionStage<List<ExecutionRow>> listExecutions(String userId) {
         return VirtualIo.supply(() -> {
             String sql = """
@@ -157,6 +200,14 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 用固定消息编号覆盖保存界面文档。空白会话编号改用执行编号，空正文存成空串。删除旧消息和插入新消息放在同一个事务里。
+     *
+     * @param executionId 执行编号，同时参与拼消息编号
+     * @param sessionId 会话编号，空白时改用执行编号
+     * @param body 文档正文
+     * @return 事务提交后结束的阶段，没有结果值
+     */
     public CompletionStage<Void> saveDocument(String executionId, String sessionId, String body) {
         return VirtualIo.supply(() -> {
             String messageId = "view-" + executionId;
@@ -183,6 +234,12 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 读取这条执行对应的界面文档正文。还没保存过时结果为空，不算失败。
+     *
+     * @param executionId 执行编号
+     * @return 完成后得到正文；没有对应消息时为空
+     */
     public CompletionStage<String> findDocument(String executionId) {
         return VirtualIo.supply(() -> {
             try (Connection connection = database.connect();
@@ -201,6 +258,14 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 插入一条任务，错误码留空。
+     *
+     * @param taskId 任务编号
+     * @param executionId 所属执行编号
+     * @param status 初始状态
+     * @return 插入成功后结束的阶段，没有结果值
+     */
     public CompletionStage<Void> insertTask(String taskId, String executionId, String status) {
         return VirtualIo.supply(() -> {
             try (Connection connection = database.connect();
@@ -217,6 +282,13 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 把任务标成失败并写下错误码。没有正好更新一行时视为任务不存在。
+     *
+     * @param taskId 任务编号
+     * @param errorCode 失败原因码
+     * @return 更新成功后结束的阶段，没有结果值
+     */
     public CompletionStage<Void> markTaskFailed(String taskId, String errorCode) {
         return VirtualIo.supply(() -> {
             try (Connection connection = database.connect();
@@ -234,14 +306,33 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 读取任务当前状态。任务不存在时阶段失败。
+     *
+     * @param taskId 任务编号
+     * @return 完成后得到 status 列
+     */
     public CompletionStage<String> taskStatus(String taskId) {
         return taskColumn(taskId, "status");
     }
 
+    /**
+     * 读取任务上记录的错误码。还没失败时结果为空。
+     *
+     * @param taskId 任务编号
+     * @return 完成后得到 error_code 列
+     */
     public CompletionStage<String> taskErrorCode(String taskId) {
         return taskColumn(taskId, "error_code");
     }
 
+    /**
+     * 按任务编号读取指定列。任务不存在时抛出持久化异常。
+     *
+     * @param taskId 任务编号
+     * @param column 要读取的列名，调用方只传入 status 或 error_code
+     * @return 完成后得到该列文本
+     */
     private CompletionStage<String> taskColumn(String taskId, String column) {
         return VirtualIo.supply(() -> {
             try (Connection connection = database.connect();
@@ -260,6 +351,13 @@ public final class ExecutionStore {
         });
     }
 
+    /**
+     * 按查询列顺序组装执行行：编号、用户、会话、工作区、状态、追踪编号、根 span 编号。
+     *
+     * @param rows 已经定位到当前行的结果集
+     * @return 这一行对应的执行记录
+     * @throws SQLException 读列失败时抛出
+     */
     private static ExecutionRow readExecution(ResultSet rows) throws SQLException {
         return new ExecutionRow(
                 rows.getString(1),
@@ -271,6 +369,14 @@ public final class ExecutionStore {
                 rows.getString(7));
     }
 
+    /**
+     * 把数据库失败收成持久化异常，并带上能定位的执行编号。
+     *
+     * @param executionId 相关执行编号，没有时为空
+     * @param message 给调用方看的失败说明
+     * @param cause 原始异常，没有时为空
+     * @return 持久化异常
+     */
     private static AgentException persist(String executionId, String message, Throwable cause) {
         return new AgentException(ErrorCode.PERSIST, message, executionId, cause);
     }

@@ -14,16 +14,40 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 把工作流 JSON 收成定义，并提供示例文档和默认的单节点 react 文档。
+ */
 public final class WorkflowParser {
+    /**
+     * 解析工作流 JSON 的映射器，全类共用。
+     */
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    /**
+     * 文档里允许出现的节点类型。
+     */
     private static final Set<String> TYPES = Set.of(
             "react", "tool", "plugin", "subagents", "evaluate", "interrupt", "condition", "retrieve", "end");
+    /**
+     * 条件节点允许使用的比较名。
+     */
     private static final Set<String> COMPARES = Set.of("boolean", "equals", "gt", "gte", "lt", "lte", "eq");
+    /**
+     * 按数字比较、并且必须写期望值的比较名。
+     */
     private static final Set<String> NUMERIC = Set.of("gt", "gte", "lt", "lte", "eq");
 
+    /**
+     * 禁止实例化。解析只通过静态方法完成。
+     */
     private WorkflowParser() {
     }
 
+    /**
+     * 解析一份工作流 JSON，并校验节点类型和必填字段。文档不是合法 JSON 时抛出工作流错误。
+     *
+     * @param json 工作流文档
+     * @return 校验后的工作流定义
+     */
     public static WorkflowDefinition parse(String json) {
         try {
             return parseTree(MAPPER.readTree(json));
@@ -34,6 +58,11 @@ public final class WorkflowParser {
         }
     }
 
+    /**
+     * 读出类路径上的示例工作流文档。资源缺失或读失败时抛出工作流错误。
+     *
+     * @return 示例文档原文
+     */
     public static String exampleAnswerWithTool() {
         try (InputStream input = WorkflowParser.class.getResourceAsStream("/workflows/answer-with-tool.json")) {
             if (input == null) {
@@ -47,12 +76,23 @@ public final class WorkflowParser {
         }
     }
 
+    /**
+     * 返回一份只有一个 react 节点、最多 6 步、预算 8000 的默认文档。
+     *
+     * @return 默认 react 工作流 JSON
+     */
     public static String defaultReactDocument() {
         return """
                 {"id":"default-react","budgetTokens":8000,"nodes":[{"id":"act","type":"react","maxSteps":6,"tools":[],"grounding":false}]}
                 """;
     }
 
+    /**
+     * 校验根对象、标识、预算和节点。条件分支必须指向文档里存在的节点。
+     *
+     * @param root 已解析的文档根节点
+     * @return 工作流定义
+     */
     private static WorkflowDefinition parseTree(JsonNode root) {
         if (root == null || !root.isObject()) {
             throw new AgentException(ErrorCode.WORKFLOW, "工作流文档必须是对象");
@@ -83,6 +123,12 @@ public final class WorkflowParser {
         return new WorkflowDefinition(id, texts(root, "rules"), texts(root, "skills"), budget, List.copyOf(nodes));
     }
 
+    /**
+     * 校验一个节点的类型和该类型的必填字段，并收成节点规格。
+     *
+     * @param raw 节点 JSON
+     * @return 校验后的节点规格
+     */
     private static NodeSpec node(JsonNode raw) {
         if (raw == null || !raw.isObject()) {
             throw new AgentException(ErrorCode.WORKFLOW, "节点必须是对象");
@@ -146,6 +192,13 @@ public final class WorkflowParser {
                 texts(raw, "tasks"));
     }
 
+    /**
+     * 读取必填文本字段。缺失或空白时抛出工作流错误。
+     *
+     * @param node 对象节点
+     * @param field 字段名
+     * @return 去掉空白后仍有内容的文本
+     */
     private static String requiredText(JsonNode node, String field) {
         String value = text(node, field);
         if (value == null || value.isBlank()) {
@@ -154,6 +207,13 @@ public final class WorkflowParser {
         return value;
     }
 
+    /**
+     * 读取可选文本字段。缺失、null 或空白时返回 null。
+     *
+     * @param node 对象节点
+     * @param field 字段名
+     * @return 文本；没有内容时为 null
+     */
     private static String text(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) {
@@ -163,6 +223,13 @@ public final class WorkflowParser {
         return text == null || text.isBlank() ? null : text;
     }
 
+    /**
+     * 读取可选整数。字段缺失时返回 null。
+     *
+     * @param node 对象节点
+     * @param field 字段名
+     * @return 整数值；没有该字段时为 null
+     */
     private static Integer integer(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) {
@@ -171,6 +238,13 @@ public final class WorkflowParser {
         return value.asInt();
     }
 
+    /**
+     * 读取可选布尔值。字段缺失时返回 null。
+     *
+     * @param node 对象节点
+     * @param field 字段名
+     * @return 布尔值；没有该字段时为 null
+     */
     private static Boolean bool(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) {
@@ -179,6 +253,13 @@ public final class WorkflowParser {
         return value.asBoolean();
     }
 
+    /**
+     * 读取一个字符串数组。字段缺失时返回空列表。
+     *
+     * @param node 对象节点
+     * @param field 字段名
+     * @return 文本列表
+     */
     private static List<String> texts(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) {

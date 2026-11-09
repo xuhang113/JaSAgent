@@ -31,17 +31,29 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 核对上下文预算、订正位置、压缩时保留的内容，以及订正落盘和工具冲突。
+ */
 class ContextCorrectionTest {
+    /**
+     * 样本订正使用的固定创建时间，用来核对 JSON 里的时间文本。
+     */
     private static final Instant CREATED = Instant.parse("2026-11-08T00:00:00Z");
 
     @TempDir
     Path temp;
 
+    /**
+     * 缺省令牌预算必须是 8000。断言失败则本测试失败。
+     */
     @Test
     void defaultBudgetIs8000() {
         assertEquals(8000, ContextWindow.DEFAULT_BUDGET_TOKENS);
     }
 
+    /**
+     * 未达预算时不调用模型，订正按原顺序紧挨在当前用户消息之前。断言失败则本测试失败。
+     */
     @Test
     void noteSitsBeforeCurrentUser() {
         Scripted model = script("SHORT");
@@ -55,6 +67,9 @@ class ContextCorrectionTest {
         assertEquals("NOTE", messages.get(messages.size() - 3).content());
     }
 
+    /**
+     * 预算充足时保留工具填充和技能正文，并且不插入摘要消息。断言失败则本测试失败。
+     */
     @Test
     void unchangedWhenUnderBudget() {
         Scripted model = script("SHORT");
@@ -65,6 +80,9 @@ class ContextCorrectionTest {
         assertTrue(messages.stream().noneMatch(message -> "summary".equals(message.role())));
     }
 
+    /**
+     * 压缩之后，两条订正仍然紧挨在当前用户消息之前。断言失败则本测试失败。
+     */
     @Test
     void noteRemainsAfterCompression() {
         List<ChatMessage> messages = join(new ContextWindow(script("SHORT")).prepare(standard(30))).messages();
@@ -76,6 +94,9 @@ class ContextCorrectionTest {
         assertEquals("NOTE", messages.get(messages.size() - 3).content());
     }
 
+    /**
+     * 压缩后规则、技能名和说明、任务板、最近轮次、执行标识仍在，且系统提示只有一条。断言失败则本测试失败。
+     */
     @Test
     void protectedPartsStay() {
         List<ChatMessage> messages = join(new ContextWindow(script("SHORT")).prepare(standard(30))).messages();
@@ -93,6 +114,9 @@ class ContextCorrectionTest {
         assertTrue(systems.get(0).content().contains("exec-ctx"));
     }
 
+    /**
+     * 超过预算时只发一次压缩任务，摘要消息采用模型回复，且不指定具名提供方。断言失败则本测试失败。
+     */
     @Test
     void overBudgetUsesCompressRoute() {
         Scripted model = script("SHORT");
@@ -107,6 +131,9 @@ class ContextCorrectionTest {
         assertEquals(1, prepared.messages().stream().filter(message -> "summary".equals(message.role()) && "SHORT".equals(message.content())).count());
     }
 
+    /**
+     * 送给摘要模型的内容只含旧对话，不含规则、技能、订正、任务板、执行标识和最近轮次。断言失败则本测试失败。
+     */
     @Test
     void summaryRequestOmitsProtectedText() {
         Scripted model = script("SHORT");
@@ -128,6 +155,9 @@ class ContextCorrectionTest {
         assertFalse(sent.contains("SHORT-PADDING"));
     }
 
+    /**
+     * 没有可摘要的旧对话时不调用模型；只剩技能正文超预算时去掉正文，只剩旧工具结果时换成占位。断言失败则本测试失败。
+     */
     @Test
     void noSummaryCallWhenNothingOld() {
         Scripted skillsOnly = script("SHORT");
@@ -156,6 +186,9 @@ class ContextCorrectionTest {
         assertFalse(collapsed.contains("OLD-TOOL-BODY"));
     }
 
+    /**
+     * 摘要后仍超预算时，最近轮次之前的工具结果都换成占位，最近轮次保留。断言失败则本测试失败。
+     */
     @Test
     void oldToolResultsCollapse() {
         List<ChatMessage> turns = new ArrayList<>();
@@ -172,6 +205,9 @@ class ContextCorrectionTest {
         assertTrue(joinText(messages).contains("RECENT-1"));
     }
 
+    /**
+     * 落在最近轮次里的工具结果保持原文，更早的工具结果换成占位。断言失败则本测试失败。
+     */
     @Test
     void recentToolResultsStay() {
         List<ChatMessage> turns = new ArrayList<>();
@@ -187,6 +223,9 @@ class ContextCorrectionTest {
         assertFalse(joined.contains("OLD-TOOL-BODY"));
     }
 
+    /**
+     * 折叠工具后仍超预算时，技能只留名称和说明，正文不再出现。断言失败则本测试失败。
+     */
     @Test
     void skillsShrinkToNameAndDescription() {
         String joined = joinText(join(new ContextWindow(script("X".repeat(800))).prepare(standard(20))).messages());
@@ -195,6 +234,9 @@ class ContextCorrectionTest {
         assertFalse(joined.contains("SKILL-BODY-VERY-LONG"));
     }
 
+    /**
+     * 旧工具结果换成占位后已经放进预算时，技能正文继续保留。断言失败则本测试失败。
+     */
     @Test
     void skillsStayWhenCollapseFits() {
         List<ChatMessage> turns = new ArrayList<>();
@@ -210,6 +252,9 @@ class ContextCorrectionTest {
         assertFalse(joined.contains("X".repeat(50)));
     }
 
+    /**
+     * 即使压缩后仍然超过预算，订正、任务板和执行标识也不能被删掉。断言失败则本测试失败。
+     */
     @Test
     void forbiddenPartsStayWhenStillOverBudget() {
         List<ChatMessage> messages = join(new ContextWindow(script("X".repeat(800))).prepare(standard(20))).messages();
@@ -220,6 +265,9 @@ class ContextCorrectionTest {
         assertTrue(system.contains("exec-ctx"));
     }
 
+    /**
+     * 订正要写到用户目录下按会话和笔记标识分开的 JSON，并把原文交给快照。断言失败则本测试失败。
+     */
     @Test
     void noteStoredInUserDirAndSnapshot() throws Exception {
         List<CorrectionNote> snapshot = new ArrayList<>();
@@ -236,6 +284,9 @@ class ContextCorrectionTest {
         assertEquals("NOTE \"keep\"", snapshot.get(0).text());
     }
 
+    /**
+     * 四种订正来源都要能按来源名写进 JSON，且枚举就这些值。断言失败则本测试失败。
+     */
     @Test
     void fourSourcesRoundTrip() throws Exception {
         assertEquals(
@@ -250,6 +301,9 @@ class ContextCorrectionTest {
         }
     }
 
+    /**
+     * 空笔记、空白字段、路径逃逸、空目录或空快照都要被内部错误拒绝，并且不留下订正文件。断言失败则本测试失败。
+     */
     @Test
     void invalidNoteIsRejected() {
         Path root = temp.resolve("jasagent");
@@ -271,12 +325,18 @@ class ContextCorrectionTest {
         assertTrue(Files.notExists(root) || !Files.exists(root.resolve("corrections")));
     }
 
+    /**
+     * 助手引用了工具和用户都没有的时间时，要追加一条以工具结果为准的订正，并把工具结果接进对话。断言失败则本测试失败。
+     */
     @Test
     void toolContradictionKeepsToolResult() {
         assertConflict("I think \"99:99\" is right");
         assertConflict("记忆是“99:99”");
     }
 
+    /**
+     * 引号片段已出现在工具结果或用户消息里、助手没有引号、或工具结果为空白时，都不新增订正。断言失败则本测试失败。
+     */
     @Test
     void quotedFragmentInEvidenceAddsNoNote() {
         List<ChatMessage> history = List.of(ChatMessage.text("assistant", "the clock says \"12:00 UTC\""));
@@ -302,6 +362,9 @@ class ContextCorrectionTest {
         assertEquals(original.size(), unchanged.size());
     }
 
+    /**
+     * 预算小于 1 或执行标识为空白时准备失败，且不会调用模型。断言失败则本测试失败。
+     */
     @Test
     void rejectsBlankExecutionAndBadBudget() {
         Scripted model = script("SHORT");
@@ -312,12 +375,20 @@ class ContextCorrectionTest {
         assertEquals(0, model.requests.size());
     }
 
+    /**
+     * 没有模型时不能创建上下文窗口。断言失败则本测试失败。
+     */
     @Test
     void nullModelRejected() {
         AgentException ex = assertThrows(AgentException.class, () -> new ContextWindow(null));
         assertEquals(ErrorCode.INTERNAL, ex.code());
     }
 
+    /**
+     * 用给定助手回复核对工具冲突：原历史不被修改，订正来源、会话和执行正确，新列表以工具结果结尾。不符合时测试失败。
+     *
+     * @param assistant 含有对不上片段的助手回复
+     */
     private static void assertConflict(String assistant) {
         List<ChatMessage> history = new ArrayList<>();
         history.add(ChatMessage.text("assistant", assistant));
@@ -333,10 +404,21 @@ class ContextCorrectionTest {
         assertEquals("12:00 UTC", next.get(next.size() - 1).content());
     }
 
+    /**
+     * 用标准轮次和长技能构造一份指定预算的输入。
+     *
+     * @param budget 令牌预算
+     * @return 含两条订正和当前用户的输入
+     */
     private static ContextInput standard(int budget) {
         return input(budget, standardTurns(), longSkill());
     }
 
+    /**
+     * 构造一条很长的旧用户消息、一条工具填充，以及最近四条对话。
+     *
+     * @return 供压缩测试使用的轮次
+     */
     private static List<ChatMessage> standardTurns() {
         List<ChatMessage> turns = new ArrayList<>();
         turns.add(ChatMessage.text("user", "OLD-" + "Q".repeat(300)));
@@ -348,32 +430,77 @@ class ContextCorrectionTest {
         return turns;
     }
 
+    /**
+     * 构造一条带很长正文的研究技能。
+     *
+     * @return 只含这一条技能的列表
+     */
     private static List<SkillText> longSkill() {
         return List.of(new SkillText("research", "查找资料", "SKILL-BODY-VERY-LONG-" + "S".repeat(400)));
     }
 
+    /**
+     * 构造一条正文由调用方指定的研究技能。
+     *
+     * @param body 技能正文
+     * @return 只含这一条技能的列表
+     */
     private static List<SkillText> shortSkill(String body) {
         return List.of(new SkillText("research", "查找资料", body));
     }
 
+    /**
+     * 构造同一会话下的两条用户订正。
+     *
+     * @return 按原顺序排列的订正
+     */
     private static List<CorrectionNote> standardNotes() {
         return List.of(
                 note("n1", "sess-1", CorrectionSource.USER, "NOTE"),
                 note("n2", "sess-1", CorrectionSource.USER, "NOTE-B"));
     }
 
+    /**
+     * 用给定预算、轮次和技能组装标准订正下的上下文输入。
+     *
+     * @param budget 令牌预算
+     * @param turns 对话轮次
+     * @param skills 技能列表
+     * @return 可交给上下文窗口的输入
+     */
     private static ContextInput input(int budget, List<ChatMessage> turns, List<SkillText> skills) {
         return new ContextInput("exec-ctx", "助手", "RULE", skills, "BOARD", standardNotes(), turns, "CURRENT", budget);
     }
 
+    /**
+     * 用固定执行和时间构造一条订正。
+     *
+     * @param noteId 笔记标识
+     * @param sessionId 会话标识
+     * @param source 订正来源
+     * @param text 订正正文
+     * @return 可落盘或放进上下文的订正
+     */
     private static CorrectionNote note(String noteId, String sessionId, CorrectionSource source, String text) {
         return new CorrectionNote(noteId, sessionId, "exec-ctx", CREATED, source, text);
     }
 
+    /**
+     * 创建一个会立刻返回指定摘要的模型。
+     *
+     * @param summary 回复正文
+     * @return 记录请求的模型
+     */
     private static Scripted script(String summary) {
         return new Scripted(summary);
     }
 
+    /**
+     * 把消息正文按行拼起来，便于断言某段文字是否保留。
+     *
+     * @param messages 已渲染的消息
+     * @return 每条正文占一行的文本
+     */
     private static String joinText(List<ChatMessage> messages) {
         StringBuilder builder = new StringBuilder();
         for (ChatMessage message : messages) {
@@ -382,11 +509,22 @@ class ContextCorrectionTest {
         return builder.toString();
     }
 
+    /**
+     * 执行动作并确认它抛出内部错误。不符合时测试失败。
+     *
+     * @param call 应当失败的动作
+     */
     private static void assertInternal(ThrowingCall call) {
         AgentException ex = assertThrows(AgentException.class, call::run);
         assertEquals(ErrorCode.INTERNAL, ex.code());
     }
 
+    /**
+     * 在限定时间内取回异步结果，并把包装异常还原成原来的运行时异常；等待被中断时重新置上中断标记。
+     *
+     * @param stage 待等待的异步阶段
+     * @return 阶段成功时的结果
+     */
     private static <T> T join(CompletionStage<T> stage) {
         try {
             return stage.toCompletableFuture().get(10, TimeUnit.SECONDS);
@@ -409,19 +547,39 @@ class ContextCorrectionTest {
         }
     }
 
+    /**
+     * 包一层会抛出运行时异常的测试动作，便于断言它被拒绝。
+     */
     @FunctionalInterface
     private interface ThrowingCall {
+        /**
+         * 执行测试放进来的动作。副作用由该动作自己决定，接口不额外改状态。
+         */
         void run();
     }
 
+    /**
+     * 记下对话请求，并立刻用构造时给定的摘要回复。
+     */
     private static final class Scripted implements ChatModel {
         private final String summary;
         private final List<ChatRequest> requests = new ArrayList<>();
 
+        /**
+         * 指定立即回复的摘要正文。
+         *
+         * @param summary 每次对话返回的正文
+         */
         private Scripted(String summary) {
             this.summary = summary;
         }
 
+        /**
+         * 保存请求并立即返回预设摘要。
+         *
+         * @param request 上下文窗口发出的请求
+         * @return 已完成的摘要回复
+         */
         @Override
         public CompletionStage<ChatResponse> complete(ChatRequest request) {
             requests.add(request);
@@ -434,6 +592,13 @@ class ContextCorrectionTest {
                     false));
         }
 
+        /**
+         * 订正测试不使用嵌入，调用时直接失败。
+         *
+         * @param text 待嵌入文本
+         * @param executionId 所属执行
+         * @return 必定失败的阶段
+         */
         @Override
         public CompletionStage<Embedding> embed(String text, String executionId) {
             return CompletableFuture.failedFuture(new AgentException(ErrorCode.LLM, "unused"));

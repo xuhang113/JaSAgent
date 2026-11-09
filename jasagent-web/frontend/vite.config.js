@@ -1,3 +1,4 @@
+/** 前端构建和测试配置。产物写进 Java 静态资源目录，开发时代理到 18721。 */
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 

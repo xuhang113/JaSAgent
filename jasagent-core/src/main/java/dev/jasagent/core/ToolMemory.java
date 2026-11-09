@@ -13,9 +13,26 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * 把工具结果接进对话，并在助手引用了工具和用户都没有的片段时记下以工具为准的订正。
+ */
 public final class ToolMemory {
+    /**
+     * 匹配助手回复里的直引号或中文引号片段，用来发现和工具结果对不上的说法。
+     */
     private static final Pattern QUOTED = Pattern.compile("\"([^\"]+)\"|\u201c([^\u201d]+)\u201d");
 
+    /**
+     * 若助手引号中的片段既不在工具结果里也不在用户消息里，就追加一条以工具结果为准的订正，并把非空工具结果接到历史后面。
+     *
+     * @param history 已有对话，用来找最近一条助手回复
+     * @param toolResult 这次工具返回的文本；空白时不追加工具消息
+     * @param userMessage 当前用户消息，其中出现的引号片段不算冲突
+     * @param notes 订正收集列表；发现冲突时会追加一条。不能为空
+     * @param sessionId 写入订正的会话标识
+     * @param executionId 写入订正的执行标识
+     * @return 接上工具结果后的新消息列表，不修改传入的历史
+     */
     public List<ChatMessage> reconcile(
             List<ChatMessage> history,
             String toolResult,
@@ -57,6 +74,14 @@ public final class ToolMemory {
         return List.copyOf(next);
     }
 
+    /**
+     * 查看助手引号片段是否有一段既不出现在工具结果里，也不出现在用户消息里。
+     *
+     * @param assistant 最近一条助手回复
+     * @param tool 工具结果
+     * @param user 用户消息
+     * @return 存在对不上的引号片段时为真
+     */
     private static boolean conflicts(String assistant, String tool, String user) {
         Matcher matcher = QUOTED.matcher(assistant);
         while (matcher.find()) {

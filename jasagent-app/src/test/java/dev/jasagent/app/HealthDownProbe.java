@@ -9,10 +9,23 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
+/**
+ * 独立进程里的健康探针。用调用方给的家目录启动服务，请求 /health，并用一行 HEALTH_RESULT 报告状态码和正文。
+ */
 public final class HealthDownProbe {
+    /**
+     * 禁止实例化，探针只作为主程序运行。
+     * 副作用：没有可复用的实例。
+     */
     private HealthDownProbe() {
     }
 
+    /**
+     * 在 127.0.0.1 的随机端口启动应用。若端口仍是 18721 就以退出码 2 结束。否则请求 /health，存储确实为 down 且 HTTP 为 503 时退出码为 0。
+     * 副作用：启动并结束 JVM。异常栈打到标准输出。
+     *
+     * @param args 第一项是 jasagent.home
+     */
     public static void main(String[] args) {
         int status = 1;
         try {

@@ -1,9 +1,22 @@
 package dev.jasagent.evaluation;
 
+/**
+ * 把模型评判返回的 JSON 收成评估结果；解析不了时记为未通过。
+ */
 final class JudgeVerdicts {
+    /**
+     * 禁止实例化，裁决只通过静态转换使用。
+     */
     private JudgeVerdicts() {
     }
 
+    /**
+     * 把模型回复转成评判结果。不是单一 JSON 对象，或字段缺失、超范围时，分数为零并标明无法解析。
+     *
+     * @param executionId 被评判的执行
+     * @param content 模型回复的正文
+     * @return 解析成功时带上模型给出的通过、分数和原因；否则为无法解析
+     */
     static EvaluationResult toResult(String executionId, String content) {
         Parsed parsed = parse(content);
         if (parsed == null) {
@@ -12,6 +25,12 @@ final class JudgeVerdicts {
         return new EvaluationResult(executionId, EvaluationEngine.LLM_JUDGE, parsed.passed, parsed.score, parsed.reason);
     }
 
+    /**
+     * 只接受由 passed、score 和 reason 组成的单个 JSON 对象，拒绝多余字段、重复字段和分数越界。
+     *
+     * @param content 模型回复；空或不是对象时无法解析
+     * @return 三个字段都合法时的裁决；否则为空
+     */
     private static Parsed parse(String content) {
         if (content == null) {
             return null;
@@ -88,23 +107,46 @@ final class JudgeVerdicts {
         return new Parsed(passed, score, reason);
     }
 
+    /**
+     * 从评判 JSON 中读出的三个字段。
+     *
+     * @param passed 模型是否认为通过
+     * @param score 零到一之间的有限分数
+     * @param reason 模型给出的原因
+     */
     private record Parsed(boolean passed, double score, String reason) {
     }
 
+    /**
+     * 在一段 JSON 文本上向前读取空白、布尔、数字和字符串。
+     */
     private static final class Cursor {
         private final String text;
         private int index;
 
+        /**
+         * 记住这段回复，并从第一个字符开始扫描。
+         *
+         * @param text 去掉首尾空白后的模型回复
+         */
         private Cursor(String text) {
             this.text = text;
         }
 
+        /**
+         * 把扫描位置移过连续空白。副作用是推进当前位置。
+         */
         private void skipWhitespace() {
             while (index < text.length() && Character.isWhitespace(text.charAt(index))) {
                 index++;
             }
         }
 
+        /**
+         * 查看当前位置的字符，不向前移动。
+         *
+         * @return 当前字符；已经到末尾时为空字符
+         */
         private char peek() {
             if (index >= text.length()) {
                 return '\0';
@@ -112,6 +154,11 @@ final class JudgeVerdicts {
             return text.charAt(index);
         }
 
+        /**
+         * 读取 true 或 false，并在成功时把位置移到值之后。
+         *
+         * @return 读到的布尔值；当前位置不是布尔字面量时为空
+         */
         private Boolean readBoolean() {
             if (text.startsWith("true", index)) {
                 index += 4;
@@ -124,6 +171,11 @@ final class JudgeVerdicts {
             return null;
         }
 
+        /**
+         * 读取可选负号、整数和小数，拒绝指数记法。成功时把位置移到数字之后。
+         *
+         * @return 读到的有限数字；格式不符时为空
+         */
         private Double readNumber() {
             int start = index;
             if (peek() == '-') {
@@ -151,6 +203,11 @@ final class JudgeVerdicts {
             }
         }
 
+        /**
+         * 读取 JSON 字符串，解开引号、反斜杠、换行和制表符转义，并在成功时把位置移到结束引号之后。
+         *
+         * @return 解码后的文本；引号不配对或遇到不支持的转义时为空
+         */
         private String readString() {
             if (peek() != '"') {
                 return null;

@@ -48,10 +48,16 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 核对工具目录的重名失败、通行证决定、挂起后续执行、调用记录和模块边界。
+ */
 class ToolCatalogTest {
     @TempDir
     Path temp;
 
+    /**
+     * 登记两个同名时钟时，断言目录在构造时就以工具错误失败。
+     */
     @Test
     void duplicateToolNameFailsStartup() {
         ScriptedPassGate gate = new ScriptedPassGate(PassDecision.ALLOW);
@@ -62,6 +68,9 @@ class ToolCatalogTest {
         assertEquals(ErrorCode.TOOL, error.code());
     }
 
+    /**
+     * 通行证即使会拒绝，断言时钟仍返回接近当前时刻的 UTC 文本，并且没有申请通行证。
+     */
     @Test
     void clockReturnsUtcWithoutPass() {
         ScriptedPassGate gate = new ScriptedPassGate(PassDecision.DENY);
@@ -74,6 +83,9 @@ class ToolCatalogTest {
         assertTrue(result.executed());
     }
 
+    /**
+     * 断言外部工具先拿到通行证，工具体才执行，且申请里带上用户、执行、目录和工具名。
+     */
     @Test
     void externalToolAcquiresPassBeforeBody() {
         AtomicInteger hits = new AtomicInteger();
@@ -93,6 +105,9 @@ class ToolCatalogTest {
         assertTrue(result.executed());
     }
 
+    /**
+     * 断言按键排序后的参数文本，其 SHA-256 与通行证申请里的参数哈希一致。
+     */
     @Test
     void argumentHashMatchesIndependentSha256() throws Exception {
         ScriptedPassGate gate = new ScriptedPassGate(PassDecision.ALLOW);
@@ -103,6 +118,9 @@ class ToolCatalogTest {
         assertEquals(HexFormat.of().formatHex(hashed), gate.requests.get(0).argumentHash());
     }
 
+    /**
+     * 通行证拒绝时，断言工具体没有执行，结果里的决定是拒绝。
+     */
     @Test
     void denyDoesNotExecuteTool() {
         AtomicInteger hits = new AtomicInteger();
@@ -114,6 +132,9 @@ class ToolCatalogTest {
         assertEquals(PassDecision.DENY, result.pass().decision());
     }
 
+    /**
+     * 通行证允许时，断言工具体执行一次，并带回固定输出和允许决定。
+     */
     @Test
     void allowExecutesTool() {
         AtomicInteger hits = new AtomicInteger();
@@ -125,6 +146,9 @@ class ToolCatalogTest {
         assertEquals(PassDecision.ALLOW, result.pass().decision());
     }
 
+    /**
+     * 通行证待批时，断言工具体没有执行，结果保持待批。
+     */
     @Test
     void pendingDoesNotExecuteTool() {
         AtomicInteger hits = new AtomicInteger();
@@ -136,6 +160,9 @@ class ToolCatalogTest {
         assertEquals(PassDecision.PENDING, result.pass().decision());
     }
 
+    /**
+     * 通行证被跳过时，断言工具仍然执行，原因是通行证功能未启用。
+     */
     @Test
     void skippedExecutesTool() {
         AtomicInteger hits = new AtomicInteger();
@@ -147,6 +174,9 @@ class ToolCatalogTest {
         assertEquals("agentpass-not-enabled", result.pass().reason());
     }
 
+    /**
+     * 待批之后改成允许时，断言执行的是原来的执行编号和参数，并且只执行一次。
+     */
     @Test
     void allowPendingExecutesOriginalExecution() {
         AtomicInteger hits = new AtomicInteger();
@@ -164,6 +194,9 @@ class ToolCatalogTest {
         assertEquals(PassDecision.ALLOW, allowed.pass().decision());
     }
 
+    /**
+     * 待批之后改成拒绝时，断言工具体仍然没有执行。
+     */
     @Test
     void denyPendingDoesNotExecute() {
         AtomicInteger hits = new AtomicInteger();
@@ -177,6 +210,9 @@ class ToolCatalogTest {
         assertEquals(PassDecision.DENY, denied.pass().decision());
     }
 
+    /**
+     * 两次外部调用分别被拒绝和挂起时，断言调用记录按顺序记下工具名、决定和未执行。
+     */
     @Test
     void decisionsAreWrittenToToolCall() {
         MemoryToolCallStore store = new MemoryToolCallStore();
@@ -197,6 +233,9 @@ class ToolCatalogTest {
         assertEquals("shell", entries.get(1).toolName());
     }
 
+    /**
+     * 两张通行证都停在门里时，断言两次外部调用都已进入申请，放开后两边都能结束。
+     */
     @Test
     @Timeout(10)
     void externalCallsCanOverlap() throws Exception {
@@ -216,6 +255,9 @@ class ToolCatalogTest {
         join(second);
     }
 
+    /**
+     * 读工具、插件和通行证模块的源码与构建文件，断言它们没有互相引用对方的包，也没有带上禁用的运行时或图框架。
+     */
     @Test
     void modulesKeepPassAndGraphBoundaries() throws Exception {
         Path root = Path.of("..").toAbsolutePath().normalize();
@@ -252,17 +294,46 @@ class ToolCatalogTest {
         }
     }
 
+    /**
+     * 用一个会计数的外部工具装目录。
+     *
+     * @param gate 测试用的通行证门
+     * @param store 内存调用记录
+     * @param hits 工具体执行次数
+     * @param seen 用来记下实际执行编号；不需要时为 null
+     * @param name 外部工具名
+     * @return 只含这一个工具的目录
+     */
     private DefaultToolCatalog catalog(PassGate gate, MemoryToolCallStore store, AtomicInteger hits, AtomicReference<String> seen, String name) {
         return new DefaultToolCatalog(gate, store, List.of(tool(name, hits, seen)));
     }
 
+    /**
+     * 做一个外部工具：执行时加一次计数，可选地记下执行编号，并返回带名字的固定输出。
+     *
+     * @param name 工具名
+     * @param hits 执行次数计数器
+     * @param seen 接收执行编号的引用；不需要时为 null
+     * @return 非内部的测试工具
+     */
     private Tool tool(String name, AtomicInteger hits, AtomicReference<String> seen) {
         return new Tool() {
+            /**
+             * 返回用构造时的名字做成的外部工具规格。
+             *
+             * @return 非内部的工具规格
+             */
             @Override
             public ToolSpec spec() {
                 return new ToolSpec(name, name, false);
             }
 
+            /**
+             * 把执行次数加一，记下执行编号，并返回带工具名的固定输出。
+             *
+             * @param call 本次工具调用
+             * @return 立即完成的固定输出
+             */
             @Override
             public CompletionStage<String> call(ToolCall call) {
                 hits.incrementAndGet();
@@ -274,10 +345,24 @@ class ToolCatalogTest {
         };
     }
 
+    /**
+     * 做一次落在临时用户目录和工作区里的工具调用。
+     *
+     * @param executionId 执行编号
+     * @param name 工具名
+     * @param arguments 工具参数
+     * @return 可交给目录的调用
+     */
     private ToolCall call(String executionId, String name, Map<String, String> arguments) {
         return new ToolCall("aa", executionId, temp.resolve("user"), temp.resolve("workspace"), name, arguments);
     }
 
+    /**
+     * 把模块的构建文件和源码路径收进列表，供边界检查读取。
+     *
+     * @param module 模块目录
+     * @param out 收集到的文件路径，方法会向其中追加
+     */
     private static void collect(Path module, List<Path> out) throws Exception {
         Path pom = module.resolve("pom.xml");
         if (Files.exists(pom)) {
@@ -292,6 +377,13 @@ class ToolCatalogTest {
         }
     }
 
+    /**
+     * 在 30 秒内等到阶段结束。运行时异常和错误原样抛出，中断会恢复中断标记。
+     *
+     * @param <T> 阶段结果的类型
+     * @param stage 要等待的异步阶段
+     * @return 阶段成功时的结果
+     */
     private static <T> T join(CompletionStage<T> stage) {
         try {
             return stage.toCompletableFuture().get(30, TimeUnit.SECONDS);
@@ -312,28 +404,54 @@ class ToolCatalogTest {
         }
     }
 
+    /**
+     * 按预先排好的决定依次发通行证，并记住申请和已发出的通行证。
+     */
     private static final class ScriptedPassGate implements PassGate {
         private final Queue<PassDecision> decisions = new ArrayDeque<>();
         private final Runnable beforeAcquire;
         private final List<PassRequest> requests = new CopyOnWriteArrayList<>();
         private final Map<String, Pass> passes = new ConcurrentHashMap<>();
 
+        /**
+         * 每次申请都返回同一种决定。
+         *
+         * @param decision 要返回的通行证决定
+         */
         private ScriptedPassGate(PassDecision decision) {
             this(decision, () -> {
             });
         }
 
+        /**
+         * 前两次申请按顺序返回两种决定，之后继续用第二种。
+         *
+         * @param first 第一次申请的决定
+         * @param second 从第二次起使用的决定
+         */
         private ScriptedPassGate(PassDecision first, PassDecision second) {
             this(first, () -> {
             });
             decisions.add(second);
         }
 
+        /**
+         * 返回一种决定，并在记录申请之前先跑给定动作。
+         *
+         * @param decision 要返回的通行证决定
+         * @param beforeAcquire 发通行证前执行的动作
+         */
         private ScriptedPassGate(PassDecision decision, Runnable beforeAcquire) {
             this.beforeAcquire = beforeAcquire;
             decisions.add(decision);
         }
 
+        /**
+         * 先跑预设动作，再记下申请。队列里只剩一种决定时反复使用它。
+         *
+         * @param request 工具目录发来的申请
+         * @return 立即完成的通行证
+         */
         @Override
         public CompletionStage<Pass> acquire(PassRequest request) {
             beforeAcquire.run();
@@ -352,6 +470,12 @@ class ToolCatalogTest {
             return CompletableFuture.completedFuture(pass);
         }
 
+        /**
+         * 把仍在待批的通行证改成批准或拒绝。通行证对不上用户、执行，或已经决定过时抛出业务异常。
+         *
+         * @param approval 用户对通行证的决定
+         * @return 更新后的通行证
+         */
         @Override
         public CompletionStage<Pass> decide(PassApproval approval) {
             Pass existing = passes.get(approval.passId());
@@ -374,21 +498,43 @@ class ToolCatalogTest {
             return CompletableFuture.completedFuture(updated);
         }
 
+        /**
+         * 这个替身不提供待办列表。
+         *
+         * @param userId 用户编号，这里不使用
+         * @param userDirectory 用户目录，这里不使用
+         * @return 立即完成的空列表
+         */
         @Override
         public CompletionStage<List<Pass>> pending(String userId, Path userDirectory) {
             return CompletableFuture.completedFuture(List.of());
         }
 
+        /**
+         * 这个替身不跟踪执行状态。
+         *
+         * @param executionId 执行编号，这里不使用
+         * @return 立即完成的空结果
+         */
         @Override
         public CompletionStage<ExecutionStatus> executionStatus(String executionId) {
             return CompletableFuture.completedFuture(null);
         }
     }
 
+    /**
+     * 把通行证申请停住，直到测试放开，用来观察两次外部调用能否重叠进入。
+     */
     private static final class HoldGate implements PassGate {
         private final AtomicInteger entered = new AtomicInteger();
         private final CountDownLatch release = new CountDownLatch(1);
 
+        /**
+         * 把进入次数加一，然后等到放行信号再返回允许。超时未放开时失败。
+         *
+         * @param request 工具目录发来的申请
+         * @return 放行后完成、决定为允许的通行证
+         */
         @Override
         public CompletionStage<Pass> acquire(PassRequest request) {
             entered.incrementAndGet();
@@ -413,22 +559,47 @@ class ToolCatalogTest {
             });
         }
 
+        /**
+         * 这个重叠测试不使用事后决定，调用即失败。
+         *
+         * @param approval 不会被处理的决定
+         * @return 不返回；调用直接抛出不支持操作
+         */
         @Override
         public CompletionStage<Pass> decide(PassApproval approval) {
             throw new UnsupportedOperationException();
         }
 
+        /**
+         * 这个替身不提供待办列表。
+         *
+         * @param userId 用户编号，这里不使用
+         * @param userDirectory 用户目录，这里不使用
+         * @return 立即完成的空列表
+         */
         @Override
         public CompletionStage<List<Pass>> pending(String userId, Path userDirectory) {
             return CompletableFuture.completedFuture(List.of());
         }
 
+        /**
+         * 这个替身不跟踪执行状态。
+         *
+         * @param executionId 执行编号，这里不使用
+         * @return 立即完成的空结果
+         */
         @Override
         public CompletionStage<ExecutionStatus> executionStatus(String executionId) {
             return CompletableFuture.completedFuture(null);
         }
     }
 
+    /**
+     * 按决定给出测试用的原因文本。
+     *
+     * @param decision 通行证决定
+     * @return 写进通行证的原因
+     */
     private static String reason(PassDecision decision) {
         return switch (decision) {
             case ALLOW -> "policy";

@@ -11,7 +11,14 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 确认 JDBC 指向一个连不上的地址时，独立进程里的 /health 会报告存储 down。
+ */
 class HealthStorageDownTest {
+    /**
+     * 启动 HealthDownProbe，把 JDBC 指到 127.0.0.1:1，并要求 45 秒内以 0 退出。输出的最后一条 HEALTH_RESULT 必须是 503，且 status 和 storage 都是 down。
+     * 副作用：创建临时家目录和日志文件，并可能强制结束超时进程。断言失败则测试失败。
+     */
     @Test
     @Timeout(value = 60)
     void healthIsDownWhenStorageUnreachable() throws Exception {

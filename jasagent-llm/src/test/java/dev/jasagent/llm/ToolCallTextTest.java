@@ -8,7 +8,13 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 核对正文里的工具对象和补全 JSON 里的 tool_calls 都能被还原，普通句子则被忽略。
+ */
 class ToolCallTextTest {
+    /**
+     * 断言一段只含工具名和参数对象的正文能还原成一次目录列举调用。
+     */
     @Test
     void parsesABareToolObject() {
         List<LlmToolCall> calls = ToolCallText.parse("""
@@ -19,11 +25,17 @@ class ToolCallTextTest {
         assertTrue(calls.get(0).arguments().contains("."));
     }
 
+    /**
+     * 断言普通问候不会被当成工具调用。
+     */
     @Test
     void proseIsNotAToolCall() {
         assertTrue(ToolCallText.parse("早上好！").isEmpty());
     }
 
+    /**
+     * 断言补全消息里的函数调用能还原出调用编号、工具名和参数文本。
+     */
     @Test
     void readsOpenAiToolCalls() {
         List<LlmToolCall> calls = ToolCallText.fromCompletionJson("""

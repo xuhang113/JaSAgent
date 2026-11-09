@@ -21,7 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 核对异步边界不会吞掉失败、任务消费失败后仍能继续，以及返回正文不带堆栈。
+ */
 class AsyncExceptionTest {
+    /**
+     * 确认错误码枚举包含模型、工具、插件、检索、工作流、持久化、认证、中断、取消和内部错误。断言失败则本测试失败。
+     */
     @Test
     void errorCodesPresent() {
         Set<ErrorCode> required = EnumSet.of(
@@ -40,6 +46,9 @@ class AsyncExceptionTest {
         assertTrue(EnumSet.allOf(ErrorCode.class).containsAll(required));
     }
 
+    /**
+     * 动作在内部吃掉异常后返回空时，守卫仍要报内部错误，并带上本次执行标识。断言失败则本测试失败。
+     */
     @Test
     void swallowedNullIsRejected() {
         String executionId = UUID.randomUUID().toString();
@@ -55,6 +64,9 @@ class AsyncExceptionTest {
         assertEquals(executionId, error.executionId());
     }
 
+    /**
+     * 动作直接抛出的异常不能变成空结果，守卫要保留原因并写上执行标识。断言失败则本测试失败。
+     */
     @Test
     void thrownExceptionIsNotReturnedAsNull() {
         String executionId = UUID.randomUUID().toString();
@@ -65,6 +77,9 @@ class AsyncExceptionTest {
         assertNotNull(error.getCause());
     }
 
+    /**
+     * 第一个任务抛出工具错误时要记入失败槽并得到失败结局，随后另一个任务仍能正常完成。断言失败则本测试失败。
+     */
     @Test
     void consumerMarksTaskFailedAndContinues() {
         String executionId = UUID.randomUUID().toString();
@@ -86,6 +101,9 @@ class AsyncExceptionTest {
         assertEquals(List.of("task-1"), failed);
     }
 
+    /**
+     * 返回正文只含执行标识和工具错误码，堆栈文本只出现在追踪出口里。断言失败则本测试失败。
+     */
     @Test
     void httpBodyHasExecutionIdAndCodeWithoutStack() {
         String executionId = UUID.randomUUID().toString();
@@ -101,6 +119,9 @@ class AsyncExceptionTest {
         assertTrue(stacks.get(0).contains("at "));
     }
 
+    /**
+     * 守卫里的动作必须跑在虚拟线程上。断言失败则本测试失败。
+     */
     @Test
     void guardRunsOnVirtualThread() {
         String executionId = UUID.randomUUID().toString();
@@ -112,6 +133,12 @@ class AsyncExceptionTest {
         assertTrue(virtual.get());
     }
 
+    /**
+     * 在限定时间内取回异步结果，并把包装异常还原成原来的运行时异常；等待被中断时重新置上中断标记。
+     *
+     * @param stage 待等待的异步阶段
+     * @return 阶段成功时的结果
+     */
     private static <T> T join(CompletionStage<T> stage) {
         try {
             return stage.toCompletableFuture().get(30, TimeUnit.SECONDS);

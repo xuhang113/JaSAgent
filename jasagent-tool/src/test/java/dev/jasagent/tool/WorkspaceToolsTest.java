@@ -10,10 +10,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 核对工作区工具的文件计数、路径边界、搜索和只读 shell。
+ */
 class WorkspaceToolsTest {
     @TempDir
     Path root;
 
+    /**
+     * 断言列目录时文件总数不含 .git 里的文件，但会列出工作区里的普通文件。
+     */
     @Test
     void listDirectoryCountsFiles() throws Exception {
         Files.writeString(root.resolve("a.txt"), "alpha");
@@ -28,6 +34,9 @@ class WorkspaceToolsTest {
         assertFalse(listed.contains("HEAD"), listed);
     }
 
+    /**
+     * 断言工作区内的文件能读到正文，逃出工作区的路径返回错误且不带出区外内容。
+     */
     @Test
     void readFileStaysInsideWorkspace() throws Exception {
         Files.writeString(root.resolve("note.txt"), "hello");
@@ -38,6 +47,9 @@ class WorkspaceToolsTest {
         assertFalse(escaped.contains("secret"), escaped);
     }
 
+    /**
+     * 断言 glob 能按扩展名找到 Java 文件，内容搜索能带回该文件的命中行。
+     */
     @Test
     void grepAndGlobFindTheFile() throws Exception {
         Files.writeString(root.resolve("Note.java"), "class Note {}");
@@ -47,6 +59,9 @@ class WorkspaceToolsTest {
         assertTrue(grep.contains("Note.java:1:"), grep);
     }
 
+    /**
+     * 断言只读命令可以免批准并列出文件，删除命令需要批准，高危命令不能免批准，且原文件仍在。
+     */
     @Test
     void readOnlyShellRunsAndDangerousShellDoesNot() throws Exception {
         Files.writeString(root.resolve("keep.txt"), "stay");
@@ -59,6 +74,9 @@ class WorkspaceToolsTest {
         assertFalse(WorkspaceTools.runsWithoutApproval("run_shell_command", "rm -rf /"));
     }
 
+    /**
+     * 断言工具定义保留认识的名字并保持顺序，不认识的检索工具名被跳过。
+     */
     @Test
     void definitionsCoverReadTools() {
         var tools = WorkspaceTools.definitions(java.util.List.of("list_directory", "rag.search", "clock"));

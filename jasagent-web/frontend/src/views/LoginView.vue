@@ -18,16 +18,26 @@
 </template>
 
 <script setup>
+/** 登录页。成功后进入会话控制台，失败只显示「登录失败」。 */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 
+/** 用来在登录成功后跳进会话页。 */
 const router = useRouter()
+/** 登录名草稿。 */
 const user = ref('')
+/** 口令草稿，只放在这次提交里。 */
 const password = ref('')
+/** 正在提交时禁用重复点击。 */
 const pending = ref(false)
+/** 失败提示。空字符串表示没有错误。 */
 const error = ref('')
 
+/**
+ * 用表单提交登录。口令不写进 JSON。
+ * 成功后进入首页；失败时留下「登录失败」，不抛出页面错误。
+ */
 async function submit() {
   pending.value = true
   error.value = ''

@@ -16,8 +16,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 本机进程入口。普通子命令交给命令行，其余情况在 127.0.0.1:18721 启动只扫应用、控制器和网页包的 Spring 服务。
+ */
 @SpringBootApplication(scanBasePackages = {"dev.jasagent.app", "dev.jasagent.controller", "dev.jasagent.web"})
 public class JasagentApplication {
+    /**
+     * 第一个参数是子命令时执行命令行并用退出码结束进程；否则绑定本机 18721 端口启动网页服务。
+     * 副作用：命令行路径调用 System.exit；服务路径启动 Spring，不返回。
+     *
+     * @param args 原始命令行。server 会被剥掉后再交给 Spring
+     */
     public static void main(String[] args) {
         if (dispatchesToCli(args)) {
             int code = CliCommands.run(args, Path.of(System.getProperty("user.home")));
@@ -28,10 +37,22 @@ public class JasagentApplication {
         application.run(serverArgs(args));
     }
 
+    /**
+     * 没有参数、第一个词是 server，或第一个词以横线开头时留给网页服务，其余非空参数走命令行。
+     *
+     * @param args 原始命令行
+     * @return 应交给命令行时为 true
+     */
     private static boolean dispatchesToCli(String[] args) {
         return args.length > 0 && !"server".equals(args[0]) && !args[0].startsWith("-");
     }
 
+    /**
+     * 若第一个词是 server，则丢掉它，把后面的参数交给 Spring；否则原样返回。
+     *
+     * @param args 原始命令行
+     * @return 网页服务实际使用的参数
+     */
     private static String[] serverArgs(String[] args) {
         if (args.length > 0 && "server".equals(args[0])) {
             return Arrays.copyOfRange(args, 1, args.length);
@@ -39,11 +60,26 @@ public class JasagentApplication {
         return args;
     }
 
+    /**
+     * 按家目录创建本机认证服务，供登录、用户和工作区选择使用。
+     *
+     * @param home 数据根目录，缺省是运行用户的主目录
+     * @return 绑定该目录的认证服务
+     */
     @Bean
     LocalAuthService localAuthService(@Value("${jasagent.home:${user.home}}") String home) {
         return new LocalAuthService(Path.of(home));
     }
 
+    /**
+     * 用认证服务和三项配置组装本机运行时。构造过程会尝试打开执行日志和检查点。
+     *
+     * @param localAuthService 已绑定家目录的认证服务
+     * @param agentpassEnabled 是否启用通行证，对应 jasagent.agentpass.enabled
+     * @param compressAt 上下文开始压缩的占用比例，对应 jasagent.context.compress-at
+     * @param deepseekThinking 是否打开 DeepSeek 思考，对应 jasagent.deepseek.thinking
+     * @return 可供执行和会话接口使用的运行时
+     */
     @Bean
     LocalRuntime localRuntime(LocalAuthService localAuthService,
                               @Value("${jasagent.agentpass.enabled:true}") String agentpassEnabled,
@@ -55,11 +91,23 @@ public class JasagentApplication {
                 "jasagent.deepseek.thinking", deepseekThinking));
     }
 
+    /**
+     * 把健康检查要的存储状态指到运行时的可达性判断。
+     *
+     * @param localRuntime 持有执行日志和检查点的运行时
+     * @return 存储状态探针
+     */
     @Bean
     StorageStatus storageStatus(LocalRuntime localRuntime) {
         return localRuntime::storageReachable;
     }
 
+    /**
+     * 把逗号分隔的工作区路径收成允许选择的列表。空白配置表示不预置路径。
+     *
+     * @param raw 逗号分隔的路径，各项会去掉首尾空白
+     * @return 允许进入的工作区
+     */
     @Bean
     WorkspaceList workspaceList(@Value("${jasagent.workspaces:}") String raw) {
         if (raw == null || raw.isBlank()) {

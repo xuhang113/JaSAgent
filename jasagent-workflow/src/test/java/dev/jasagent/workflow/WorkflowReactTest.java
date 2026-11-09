@@ -47,10 +47,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 覆盖工作流解析、消息顺序、react 工具循环、条件、检索、评估、中断和检查点。
+ */
 class WorkflowReactTest {
     @TempDir
     Path temp;
 
+    /**
+     * 文档使用不支持的节点类型时，断言解析以工作流错误失败。
+     */
     @Test
     void unknownNodeTypeRejected() {
         AgentException error = assertThrows(AgentException.class, () -> WorkflowParser.parse("""
@@ -59,6 +65,9 @@ class WorkflowReactTest {
         assertEquals(ErrorCode.WORKFLOW, error.code());
     }
 
+    /**
+     * 断言示例工作流的标识、规则、技能、预算，以及检索、react、评估和结束节点的字段都按文档还原。
+     */
     @Test
     void exampleAnswerWithToolParses() {
         WorkflowDefinition definition = WorkflowParser.parse(WorkflowParser.exampleAnswerWithTool());
@@ -104,6 +113,9 @@ class WorkflowReactTest {
         assertEquals("end", done.type());
     }
 
+    /**
+     * 断言发给模型的消息依次是系统提示、摘要、上一轮用户和上一轮助手，系统提示含角色、规则、技能和未完成任务。
+     */
     @Test
     void modelMessagesFollowFixedOrder() {
         List<ModelRequest> seen = new ArrayList<>();
@@ -124,6 +136,9 @@ class WorkflowReactTest {
         assertEquals("上一答", messages.get(3).content());
     }
 
+    /**
+     * 断言两条纠正紧挨在当前用户问题前面，后写的纠正更靠近问题。
+     */
     @Test
     void correctionSitsImmediatelyBeforeUser() {
         List<ModelRequest> seen = new ArrayList<>();
@@ -143,6 +158,9 @@ class WorkflowReactTest {
         assertEquals("先改口径", messages.get(userAt - 2).content());
     }
 
+    /**
+     * 模型先要时钟再给出正文时，断言时钟只执行一次，运行成功，输出是最终正文，思考为空。
+     */
     @Test
     void reactCompletesOneToolCall() {
         AtomicInteger clocks = new AtomicInteger();
@@ -171,6 +189,9 @@ class WorkflowReactTest {
         assertEquals("", run.thinking());
     }
 
+    /**
+     * 模型回复带思考时，断言运行结果同时保留正文和思考。
+     */
     @Test
     void reactKeepsModelThinkingBesideReply() {
         ChatModel chat = request -> CompletableFuture.completedFuture(new ModelReply("ready", List.of(), "先想一步"));
@@ -186,6 +207,9 @@ class WorkflowReactTest {
         assertEquals("先想一步", run.thinking());
     }
 
+    /**
+     * 模型一次要两个工具时，断言两个工具都进入执行后才进行下一步，并且运行成功。
+     */
     @Test
     void parallelToolCallsJoinBeforeNextStep() {
         CountDownLatch entered = new CountDownLatch(2);
@@ -218,6 +242,9 @@ class WorkflowReactTest {
         assertEquals(2, finished.get());
     }
 
+    /**
+     * 模型每次都继续要工具时，断言在步数上限处失败，错误码是最大步数，模型调用次数等于上限。
+     */
     @Test
     void maxStepsFailsWithWorkflowMaxSteps() {
         AtomicInteger calls = new AtomicInteger();
@@ -232,6 +259,9 @@ class WorkflowReactTest {
         assertEquals(2, calls.get());
     }
 
+    /**
+     * 一次工具往返后，断言插件阶段按开始、模型前后、工具前后、再次模型前后和结束出现。
+     */
     @Test
     void pluginPhasesAroundModelAndTool() {
         List<String> phases = new ArrayList<>();
@@ -258,6 +288,9 @@ class WorkflowReactTest {
                 "onNodeEnd"), phases);
     }
 
+    /**
+     * 插件失败策略是中断时，断言运行以插件错误失败，并且模型没有被调用。
+     */
     @Test
     void pluginFailureFailStopsNode() {
         AtomicInteger calls = new AtomicInteger();
@@ -272,6 +305,9 @@ class WorkflowReactTest {
         assertEquals(0, calls.get());
     }
 
+    /**
+     * 插件失败但没有要求中断时，断言运行仍然成功，并把插件错误留在结果里。
+     */
     @Test
     void pluginFailureDefaultsToContinue() {
         ChatModel chat = request -> CompletableFuture.completedFuture(reply("ok"));
@@ -281,6 +317,9 @@ class WorkflowReactTest {
         assertFalse(run.pluginErrors().isEmpty());
     }
 
+    /**
+     * 回答里的数字和引号对不上依据时，断言只重试一次模型，两次都留下依据核对来源，然后成功结束。
+     */
     @Test
     void groundingRetriesOnlyOnce() {
         List<ModelRequest> seen = new ArrayList<>();
@@ -298,6 +337,9 @@ class WorkflowReactTest {
         assertEquals("SUCCEEDED", run.status());
     }
 
+    /**
+     * 评估结果为假时，断言布尔条件走假分支，被跳过的工具没有执行。
+     */
     @Test
     void conditionBooleanFalseSkipsBranch() {
         AtomicInteger taken = new AtomicInteger();
@@ -321,6 +363,9 @@ class WorkflowReactTest {
         assertEquals("SUCCEEDED", run.status());
     }
 
+    /**
+     * 条件比较名不在允许名单里时，断言解析以工作流错误失败。
+     */
     @Test
     void conditionRejectsUnsupportedCompare() {
         AgentException error = assertThrows(AgentException.class, () -> WorkflowParser.parse("""
@@ -332,6 +377,9 @@ class WorkflowReactTest {
         assertEquals(ErrorCode.WORKFLOW, error.code());
     }
 
+    /**
+     * 上一输出与期望字符串相等时，断言走到 taken 工具，skipped 工具没有执行。
+     */
     @Test
     void conditionStringEqualitySelectsBranch() {
         List<String> called = new ArrayList<>();
@@ -344,6 +392,9 @@ class WorkflowReactTest {
         assertFalse(called.contains("skipped"));
     }
 
+    /**
+     * 上一输出达到数字阈值时，断言走到 taken 工具，skipped 工具没有执行。
+     */
     @Test
     void conditionNumericThresholdSelectsBranch() {
         List<String> called = new ArrayList<>();
@@ -356,6 +407,9 @@ class WorkflowReactTest {
         assertFalse(called.contains("skipped"));
     }
 
+    /**
+     * 子流程没有指定子工作流时，断言交给运行器的文档只有一个 react 节点，父运行输出是子流程结果。
+     */
     @Test
     void subagentsDefaultToReactOnlyWorkflow() {
         AtomicReference<String> child = new AtomicReference<>();
@@ -375,6 +429,9 @@ class WorkflowReactTest {
         assertEquals("child-result", run.output());
     }
 
+    /**
+     * 子流程写了子工作流标识时，断言该标识原样交给子流程运行器。
+     */
     @Test
     void subagentsPassChildWorkflowId() {
         AtomicReference<String> childId = new AtomicReference<>();
@@ -391,6 +448,9 @@ class WorkflowReactTest {
         assertEquals("child-flow", childId.get());
     }
 
+    /**
+     * 检索为空且节点不要求必须有结果时，断言检索执行了一次，运行仍然成功。
+     */
     @Test
     void retrieveEmptyDoesNotFailWhenOptional() {
         AtomicInteger calls = new AtomicInteger();
@@ -408,6 +468,9 @@ class WorkflowReactTest {
         assertEquals("SUCCEEDED", run.status());
     }
 
+    /**
+     * 评估未通过且节点不要求必须通过时，断言运行成功，并把未通过写进结果。
+     */
     @Test
     void evaluateFailureDoesNotFailWhenOptional() {
         AtomicInteger calls = new AtomicInteger();
@@ -426,6 +489,9 @@ class WorkflowReactTest {
         assertEquals(Boolean.FALSE, run.evaluationPassed());
     }
 
+    /**
+     * 遇到中断节点时断言先暂停且后续工具未执行；用另一引擎按同一请求恢复后，断言后续工具执行并成功。
+     */
     @Test
     void interruptSuspendsAndResumeContinues() {
         AtomicInteger after = new AtomicInteger();
@@ -455,6 +521,9 @@ class WorkflowReactTest {
         assertEquals(1, after.get());
     }
 
+    /**
+     * 后一个工具开始前，断言前一节点的检查点已经写入，且保存时间不晚于该工具开始之后。
+     */
     @Test
     void checkpointCommittedBeforeNextNode() throws Exception {
         Path database = temp.resolve("checkpoint-visible.db");
@@ -497,6 +566,9 @@ class WorkflowReactTest {
         assertEquals("SUCCEEDED", run.status());
     }
 
+    /**
+     * 断言运行结果里的图描述带有 LangGraph4j 的类型和版本。
+     */
     @Test
     void graphJsonComesFromLanggraphDsl() {
         WorkflowRun run = join(engine(null, null, null, null, null, null).execute(request("""
@@ -506,6 +578,9 @@ class WorkflowReactTest {
         assertTrue(run.graphDsl().contains("\"version\":\"1.0\""));
     }
 
+    /**
+     * 没有 JDBC 地址时，断言成功运行使用 MySQL 检查点保存器，并且没有创建请求里的本地库文件。
+     */
     @Test
     void defaultCheckpointSaverIsMysql() {
         Path database = temp.resolve("unused-default.db");
@@ -526,6 +601,9 @@ class WorkflowReactTest {
         assertFalse(Files.exists(database));
     }
 
+    /**
+     * 地址是 PostgreSQL 但库不可达时，断言运行失败细节里出现 Postgres 保存器，并且没有创建本地库文件。
+     */
     @Test
     void postgresUrlUsesPostgresSaver() {
         Path database = temp.resolve("should-not-exist.db");
@@ -546,6 +624,9 @@ class WorkflowReactTest {
         assertFalse(Files.exists(database));
     }
 
+    /**
+     * 断言图、检查点和追踪类都能加载，Spring 的上下文和聊天模型类不存在。
+     */
     @Test
     void classpathUsesLanggraphNotSpring() {
         assertLoads("org.bsc.langgraph4j.StateGraph");
@@ -558,6 +639,9 @@ class WorkflowReactTest {
         assertMissing("org.springframework.ai.chat.model.ChatModel");
     }
 
+    /**
+     * 模型还被挡住时，断言执行方法立刻返回未完成的阶段，放开后运行成功。
+     */
     @Test
     void executeReturnsIncompleteStage() throws Exception {
         CountDownLatch release = new CountDownLatch(1);
@@ -577,6 +661,9 @@ class WorkflowReactTest {
         assertEquals("SUCCEEDED", join(stage).status());
     }
 
+    /**
+     * 模型返回失败时，断言运行记录本身存在，状态为失败，错误码是模型错误。
+     */
     @Test
     void llmFailureIsNotNull() {
         ChatModel chat = request -> CompletableFuture.failedFuture(
@@ -588,6 +675,9 @@ class WorkflowReactTest {
         assertEquals("LLM", run.errorCode());
     }
 
+    /**
+     * 断言 react 节点发给模型的任务名就是 react。
+     */
     @Test
     void reactTaskNameIsReact() {
         List<ModelRequest> seen = new ArrayList<>();
@@ -596,21 +686,40 @@ class WorkflowReactTest {
         assertEquals("react", seen.get(0).task());
     }
 
+    /**
+     * 跑一个结束节点后，断言追踪里出现名为 evaluateNode 的 span。
+     */
     @Test
     void graphTraceSpanIsEvaluateNode() {
         List<SpanData> spans = new CopyOnWriteArrayList<>();
         SpanExporter exporter = new SpanExporter() {
+            /**
+             * 把这一批 span 收进测试列表。
+             *
+             * @param batch 导出器交来的 span
+             * @return 表示导出成功的结果
+             */
             @Override
             public CompletableResultCode export(Collection<SpanData> batch) {
                 spans.addAll(batch);
                 return CompletableResultCode.ofSuccess();
             }
 
+            /**
+             * 这个测试导出器没有单独缓冲，刷新直接算成功。
+             *
+             * @return 表示刷新成功的结果
+             */
             @Override
             public CompletableResultCode flush() {
                 return CompletableResultCode.ofSuccess();
             }
 
+            /**
+             * 关闭导出器。测试里没有需要释放的外部资源。
+             *
+             * @return 表示关闭成功的结果
+             */
             @Override
             public CompletableResultCode shutdown() {
                 return CompletableResultCode.ofSuccess();
@@ -634,6 +743,14 @@ class WorkflowReactTest {
         }
     }
 
+    /**
+     * 用临时 SQLite 文件、新的执行编号和给定文档装一份可执行请求。
+     *
+     * @param json 工作流文档
+     * @param input 用户输入
+     * @param context 提示上下文
+     * @return 指向该临时库的工作流请求
+     */
     private WorkflowRequest request(String json, String input, PromptContext context) {
         Path database = temp.resolve("workflow-" + System.nanoTime() + ".db");
         return new WorkflowRequest(
@@ -647,6 +764,17 @@ class WorkflowReactTest {
                 "jdbc:sqlite:" + database.toAbsolutePath());
     }
 
+    /**
+     * 用给定协作者装引擎。没给的协作者换成会拒绝模型、返回空工具、空插件、空检索、通过评估或空子流程的默认实现。
+     *
+     * @param chat 聊天入口；null 时换成不应被调用的失败实现
+     * @param tools 工具入口；null 时返回空输出
+     * @param plugins 插件入口；null 时什么都不做
+     * @param retriever 检索入口；null 时返回空命中
+     * @param evaluator 评估入口；null 时返回通过
+     * @param subagents 子流程入口；null 时返回空文本
+     * @return 装好的工作流引擎
+     */
     private LangGraphWorkflowEngine engine(
             ChatModel chat,
             ToolCaller tools,
@@ -663,6 +791,13 @@ class WorkflowReactTest {
                 subagents == null ? call -> CompletableFuture.completedFuture("") : subagents);
     }
 
+    /**
+     * 做一个会把每次请求记下来、并固定返回同一条回复的聊天模型。
+     *
+     * @param seen 收集模型请求的列表，方法返回的模型会向其中追加
+     * @param reply 每次都返回的回复
+     * @return 记录请求的聊天模型
+     */
     private static ChatModel recordingChat(List<ModelRequest> seen, ModelReply reply) {
         return request -> {
             seen.add(request);
@@ -670,18 +805,39 @@ class WorkflowReactTest {
         };
     }
 
+    /**
+     * 做一条没有工具调用的模型回复。
+     *
+     * @param content 回复正文
+     * @return 工具列表为空的回复
+     */
     private static ModelReply reply(String content) {
         return new ModelReply(content, List.of());
     }
 
+    /**
+     * 做一个每个阶段都失败的插件宿主。
+     *
+     * @return 调用即失败的插件宿主
+     */
     private static PluginHost failingPlugin() {
         return (PluginCall call) -> CompletableFuture.failedFuture(new IllegalStateException("插件炸了"));
     }
 
+    /**
+     * 做一份角色、规则、技能、任务、摘要、近几轮和纠正都空着的上下文。
+     *
+     * @return 空白提示上下文
+     */
     private static PromptContext blank() {
         return new PromptContext("", List.of(), List.of(), List.of(), "", List.of(), List.of());
     }
 
+    /**
+     * 做一份带角色、规则、技能、未完成任务、摘要、两轮对话和两条纠正的上下文。
+     *
+     * @return 用于检查消息顺序的提示上下文
+     */
     private static PromptContext richContext() {
         return new PromptContext(
                 "助手",
@@ -693,10 +849,23 @@ class WorkflowReactTest {
                 List.of(new CorrectionNote("n1", "USER", "先改口径"), new CorrectionNote("n2", "USER", "再改口径")));
     }
 
+    /**
+     * 返回一步、不核对依据的 react 文档。
+     *
+     * @return 工作流 JSON
+     */
     private static String promptJson() {
         return reactJson(1, false);
     }
 
+    /**
+     * 拼一份带步数上限、依据核对开关和工具名单的 react 文档，后面接一个结束节点。
+     *
+     * @param maxSteps react 节点的最大步数
+     * @param grounding 是否打开依据核对
+     * @param tools 允许的工具名
+     * @return 工作流 JSON
+     */
     private static String reactJson(int maxSteps, boolean grounding, String... tools) {
         StringBuilder toolList = new StringBuilder();
         for (int index = 0; index < tools.length; index++) {
@@ -713,6 +882,12 @@ class WorkflowReactTest {
                 """.formatted(maxSteps, toolList, grounding);
     }
 
+    /**
+     * 拼一份挂了审计插件的 react 文档，可以附上插件失败策略。
+     *
+     * @param pluginFailure 失败策略；null 表示不写该字段
+     * @return 工作流 JSON
+     */
     private static String pluginReact(String pluginFailure) {
         String failure = pluginFailure == null ? "" : ",\"pluginFailure\":\"" + pluginFailure + "\"";
         return """
@@ -723,6 +898,13 @@ class WorkflowReactTest {
                 """.formatted(failure);
     }
 
+    /**
+     * 拼一份先由工具给出值、再按比较选择 taken 或 skipped 的文档。
+     *
+     * @param compare 条件比较名
+     * @param value 期望值
+     * @return 工作流 JSON
+     */
     private static String conditionJson(String compare, String value) {
         return """
                 {"id":"compare-run","nodes":[
@@ -735,6 +917,13 @@ class WorkflowReactTest {
                 """.formatted(compare, value);
     }
 
+    /**
+     * 找正文匹配的用户消息下标。
+     *
+     * @param messages 发给模型的消息
+     * @param content 要找的用户正文
+     * @return 下标；没有这条消息时为 -1
+     */
     private static int indexOfUser(List<ChatMessage> messages, String content) {
         for (int index = 0; index < messages.size(); index++) {
             if ("user".equals(messages.get(index).role()) && content.equals(messages.get(index).content())) {
@@ -744,14 +933,29 @@ class WorkflowReactTest {
         return -1;
     }
 
+    /**
+     * 断言这个可选布尔不是真。空值也视为满足。
+     *
+     * @param value 节点上的可选布尔
+     */
     private static void assertNotEqualsTrue(Boolean value) {
         assertNotEqualsBooleanTrue(value);
     }
 
+    /**
+     * 断言可选布尔为 null 或假。
+     *
+     * @param value 要检查的布尔
+     */
     private static void assertNotEqualsBooleanTrue(Boolean value) {
         assertTrue(value == null || !value);
     }
 
+    /**
+     * 断言类名能被当前类加载器加载，加载不到时让测试失败。
+     *
+     * @param className 期望存在的类名
+     */
     private static void assertLoads(String className) {
         try {
             Class.forName(className);
@@ -760,10 +964,22 @@ class WorkflowReactTest {
         }
     }
 
+    /**
+     * 断言类名不在当前类路径上。
+     *
+     * @param className 期望不存在的类名
+     */
     private static void assertMissing(String className) {
         assertThrows(ClassNotFoundException.class, () -> Class.forName(className));
     }
 
+    /**
+     * 在 30 秒内等到阶段结束。运行时异常和错误原样抛出，中断会恢复中断标记。
+     *
+     * @param <T> 阶段结果的类型
+     * @param stage 要等待的异步阶段
+     * @return 阶段成功时的结果
+     */
     private static <T> T join(CompletionStage<T> stage) {
         try {
             return stage.toCompletableFuture().get(30, TimeUnit.SECONDS);

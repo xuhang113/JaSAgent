@@ -1,3 +1,10 @@
+/**
+ * 调用本机控制台接口。JSON 体会自动序列化，失败时抛出带状态码和 errorCode 的错误。
+ *
+ * @param path 以 / 开头的接口路径
+ * @param options method、headers、body；body 可以是对象、字符串或表单
+ * @return 解析后的 JSON；空响应返回 null
+ */
 export async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) }
   let body = options.body

@@ -16,7 +16,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 核对执行根跨度、子跨度共用链路，以及默认不导出、配置端点后才启用 OTLP。
+ */
 class ExecutionOtelTest {
+    /**
+     * 一次执行下应当出现的子跨度名称，覆盖调度、节点、模型、工具、插件、检索和评估。
+     */
     private static final List<String> CHILD_SPANS = List.of(
             "agent.schedule",
             "workflow.node",
@@ -28,6 +34,9 @@ class ExecutionOtelTest {
             "rag.rerank",
             "eval.run");
 
+    /**
+     * 根跨度必须使用执行跨度名称，并把执行标识写进属性。断言失败则本测试失败。
+     */
     @Test
     void rootSpanNameAndAttribute() {
         String executionId = UUID.randomUUID().toString();
@@ -39,6 +48,9 @@ class ExecutionOtelTest {
         }
     }
 
+    /**
+     * 列出的每个子跨度都要挂在同一条链路和同一个根跨度下，并带上执行标识。断言失败则本测试失败。
+     */
     @Test
     void childSpansShareSavedTraceId() {
         String executionId = UUID.randomUUID().toString();
@@ -66,6 +78,9 @@ class ExecutionOtelTest {
         }
     }
 
+    /**
+     * 跨进虚拟线程后仍能读到这条执行的链路标识，调用方线程本身不留下当前跨度。断言失败则本测试失败。
+     */
     @Test
     void asyncHandoffKeepsTraceId() {
         String executionId = UUID.randomUUID().toString();
@@ -82,6 +97,9 @@ class ExecutionOtelTest {
         }
     }
 
+    /**
+     * 不给端点时不得创建导出器。断言失败则本测试失败。
+     */
     @Test
     void defaultDoesNotExportOtlp() {
         try (ExecutionTelemetry telemetry = ExecutionTelemetry.open(Map.of())) {
@@ -90,6 +108,9 @@ class ExecutionOtelTest {
         }
     }
 
+    /**
+     * 给出端点后必须启用 HTTP 上的 OTLP 跨度导出器。断言失败则本测试失败。
+     */
     @Test
     void endpointEnablesOtlpExporter() {
         try (ExecutionTelemetry telemetry = ExecutionTelemetry.open(Map.of(
@@ -99,6 +120,12 @@ class ExecutionOtelTest {
         }
     }
 
+    /**
+     * 在限定时间内取回异步结果，并把包装异常还原成原来的运行时异常；等待被中断时重新置上中断标记。
+     *
+     * @param stage 待等待的异步阶段
+     * @return 阶段成功时的结果
+     */
     private static <T> T join(CompletionStage<T> stage) {
         try {
             return stage.toCompletableFuture().get(30, TimeUnit.SECONDS);

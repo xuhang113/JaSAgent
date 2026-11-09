@@ -15,11 +15,29 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+/**
+ * 按令牌预算组装上下文；占用达到压缩线时，只摘要较早的非工具轮次，并在仍然放不下时折叠旧工具结果和技能正文。
+ */
 public final class ContextWindow {
+    /**
+     * 未单独指定时，一段上下文允许占用的令牌数。
+     */
     public static final int DEFAULT_BUDGET_TOKENS = 8000;
+    /**
+     * 缺省压缩线：估算占用达到预算的 85% 时开始压缩。
+     */
     public static final double DEFAULT_COMPRESS_AT = 0.85;
+    /**
+     * 压缩线配置键，值必须是大于 0 且不超过 1 的小数。
+     */
     public static final String COMPRESS_AT = "jasagent.context.compress-at";
+    /**
+     * 压缩时原样保留的最近消息条数，更早的非工具消息才送给摘要。
+     */
     private static final int RECENT_TURNS = 4;
+    /**
+     * 旧工具结果放不进预算时替换成的占位文本。
+     */
     private static final String COLLAPSED_TOOL = "tool: [collapsed]";
 
     private final ChatModel model;
@@ -28,10 +46,21 @@ public final class ContextWindow {
     private ContextPrepared published;
     private boolean compressing;
 
+    /**
+     * 用缺省压缩线创建上下文窗口。
+     *
+     * @param model 占用达到压缩线时用来摘要旧对话的模型
+     */
     public ContextWindow(ChatModel model) {
         this(model, DEFAULT_COMPRESS_AT);
     }
 
+    /**
+     * 绑定摘要模型和压缩线。模型为空，或压缩线不是 (0, 1] 内的有限数时失败。
+     *
+     * @param model 用来摘要旧对话的模型
+     * @param compressAt 触发压缩的预算占比
+     */
     public ContextWindow(ChatModel model, double compressAt) {
         if (model == null) {
             throw new AgentException(ErrorCode.INTERNAL, "ChatModel");
@@ -43,6 +72,12 @@ public final class ContextWindow {
         this.compressAt = compressAt;
     }
 
+    /**
+     * 按与准备时相同的渲染规则估算这段输入会占多少令牌。
+     *
+     * @param input 待估算的上下文输入；空则占零
+     * @return 按字符长度折算的令牌数
+     */
     public static int estimatedTokens(ContextInput input) {
         if (input == null) {
             return 0;
@@ -50,6 +85,12 @@ public final class ContextWindow {
         return estimate(render(input, new ArrayList<>(input.turns()), new ArrayList<>(input.skills()), ""));
     }
 
+    /**
+     * 从配置读取压缩线。没有该键时用缺省 0.85；有键但空白、非数字或越界时失败。
+     *
+     * @param configuration 配置表；空则用缺省压缩线
+     * @return 大于 0 且不超过 1 的压缩线
+     */
     public static double compressAt(Map<String, String> configuration) {
         if (configuration == null || !configuration.containsKey(COMPRESS_AT)) {
             return DEFAULT_COMPRESS_AT;
@@ -69,18 +110,34 @@ public final class ContextWindow {
         }
     }
 
+    /**
+     * 返回最近一次已经发布的上下文。压缩尚未完成时仍是上一份。
+     *
+     * @return 已发布的上下文；还没有准备过时为空
+     */
     public ContextPrepared published() {
         synchronized (publishLock) {
             return published;
         }
     }
 
+    /**
+     * 判断是否有一次摘要调用正在进行、尚未发布新上下文。
+     *
+     * @return 正在等待摘要时为真
+     */
     public boolean compressing() {
         synchronized (publishLock) {
             return compressing;
         }
     }
 
+    /**
+     * 渲染上下文。未到压缩线时直接发布；到了则摘要最近几条之前的非工具消息，完成前不替换已发布内容。执行标识为空或预算小于 1 时失败。
+     *
+     * @param input 本轮要准备的上下文
+     * @return 完成后发布的消息和摘要
+     */
     public CompletionStage<ContextPrepared> prepare(ContextInput input) {
         if (input == null || input.executionId() == null || input.executionId().isBlank()) {
             return CompletableFuture.failedFuture(new AgentException(ErrorCode.INTERNAL, "executionId"));
@@ -137,10 +194,22 @@ public final class ContextWindow {
         });
     }
 
+    /**
+     * 判断估算令牌是否已经达到预算乘以压缩线。
+     *
+     * @param estimated 当前渲染的估算令牌
+     * @param budget 本轮预算
+     * @return 达到或超过压缩线时为真
+     */
     private boolean reached(int estimated, int budget) {
         return estimated >= budget * compressAt;
     }
 
+    /**
+     * 发布新的上下文并清掉正在压缩的标记。副作用是替换对外可见的已发布结果。
+     *
+     * @param prepared 这次准备完成的消息和摘要
+     */
     private void publish(ContextPrepared prepared) {
         synchronized (publishLock) {
             published = prepared;
@@ -148,18 +217,35 @@ public final class ContextWindow {
         }
     }
 
+    /**
+     * 标成正在等待摘要。副作用是让查询看到压缩尚未完成，已发布内容保持不变。
+     */
     private void markCompressing() {
         synchronized (publishLock) {
             compressing = true;
         }
     }
 
+    /**
+     * 清掉正在压缩的标记。副作用是压缩失败后不再显示为进行中，已发布内容也不变。
+     */
     private void clearCompressing() {
         synchronized (publishLock) {
             compressing = false;
         }
     }
 
+    /**
+     * 用保留的工具消息、最近轮次和摘要重新渲染；仍超过预算时先把旧工具结果换成占位，再不行就去掉技能正文。
+     *
+     * @param input 提供角色、规则、任务板、订正、当前用户和执行标识
+     * @param keptTools 最近轮次之前留下来的工具消息
+     * @param recent 原样保留的最近消息
+     * @param skills 初始仍带正文的技能
+     * @param summary 摘要文本，没有时为空
+     * @param budget 本轮令牌上限
+     * @return 尽量放进预算后的消息和实际留下的摘要
+     */
     private static ContextPrepared reduce(
             ContextInput input,
             List<ChatMessage> keptTools,
@@ -188,6 +274,15 @@ public final class ContextWindow {
         return new ContextPrepared(render(input, conversation, skills, kept), kept);
     }
 
+    /**
+     * 按系统提示、摘要、对话轮次、订正和当前用户的顺序排好消息。
+     *
+     * @param input 提供系统提示素材、订正和当前用户
+     * @param turns 要保留的对话，包含工具消息
+     * @param skills 写进系统提示的技能
+     * @param summary 非空时插在系统提示之后
+     * @return 排好序的消息
+     */
     private static List<ChatMessage> render(ContextInput input, List<ChatMessage> turns, List<SkillText> skills, String summary) {
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(ChatMessage.text("system", system(input, skills)));
@@ -206,6 +301,13 @@ public final class ContextWindow {
         return messages;
     }
 
+    /**
+     * 拼出含角色、规则、未完成任务、执行标识和技能的系统提示。
+     *
+     * @param input 角色、规则、任务板和执行标识的来源
+     * @param skills 要写进提示的技能；空技能会被跳过
+     * @return 系统提示全文
+     */
     private static String system(ContextInput input, List<SkillText> skills) {
         StringBuilder builder = new StringBuilder();
         builder.append("角色：").append(input.role()).append('\n');
@@ -228,6 +330,12 @@ public final class ContextWindow {
         return builder.toString();
     }
 
+    /**
+     * 从摘要回复里取出正文。
+     *
+     * @param response 模型的摘要回复
+     * @return 回复正文；没有消息时为空串
+     */
     private static String summaryText(ChatResponse response) {
         if (response == null || response.message() == null || response.message().content() == null) {
             return "";
@@ -235,6 +343,12 @@ public final class ContextWindow {
         return response.message().content();
     }
 
+    /**
+     * 把每条消息的字符数除以 4 后向上至少算 1 个令牌，用来和预算比较。
+     *
+     * @param messages 已经排好的消息
+     * @return 估算令牌数
+     */
     private static int estimate(List<ChatMessage> messages) {
         int tokens = 0;
         for (ChatMessage message : messages) {

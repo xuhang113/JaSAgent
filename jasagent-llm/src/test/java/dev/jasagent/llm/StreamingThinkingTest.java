@@ -25,12 +25,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 核对流式思考会在整段响应结束前送达，并且流里的工具调用仍能被收回。
+ */
 class StreamingThinkingTest {
+    /**
+     * 每个测试结束后卸掉思考出口，避免增量留到下一个测试。
+     */
     @AfterEach
     void clearSink() {
         ThinkingLive.clear();
     }
 
+    /**
+     * 断言第一段思考在服务端写完剩余流之前就已经送达，最终正文、思考和请求里的流式与思考开关都符合约定。
+     */
     @Test
     void thinkingDeltasArriveBeforeTheStreamEnds() throws Exception {
         AtomicReference<String> seen = new AtomicReference<>("");
@@ -86,6 +95,9 @@ class StreamingThinkingTest {
         }
     }
 
+    /**
+     * 流里先给思考、再分片给工具调用时，断言最终同时保留思考和完整的工具参数。
+     */
     @Test
     void streamedToolCallIsStillReturned() throws Exception {
         ThinkingLive.bind((executionId, text) -> {
@@ -123,6 +135,12 @@ class StreamingThinkingTest {
         }
     }
 
+    /**
+     * 用本地流式服务和打开思考的 DeepSeek 配置发起一次聊天。
+     *
+     * @param server 已经启动、按事件流返回补全的本地服务
+     * @return 客户端整理后的聊天结果
+     */
     private static LlmChatResponse ask(HttpServer server) {
         int port = server.getAddress().getPort();
         OpenAiCallConfig config = new OpenAiCallConfig(
@@ -147,10 +165,23 @@ class StreamingThinkingTest {
                 .join();
     }
 
+    /**
+     * 把一段事件流文本按 UTF-8 写进响应体。
+     *
+     * @param out 当前 HTTP 响应的输出流
+     * @param text 要写出的事件流片段
+     */
     private static void write(OutputStream out, String text) throws java.io.IOException {
         out.write(text.getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * 拼一条只带一个增量字段的事件流数据帧。
+     *
+     * @param field 增量对象里的字段名
+     * @param value 该字段的文本
+     * @return 以 data 开头、并以空行结束的一帧
+     */
     private static String chunk(String field, String value) {
         return """
                 data: {"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"%s":"%s"}}]}

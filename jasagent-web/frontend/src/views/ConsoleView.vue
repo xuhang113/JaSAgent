@@ -134,6 +134,7 @@
               <strong>用户</strong>
               <div>{{ message.text }}</div>
             </div>
+            <!-- 最后一轮思考默认收起，只显示一行「思考」。 -->
             <details v-if="showThinking(message, index)" class="thinking">
               <summary @click="foldDetails">思考</summary>
               <div class="thinking-body">{{ turnThinking(message) }}</div>
@@ -325,11 +326,13 @@
 </template>
 
 <script setup>
+/** 会话页：中间只放用户气泡、最后一轮思考和助手正文，Trace 在右栏。 */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '../api'
 
+/** 右栏页签：任务、Trace、工具、上下文、日志。id 用来切换面板，label 是按钮文字。 */
 const railTabs = [
   { id: 'tasks', label: '任务' },
   { id: 'trace', label: 'Trace' },
@@ -337,61 +340,109 @@ const railTabs = [
   { id: 'context', label: '上下文' },
   { id: 'logs', label: '日志' }
 ]
+/** 仍在排队或执行的状态，归到任务列表的「进行中」。 */
 const LIVE_STATUS = new Set(['RUNNING', 'QUEUED', 'PENDING', 'ACCEPTED'])
+/** 停住或失败的状态，归到任务列表的「待看」。 */
 const REVIEW_STATUS = new Set(['SUSPENDED', 'FAILED'])
+/** 已经结束的状态，归到任务列表的「完成」。 */
 const DONE_STATUS = new Set(['SUCCEEDED', 'CANCELLED'])
+/** 顶栏抽屉菜单。id 决定打开哪一块，label 是菜单文字。 */
 const railDrawers = [
   { id: 'retrieval', label: '溯源' },
   { id: 'evaluation', label: '评估' },
   { id: 'passes', label: '通行证' },
   { id: 'cli', label: 'CLI' }
 ]
+/** 路由实例，退出时跳回登录页。 */
 const router = useRouter()
+/** 当前路由。地址里带执行编号时，进来就查询那一次执行。 */
 const route = useRoute()
+/** 当前登录名，显示在左上角。 */
 const loginName = ref('')
+/** 正在编辑的工作区路径。 */
 const workspace = ref('')
+/** 可选工作区路径。 */
 const workspaceOptions = ref([])
+/** 左侧会话列表。 */
 const sessions = ref([])
+/** 中间栏正在看的会话编号。空字符串表示还没选。 */
 const activeSessionId = ref('')
+/** 当前会话标题，显示在对话顶栏。 */
 const activeTitle = ref('')
+/** 正在改名的会话编号。空字符串表示没有进入改名。 */
 const editingSessionId = ref('')
+/** 改名输入框里的草稿。 */
 const editingTitle = ref('')
+/** 按 Esc 取消改名时，挡住紧接着的 blur，避免又把标题存回去。 */
 const skipRenameBlur = ref(false)
+/** 当前会话的子 agent。 */
 const agents = ref([])
+/** 当前会话的纠正记录。 */
 const corrections = ref([])
+/** 可提交的工作流。 */
 const workflows = ref([])
+/** 发送和 CLI 提交使用的工作流编号。 */
 const workflowId = ref('answer-with-tool')
+/** 斜杠菜单里的 skill。 */
 const skills = ref([])
+/** CLI 抽屉的执行输入。 */
 const cliInput = ref('请回答')
+/** 当前关注的执行编号，供中止、恢复和右栏查询使用。不显示在对话气泡里。 */
 const executionId = ref('')
+/** 当前执行的日志文本。 */
 const logs = ref('')
+/** 这一轮 SSE status 事件的原文，显示在日志页。 */
 const sseLines = ref([])
+/** 输入框草稿。 */
 const draft = ref('')
+/** 模型目录。每一项含 provider、id、label。 */
 const models = ref([])
+/** 当前会话模型，形如 provider|id。 */
 const sessionModel = ref('deepseek|deepseek-flash')
+/** 纠正输入框草稿。 */
 const noteText = ref('')
+/** 当前会话的用户消息。每一项对应一轮。 */
 const messages = ref([])
+/** 当前执行的详情：状态、工具、通行证、评估。 */
 const detail = ref({})
+/** 当前会话的上下文预算、规则和 skill。 */
 const context = ref({})
+/** 当前关注的执行的时间线消息。 */
 const timeline = ref([])
+/** 按执行编号缓存的时间线，供每一轮的 Trace 使用。 */
 const timelines = ref({})
+/** 这次页面里是否已经选定过工作区。 */
 const workspaceReady = ref(false)
+/** 左栏宽度，单位像素。 */
 const sessionWidth = ref(260)
+/** 右栏宽度，单位像素。 */
 const railWidth = ref(320)
+/** 正在拖的分隔条。session 是左栏，rail 是右栏，空字符串表示没在拖。 */
 const resizing = ref('')
+/** 右栏当前页签。选中会话后回到 tasks。 */
 const railTab = ref('tasks')
+/** 打开的抽屉编号。空字符串表示抽屉关着。 */
 const drawer = ref('')
+/** 顶栏抽屉菜单是否展开。 */
 const drawerMenu = ref(false)
+/** 「全部」子 agent 列表是否展开。 */
 const agentListOpen = ref(false)
+/** 展开摘要的任务行编号。空字符串表示都收着。 */
 const openTaskId = ref('')
+/** detail 对应的执行编号，避免把别的执行状态套到当前行上。 */
 const detailExecutionId = ref('')
+/** 收起 details 的定时器，离开页面时清掉。 */
 const foldTimers = []
+/** 当前执行的 SSE 连接。换执行或离开页面时关掉。 */
 let source = null
+/** 执行进行中时每秒补拉详情和时间线的定时器编号。 */
 let poll = 0
 
+/** 三列宽度。左右两栏可拖，中间吃掉剩余空间。 */
 const layoutStyle = computed(() => ({
   gridTemplateColumns: sessionWidth.value + 'px 8px minmax(0, 1fr) 8px ' + railWidth.value + 'px'
 }))
+/** 顶栏上的模型名。目录里有就用标签，否则用模型 id。 */
 const currentModelLabel = computed(() => {
   const match = models.value.find((item) => item.provider + '|' + item.id === sessionModel.value)
   if (match) {
@@ -399,11 +450,14 @@ const currentModelLabel = computed(() => {
   }
   return splitModel(sessionModel.value).id
 })
+/** 日志页里的 SSE 原文，一行一个事件。 */
 const sseText = computed(() => sseLines.value.join('\n'))
+/** 输入框末尾的 / 查询。没有斜杠时是 null，用来决定要不要弹出 skill。 */
 const slashQuery = computed(() => {
   const matched = draft.value.match(/(?:^|\s)\/([^\s]*)$/)
   return matched ? matched[1] : null
 })
+/** 按斜杠后面的文字过滤 skill。 */
 const filteredSkills = computed(() => {
   if (slashQuery.value === null) {
     return []
@@ -415,10 +469,12 @@ const filteredSkills = computed(() => {
     return name.includes(query) || description.includes(query)
   })
 })
+/** 当前抽屉标题。没有打开时是空字符串。 */
 const drawerTitle = computed(() => {
   const found = railDrawers.find((item) => item.id === drawer.value)
   return found ? found.label : ''
 })
+/** 把检索结果摊成一行行溯源。没有命中时用原因占一行。 */
 const retrievalRows = computed(() => {
   const rows = []
   for (const retrieval of detail.value.retrievals || []) {
@@ -441,7 +497,9 @@ const retrievalRows = computed(() => {
   }
   return rows
 })
+/** 仍在执行的子 agent，挂在对话上方。 */
 const liveAgents = computed(() => agents.value.filter((agent) => agentIsLive(agent)))
+/** 右栏 Trace。每一轮默认收起，里面是思考、工具和回复步骤。 */
 const traceTurns = computed(() => {
   const turns = []
   messages.value.forEach((message, index) => {
@@ -457,6 +515,7 @@ const traceTurns = computed(() => {
   })
   return turns
 })
+/** 右栏任务。按进行中、待看、完成分组，没有行的组不显示。 */
 const taskGroups = computed(() => {
   const rows = []
   const covered = new Set()
@@ -504,6 +563,7 @@ const taskGroups = computed(() => {
   return groups.filter((group) => group.rows.length)
 })
 
+/** 进入页面时读取登录信息、模型、工作流、skill 和会话。地址上有执行编号就接着查它。 */
 onMounted(async () => {
   await loadProfile()
   await loadModels()
@@ -514,6 +574,7 @@ onMounted(async () => {
   }
 })
 
+/** 离开页面时关掉 SSE、停止轮询，并清掉折叠动画的定时器。 */
 onBeforeUnmount(() => {
   closeStream()
   window.clearInterval(poll)
@@ -522,15 +583,32 @@ onBeforeUnmount(() => {
   }
 })
 
+/**
+ * 切换右栏页签，并顺手关上抽屉菜单。
+ *
+ * @param id 页签编号：tasks、trace、tools、context、logs
+ */
 function selectRailTab(id) {
   railTab.value = id
   drawerMenu.value = false
 }
 
+/**
+ * 把状态收成大写，空值当成空字符串。
+ *
+ * @param status 执行或子 agent 的原始状态
+ * @return 大写状态
+ */
 function normalizeStatus(status) {
   return String(status || '').toUpperCase()
 }
 
+/**
+ * 优先用这条执行已经拉到的状态，而不是子 agent 身上的旧状态。
+ *
+ * @param id 执行编号
+ * @return 已知状态；查不到时是空字符串
+ */
 function knownExecutionStatus(id) {
   const message = messages.value.find((item) => item.executionId === id)
   if (message && message.status) {
@@ -542,10 +620,23 @@ function knownExecutionStatus(id) {
   return ''
 }
 
+/**
+ * 展示用状态。执行详情里有就用详情，否则用调用方给的兜底值。
+ *
+ * @param fallback 子 agent 或消息上的状态
+ * @param id 执行编号
+ * @return 大写状态
+ */
 function resolvedStatus(fallback, id) {
   return knownExecutionStatus(id) || normalizeStatus(fallback)
 }
 
+/**
+ * 把状态分进任务组。
+ *
+ * @param status 原始或已解析的状态
+ * @return active、review 或 done
+ */
 function taskBucket(status) {
   const value = normalizeStatus(status)
   if (LIVE_STATUS.has(value)) {
@@ -560,10 +651,22 @@ function taskBucket(status) {
   return 'review'
 }
 
+/**
+ * 这个子 agent 是否还在执行。
+ *
+ * @param agent 子 agent
+ * @return 进行中时为 true
+ */
 function agentIsLive(agent) {
   return taskBucket(resolvedStatus(agent.status, agent.executionId)) === 'active'
 }
 
+/**
+ * 把标题收成一行，超过 28 字加省略号。
+ *
+ * @param value 原始标题或用户原文
+ * @return 展示用短标题
+ */
 function shortTitle(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
   if (!text) {
@@ -575,6 +678,12 @@ function shortTitle(value) {
   return text.slice(0, 28) + '…'
 }
 
+/**
+ * 任务行展开后的摘要：角色、错误、输出摘录和执行编号。
+ *
+ * @param row 任务行
+ * @return 多行文本
+ */
 function taskSummary(row) {
   const lines = []
   if (row.agent) {
@@ -595,15 +704,26 @@ function taskSummary(row) {
   return lines.join('\n')
 }
 
+/** 展开或收起全部子 agent 列表。 */
 function toggleAgentList() {
   agentListOpen.value = !agentListOpen.value
 }
 
+/**
+ * 从全部列表里选一个子 agent，并让右栏去看它的执行。
+ *
+ * @param agent 子 agent
+ */
 function pickAgent(agent) {
   agentListOpen.value = false
   openAgent(agent)
 }
 
+/**
+ * 展开或收起一条任务，并加载它的执行详情和时间线。
+ *
+ * @param row 任务行
+ */
 function toggleTask(row) {
   openTaskId.value = openTaskId.value === row.id ? '' : row.id
   if (!row.executionId) {
@@ -614,19 +734,32 @@ function toggleTask(row) {
   loadTimeline(row.executionId).catch(() => {})
 }
 
+/** 展开或收起顶栏抽屉菜单。 */
 function toggleDrawerMenu() {
   drawerMenu.value = !drawerMenu.value
 }
 
+/**
+ * 打开一块抽屉。
+ *
+ * @param name 抽屉编号：retrieval、evaluation、passes、cli
+ */
 function openDrawer(name) {
   drawer.value = name
   drawerMenu.value = false
 }
 
+/** 关掉抽屉。 */
 function closeDrawer() {
   drawer.value = ''
 }
 
+/**
+ * 收起 details。第一次点击仍交给浏览器展开；已经打开时用 0.2 秒收回。
+ * 思考和 Trace 步骤都走这里，所以默认不带 open。
+ *
+ * @param event summary 的点击事件
+ */
 function foldDetails(event) {
   const details = event.currentTarget && event.currentTarget.parentElement
   if (!details) {
@@ -651,6 +784,12 @@ function foldDetails(event) {
   }, 200))
 }
 
+/**
+ * 开始拖分隔条。
+ *
+ * @param event 按下时的鼠标事件，用 clientX 当起点
+ * @param key session 拖左栏，rail 拖右栏
+ */
 function startResize(event, key) {
   resizing.value = key
   const startX = event.clientX
@@ -673,6 +812,12 @@ function startResize(event, key) {
   window.addEventListener('mouseup', up)
 }
 
+/**
+ * 取出这一轮缓存的时间线。
+ *
+ * @param message 会话消息
+ * @return 时间线行；缺少执行编号时是空数组
+ */
 function turnRows(message) {
   if (!message || !message.executionId) {
     return []
@@ -680,10 +825,24 @@ function turnRows(message) {
   return timelines.value[message.executionId] || []
 }
 
+/**
+ * 只有最后一轮、并且真有思考文字时，才在正文上面放思考块。
+ *
+ * @param message 会话消息
+ * @param index 它在消息列表里的位置
+ * @return 要不要渲染思考
+ */
 function showThinking(message, index) {
   return index === messages.value.length - 1 && !!turnThinking(message)
 }
 
+/**
+ * 把工具结果或思考收成一行摘要，避免 Trace 里铺开全文。
+ *
+ * @param text 原文
+ * @param limit 最多保留的字数，默认 72
+ * @return 单行摘要；空文本返回空字符串
+ */
 function brief(text, limit = 72) {
   const flat = String(text || '').replace(/\s+/g, ' ').trim()
   if (!flat) {
@@ -695,6 +854,12 @@ function brief(text, limit = 72) {
   return flat.slice(0, limit) + '…'
 }
 
+/**
+ * 把耗时收成「14 ms」或「1.2 s」。
+ *
+ * @param value 毫秒；缺失或不是数字时不显示
+ * @return 展示文字；不能显示时是空字符串
+ */
 function formatElapsed(value) {
   if (value == null || value === '') {
     return ''
@@ -713,6 +878,12 @@ function formatElapsed(value) {
   return Math.round(seconds) + ' s'
 }
 
+/**
+ * 工具步骤点开后的全文：有参数时先写参数，再写结果。
+ *
+ * @param row 类型为 tool 的时间线行
+ * @return 折叠体内的文本
+ */
 function toolBody(row) {
   const args = String((row && row.arguments) || '').trim()
   const content = String((row && row.content) || '')
@@ -722,6 +893,13 @@ function toolBody(row) {
   return '参数\n' + args + '\n\n结果\n' + content
 }
 
+/**
+ * 做一条思考步骤。摘要只有一行，全文留在 body。
+ *
+ * @param text 思考全文
+ * @param elapsed 已经格式化的耗时，没有时传空字符串
+ * @return Trace 步骤
+ */
 function thinkingStep(text, elapsed) {
   return {
     kind: 'thinking',
@@ -732,6 +910,12 @@ function thinkingStep(text, elapsed) {
   }
 }
 
+/**
+ * 把一条时间线收成 Trace 步骤。系统提示和用户原文不单列，文件全文只进 body。
+ *
+ * @param rows 时间线行
+ * @return 步骤数组
+ */
 function traceSteps(rows) {
   const steps = []
   let sawThinking = false
@@ -775,6 +959,13 @@ function traceSteps(rows) {
   return steps
 }
 
+/**
+ * 把 SSE 里还在长的思考补进步骤。已经记进时间线的不再重复。
+ *
+ * @param steps 已经从时间线做出的步骤
+ * @param live 这条消息上最新的思考全文
+ * @return 补过实时思考的步骤
+ */
 function absorbLive(steps, live) {
   const text = cleanThinking(live)
   if (!text) {
@@ -806,6 +997,12 @@ function absorbLive(steps, live) {
   return steps.concat([thinkingStep(text, '')])
 }
 
+/**
+ * 按执行编号找会话消息，找不到就用最后一条。
+ *
+ * @param id 执行编号
+ * @return 消息；列表是空的时是 null
+ */
 function messageForExecution(id) {
   for (let index = messages.value.length - 1; index >= 0; index -= 1) {
     if (id && messages.value[index].executionId === id) {
@@ -815,6 +1012,11 @@ function messageForExecution(id) {
   return messages.value[messages.value.length - 1] || null
 }
 
+/**
+ * 把 SSE thinking 事件写进对应消息。空白事件不覆盖已有思考。
+ *
+ * @param raw 事件数据，是到目前为止的思考全文
+ */
 function applyThinking(raw) {
   const text = raw == null ? '' : String(raw)
   if (!text.trim()) {
@@ -827,6 +1029,13 @@ function applyThinking(raw) {
   message.thinking = text
 }
 
+/**
+ * 这一轮要显示的思考。时间线上的模型思考优先，否则用消息上的实时思考。
+ * 思考和正文完全一样时不显示，避免两块重复。
+ *
+ * @param message 会话消息
+ * @return 思考全文；不该显示时是空字符串
+ */
 function turnThinking(message) {
   const rows = turnRows(message)
   let fromRows = ''
@@ -846,6 +1055,12 @@ function turnThinking(message) {
   return thinking
 }
 
+/**
+ * 去掉思考两侧空白。
+ *
+ * @param value 原始思考
+ * @return 去掉空白后的文字；空值返回空字符串
+ */
 function cleanThinking(value) {
   if (value == null) {
     return ''
@@ -853,6 +1068,12 @@ function cleanThinking(value) {
   return String(value).trim()
 }
 
+/**
+ * 这一轮的助手正文。先用执行输出，否则用时间线上最后一条模型回复。
+ *
+ * @param message 会话消息
+ * @return 正文；暂时没有时是空字符串
+ */
 function turnReply(message) {
   if (message.output) {
     return message.output
@@ -866,6 +1087,7 @@ function turnReply(message) {
   return ''
 }
 
+/** 读取登录名和可选工作区，并填上当前工作区。 */
 async function loadProfile() {
   const me = await api('/api/me')
   loginName.value = me.login
@@ -874,6 +1096,7 @@ async function loadProfile() {
   workspace.value = me.workspace || listed.workspace || workspaceOptions.value[0] || ''
 }
 
+/** 提交工作区路径。成功后刷新 skill，失败时弹出错误。 */
 async function saveWorkspace() {
   try {
     const saved = await api('/api/workspace', { method: 'POST', body: { path: workspace.value } })
@@ -885,6 +1108,7 @@ async function saveWorkspace() {
   }
 }
 
+/** 读取工作流列表。当前选中的不在列表里时改选第一项。 */
 async function loadWorkflows() {
   workflows.value = await api('/api/workflows')
   if (!workflows.value.some((item) => item.id === workflowId.value) && workflows.value.length) {
@@ -892,14 +1116,17 @@ async function loadWorkflows() {
   }
 }
 
+/** 读取斜杠菜单用的 skill。 */
 async function loadSkills() {
   skills.value = await api('/api/skills')
 }
 
+/** 重新读取左侧会话列表。 */
 async function loadSessions() {
   sessions.value = await api('/api/sessions')
 }
 
+/** 读取模型目录。接口失败时清空列表，选择框仍可用默认值。 */
 async function loadModels() {
   try {
     const body = await api('/api/models')
@@ -909,6 +1136,12 @@ async function loadModels() {
   }
 }
 
+/**
+ * 把 provider|id 拆开。没有竖线时供应方按 deepseek。
+ *
+ * @param value 选择框的值
+ * @return provider 和 id
+ */
 function splitModel(value) {
   const text = String(value || '')
   const cut = text.indexOf('|')
@@ -918,6 +1151,11 @@ function splitModel(value) {
   return { provider: text.slice(0, cut) || 'deepseek', id: text.slice(cut + 1) || 'deepseek-flash' }
 }
 
+/**
+ * 默认模型键。目录里有 deepseek-flash 就用它，否则用第一项。
+ *
+ * @return provider|id
+ */
 function defaultModelKey() {
   const flash = models.value.find((item) => item.provider === 'deepseek' && item.id === 'deepseek-flash')
   if (flash) {
@@ -929,12 +1167,22 @@ function defaultModelKey() {
   return 'deepseek|deepseek-flash'
 }
 
+/**
+ * 把会话记录里的模型写进选择框。目录里没有这项时退回默认模型。
+ *
+ * @param stored 会话对象，读 model 和 modelProvider
+ */
 function rememberModel(stored) {
   const key = (stored.modelProvider || 'deepseek') + '|' + (stored.model || 'deepseek-flash')
   const known = models.value.some((item) => item.provider + '|' + item.id === key)
   sessionModel.value = known ? key : defaultModelKey()
 }
 
+/**
+ * 把选择框里的模型存到当前会话。失败时重新读回服务器上的值。
+ *
+ * @param value provider|id
+ */
 async function saveModel(value) {
   if (!activeSessionId.value) {
     return
@@ -956,12 +1204,18 @@ async function saveModel(value) {
   }
 }
 
+/** 新建会话并立刻打开它。标题由服务器写成「新会话」。 */
 async function createSession() {
   const created = await api('/api/sessions', { method: 'POST', body: { title: '新会话' } })
   await loadSessions()
   await switchSession(created.sessionId)
 }
 
+/**
+ * 进入改名，并选中输入框里的原文。
+ *
+ * @param item 会话列表项
+ */
 function beginRename(item) {
   editingSessionId.value = item.sessionId
   editingTitle.value = item.title || ''
@@ -975,12 +1229,18 @@ function beginRename(item) {
   })
 }
 
+/** 取消改名，并让随后的 blur 不要再保存。 */
 function cancelRename() {
   skipRenameBlur.value = true
   editingSessionId.value = ''
   editingTitle.value = ''
 }
 
+/**
+ * 输入框失焦时保存。如果刚刚按了 Esc，这次 blur 不保存。
+ *
+ * @param item 会话列表项
+ */
 function onRenameBlur(item) {
   if (skipRenameBlur.value) {
     skipRenameBlur.value = false
@@ -989,6 +1249,11 @@ function onRenameBlur(item) {
   commitRename(item)
 }
 
+/**
+ * 把标题写到服务器。空白或没改过的标题只退出编辑。
+ *
+ * @param item 会话列表项
+ */
 async function commitRename(item) {
   if (editingSessionId.value !== item.sessionId) {
     return
@@ -1010,6 +1275,11 @@ async function commitRename(item) {
   }
 }
 
+/**
+ * 打开一条会话。右栏回到任务，并加载消息、时间线和上下文。
+ *
+ * @param sessionId 会话编号
+ */
 async function switchSession(sessionId) {
   activeSessionId.value = sessionId
   railTab.value = 'tasks'
@@ -1035,6 +1305,11 @@ async function switchSession(sessionId) {
   await loadContext()
 }
 
+/**
+ * 删除一条会话。删的是当前这条时，清空中间栏和右栏。
+ *
+ * @param sessionId 会话编号
+ */
 async function removeSession(sessionId) {
   await api('/api/sessions/' + sessionId, { method: 'DELETE' })
   if (activeSessionId.value === sessionId) {
@@ -1056,6 +1331,11 @@ async function removeSession(sessionId) {
   await loadSessions()
 }
 
+/**
+ * 把输入框末尾的斜杠换成选中的 skill。
+ *
+ * @param skill skill 对象，使用它的 name
+ */
 function insertSkill(skill) {
   draft.value = draft.value.replace(/(?:^|\s)\/([^\s]*)$/, (all) => {
     const lead = all.startsWith('/') ? '' : all[0]
@@ -1063,6 +1343,7 @@ function insertSkill(skill) {
   })
 }
 
+/** 发送输入框里的文字，并订阅这一轮的 SSE。空白输入不发送。 */
 async function sendMessage() {
   if (!draft.value.trim()) {
     return
@@ -1089,6 +1370,7 @@ async function sendMessage() {
   }
 }
 
+/** 给当前会话追加一条纠正。没选会话或没写文字时只提示。 */
 async function addNote() {
   if (!activeSessionId.value || !noteText.value.trim()) {
     ElMessage.warning('先选择会话，再写纠正')
@@ -1103,6 +1385,7 @@ async function addNote() {
   ElMessage.success('已追加纠正')
 }
 
+/** 读取当前会话的上下文。失败时保留原来的值。 */
 async function loadContext() {
   if (!activeSessionId.value) {
     return
@@ -1114,6 +1397,11 @@ async function loadContext() {
   }
 }
 
+/**
+ * 让右栏查看这个子 agent 的执行和时间线。
+ *
+ * @param agent 子 agent，使用它的 executionId
+ */
 async function openAgent(agent) {
   executionId.value = agent.executionId || executionId.value
   try {
@@ -1124,6 +1412,11 @@ async function openAgent(agent) {
   await loadTimeline(executionId.value)
 }
 
+/**
+ * 读取一条执行的时间线，并放进按编号缓存的表。
+ *
+ * @param id 执行编号；空字符串表示让服务器选最近一条
+ */
 async function loadTimeline(id) {
   if (!activeSessionId.value) {
     timeline.value = []
@@ -1147,6 +1440,7 @@ async function loadTimeline(id) {
   }
 }
 
+/** 把当前会话每一轮的时间线都读进缓存。 */
 async function loadTurnTimelines() {
   const ids = []
   for (const message of messages.value) {
@@ -1162,6 +1456,7 @@ async function loadTurnTimelines() {
   }
 }
 
+/** 从 CLI 抽屉提交一次执行，并订阅它的 SSE。 */
 async function submitExecution() {
   try {
     const created = await api('/api/executions', {
@@ -1175,6 +1470,7 @@ async function submitExecution() {
   }
 }
 
+/** 读取当前执行的详情和日志，并刷新消息上的输出。 */
 async function queryExecution() {
   if (!executionId.value) {
     return
@@ -1187,6 +1483,7 @@ async function queryExecution() {
   await refreshMessageOutputs()
 }
 
+/** 中止当前执行。没有执行编号时什么也不做。 */
 async function interruptExecution() {
   if (!executionId.value) {
     return
@@ -1195,6 +1492,7 @@ async function interruptExecution() {
   logs.value = detail.value.logs || logs.value
 }
 
+/** 恢复当前执行。失败时弹出错误并重新查询状态。 */
 async function resumeExecution() {
   if (!executionId.value) {
     return
@@ -1211,6 +1509,12 @@ async function resumeExecution() {
   }
 }
 
+/**
+ * 对一张通行证做出允许或拒绝。
+ *
+ * @param row 通行证，使用它的 passId
+ * @param decision ALLOW 或 DENY
+ */
 async function decide(row, decision) {
   detail.value = await api('/api/executions/' + executionId.value + '/passes/' + row.passId, {
     method: 'POST',
@@ -1218,6 +1522,11 @@ async function decide(row, decision) {
   })
 }
 
+/**
+ * 订阅一次执行的 SSE。thinking 事件立刻写到最后一轮，status 事件再拉详情和时间线。
+ *
+ * @param id 执行编号
+ */
 function watchExecution(id) {
   closeStream()
   sseLines.value = []
@@ -1238,6 +1547,7 @@ function watchExecution(id) {
   }, 1000)
 }
 
+/** 关掉当前的 SSE 连接。 */
 function closeStream() {
   if (source) {
     source.close()
@@ -1245,6 +1555,7 @@ function closeStream() {
   }
 }
 
+/** 按执行详情刷新每条消息的状态、错误和正文。空白思考不覆盖正在流式增长的思考。 */
 async function refreshMessageOutputs() {
   for (const message of messages.value) {
     if (!message.executionId) {
@@ -1264,6 +1575,7 @@ async function refreshMessageOutputs() {
   }
 }
 
+/** 退出登录并回到登录页。 */
 async function logout() {
   await api('/logout', { method: 'POST' })
   await router.push('/login')

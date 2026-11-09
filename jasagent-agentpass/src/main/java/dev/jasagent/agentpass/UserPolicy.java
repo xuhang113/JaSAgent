@@ -12,13 +12,28 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 读取用户自己的策略文件，并按工具名或插件标识给出允许或拒绝。
+ */
 final class UserPolicy {
     private final List<Rule> rules;
 
+    /**
+     * 保存已经解析好的规则，顺序与文件中的出现顺序一致。
+     *
+     * @param rules 按文件顺序排列的规则
+     */
     private UserPolicy(List<Rule> rules) {
         this.rules = rules;
     }
 
+    /**
+     * 先按工具名找第一条同名规则，没有工具名时再按插件标识找。两者都空时拒绝继续裁决。
+     *
+     * @param toolName 申请调用的工具名，可以空
+     * @param pluginId 申请调用的插件标识，可以空
+     * @return 第一条命中的允许或拒绝；没有命中时为空
+     */
     Optional<PassDecision> match(String toolName, String pluginId) {
         if (present(toolName)) {
             for (Rule rule : rules) {
@@ -39,6 +54,12 @@ final class UserPolicy {
         throw new AgentException(ErrorCode.INTERNAL, "pass target missing");
     }
 
+    /**
+     * 解析用户策略文件。文件不存在或只剩注释时没有任何规则；格式不对时作为内部错误抛出。
+     *
+     * @param file 用户目录下 auth/policies.yaml 的路径
+     * @return 文件中的规则；没有规则时为空策略
+     */
     static UserPolicy read(Path file) {
         try {
             if (Files.notExists(file)) {
@@ -89,6 +110,12 @@ final class UserPolicy {
         }
     }
 
+    /**
+     * 去掉字段值两端空白和一对引号，空值视为策略格式错误。
+     *
+     * @param raw 冒号后面的原始文本
+     * @return 去掉引号后的字段值
+     */
     private static String value(String raw) {
         String trimmed = raw.trim();
         if (trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
@@ -100,10 +127,23 @@ final class UserPolicy {
         return trimmed;
     }
 
+    /**
+     * 判断工具名或插件标识是否真的带了内容。
+     *
+     * @param value 待判断的名字
+     * @return 非空且不是空白时为真
+     */
     private static boolean present(String value) {
         return value != null && !value.isBlank();
     }
 
+    /**
+     * 一条只针对工具或只针对插件的允许或拒绝。
+     *
+     * @param toolName 这条规则匹配的工具名；按插件匹配时为空
+     * @param pluginId 这条规则匹配的插件标识；按工具匹配时为空
+     * @param decision 命中后采用的允许或拒绝
+     */
     private record Rule(String toolName, String pluginId, PassDecision decision) {
     }
 }

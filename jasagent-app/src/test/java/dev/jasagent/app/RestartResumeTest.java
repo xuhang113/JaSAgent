@@ -16,7 +16,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 直接构造运行时，核对挂起后的 trace、缺模型时的离线失败、脚本文件工作区的数据目录，以及恢复失败不能停在 RUNNING。
+ */
 class RestartResumeTest {
+    /**
+     * call-rag 挂起后关掉运行时，再用新运行时按原执行编号恢复。trace 仍是 32 位且无横线，子 span 沿用同一条 trace，状态仍是 SUSPENDED。
+     * 副作用：创建临时家目录、工作区、用户和两代运行时。断言失败则测试失败。
+     */
     @Test
     void suspendedExecutionResumesWithSavedTraceId() throws Exception {
         Path home = Files.createTempDirectory("jasagent-restart-home");
@@ -54,6 +61,10 @@ class RestartResumeTest {
         }
     }
 
+    /**
+     * show-support 含有 react 节点且没有模型密钥时，执行必须 FAILED、错误码 OFFLINE，输出和日志都不能出现“已收到”。
+     * 副作用：创建临时目录和用户，并跑一次工作流。断言失败则测试失败。
+     */
     @Test
     void missingModelKeyDoesNotSucceed() throws Exception {
         Path home = Files.createTempDirectory("jasagent-offline-home");
@@ -80,6 +91,10 @@ class RestartResumeTest {
         }
     }
 
+    /**
+     * 工作区根上的 jasagent 是脚本文件时，检查点落到 .jasagent/data，不能把脚本变成目录。终态不能是 RUNNING，错误码不能是 PERSIST。
+     * 副作用：写脚本文件并提交 answer-with-tool。断言失败则测试失败。
+     */
     @Test
     void scriptFileWorkspaceStoresHiddenData() throws Exception {
         Path home = Files.createTempDirectory("jasagent-script-home");
@@ -104,6 +119,10 @@ class RestartResumeTest {
         }
     }
 
+    /**
+     * 挂起后把数据目录挪走并换成普通文件，再次恢复必须仍是 SUSPENDED、错误码 PERSIST，不能变成 RUNNING。
+     * 副作用：移动数据目录并写一个名叫原目录的阻塞文件。断言失败则测试失败。
+     */
     @Test
     void resumeFailureDoesNotMarkRunning() throws Exception {
         Path home = Files.createTempDirectory("jasagent-resume-home");
@@ -149,6 +168,10 @@ class RestartResumeTest {
         }
     }
 
+    /**
+     * jasagent 是脚本、.jasagent 已是普通文件时，提交以 FAILED 和 PERSIST 结束。再 resume 也不能离开这个失败状态。
+     * 副作用：写两个阻塞文件并提交执行。断言失败则测试失败。
+     */
     @Test
     void blockedDataDirectoryStaysFailed() throws Exception {
         Path home = Files.createTempDirectory("jasagent-blocked-home");
@@ -175,6 +198,10 @@ class RestartResumeTest {
         }
     }
 
+    /**
+     * JDBC 指到 127.0.0.1 的 1 端口时，storageReachable 必须为 false。
+     * 副作用：构造一个连不上库的运行时并关闭它。断言失败则测试失败。
+     */
     @Test
     void healthSeesUnreachableStorage() {
         Path home = Path.of(System.getProperty("java.io.tmpdir"), "jasagent-storage-down-" + System.nanoTime());
@@ -185,6 +212,12 @@ class RestartResumeTest {
         runtime.close();
     }
 
+    /**
+     * 在给定工作区写入 call-rag，节点是 rag.search 然后结束。
+     * 副作用：创建 workflows 目录并覆盖 json。不往 JSON 原文里插注释。
+     *
+     * @param workspace 工作区根路径
+     */
     private static void writeCallRag(Path workspace) throws Exception {
         Path file = workspace.resolve("jasagent").resolve("workflows").resolve("call-rag.json");
         Files.createDirectories(file.getParent());
@@ -193,12 +226,26 @@ class RestartResumeTest {
                 """);
     }
 
+    /**
+     * 把目录挪到旁边，再在原路径写一个普通文件，使随后的存储打开失败。
+     * 副作用：移动原路径并写入文本 blocked。
+     *
+     * @param path 要挡住的数据目录
+     */
     private static void blockPath(Path path) throws Exception {
         Path parked = path.resolveSibling(path.getFileName().toString() + "-parked-" + Long.toUnsignedString(System.nanoTime()));
         Files.move(path, parked);
         Files.writeString(path, "blocked");
     }
 
+    /**
+     * 最多约 5 秒轮询详情，直到成功、失败、取消或挂起。超时仍返回最后一次详情。
+     *
+     * @param runtime 被观察的运行时
+     * @param userId 所有者登录名
+     * @param executionId 执行编号
+     * @return 终态或最后一次详情
+     */
     private static Map<String, Object> awaitTerminal(LocalRuntime runtime, String userId, String executionId) throws Exception {
         Map<String, Object> detail = Map.of();
         for (int attempt = 0; attempt < 100; attempt++) {
@@ -212,6 +259,15 @@ class RestartResumeTest {
         return detail;
     }
 
+    /**
+     * 轮询详情直到状态等于期望值。超时则断言失败。
+     *
+     * @param runtime 被观察的运行时
+     * @param userId 所有者登录名
+     * @param executionId 执行编号
+     * @param status 期望的状态名
+     * @return 达到期望状态时的详情
+     */
     private static Map<String, Object> await(LocalRuntime runtime, String userId, String executionId, String status) throws Exception {
         Map<String, Object> detail = Map.of();
         for (int attempt = 0; attempt < 100; attempt++) {

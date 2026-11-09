@@ -18,7 +18,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 核对思考文本的字段优先级，以及 DeepSeek 兼容响应里思考和模型名的传递。
+ */
 class ReasoningTextTest {
+    /**
+     * 多个思考字段同时存在时，断言优先取 reasoning_content，而不是 reasoning 或 thinking。
+     */
     @Test
     void readsDeepSeekReasoningContentFirst() {
         String json = """
@@ -27,6 +33,9 @@ class ReasoningTextTest {
         assertEquals("先想一步", ReasoningText.fromCompletionJson(json));
     }
 
+    /**
+     * reasoning_content 只有空白时断言退到 reasoning；只剩 thinking 时断言取 thinking。
+     */
     @Test
     void fallsThroughReasoningThenThinking() {
         assertEquals("中间层", ReasoningText.fromCompletionJson("""
@@ -37,6 +46,9 @@ class ReasoningTextTest {
                 """));
     }
 
+    /**
+     * 对 null、空串、残缺 JSON 和没有思考字段的补全，断言思考结果都是空串。
+     */
     @Test
     void blankWhenReasoningIsMissing() {
         assertEquals("", ReasoningText.fromCompletionJson(null));
@@ -47,6 +59,9 @@ class ReasoningTextTest {
                 """));
     }
 
+    /**
+     * 用本地补全接口断言客户端能读出 reasoning_content，请求里带 deepseek-flash 和打开的思考，并且响应断言看不到密钥。
+     */
     @Test
     void deepSeekFlashParsesReasoningContentFromTheResponse() throws Exception {
         AtomicReference<String> seen = new AtomicReference<>("");
@@ -72,6 +87,9 @@ class ReasoningTextTest {
         }
     }
 
+    /**
+     * 补全只有 thinking 字段时，断言聊天结果的思考取该字段，正文仍是答案。
+     */
     @Test
     void thinkingFieldIsUsedWhenReasoningContentIsAbsent() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -93,6 +111,9 @@ class ReasoningTextTest {
         }
     }
 
+    /**
+     * 请求另选模型时，断言发到补全路径的正文使用该模型名和思考开关，默认模型名不出现，密钥也不出现在正文里。
+     */
     @Test
     void selectedModelIsPostedToTheDeepSeekEndpoint() throws Exception {
         AtomicReference<String> seen = new AtomicReference<>("");
@@ -143,6 +164,9 @@ class ReasoningTextTest {
         }
     }
 
+    /**
+     * 补全消息没有任何思考字段时，断言正文保留、思考为空。
+     */
     @Test
     void responseWithoutReasoningLeavesThinkingEmpty() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -164,6 +188,13 @@ class ReasoningTextTest {
         }
     }
 
+    /**
+     * 用本地服务的端口和打开思考的配置，发起一次不指定模型名的聊天。
+     *
+     * @param server 已经启动、提供补全接口的本地服务
+     * @param apiKey 放进客户端配置的占位密钥
+     * @return 客户端整理后的聊天结果
+     */
     private static LlmChatResponse ask(HttpServer server, String apiKey) {
         int port = server.getAddress().getPort();
         OpenAiCallConfig config = new OpenAiCallConfig(
@@ -187,6 +218,13 @@ class ReasoningTextTest {
                 .join();
     }
 
+    /**
+     * 拼一条带用量的补全 JSON，把额外字段并进助手消息。
+     *
+     * @param content 助手正文
+     * @param extra 要插入消息对象的额外 JSON 片段；空白表示不加
+     * @return 一整段补全响应 JSON
+     */
     private static String completion(String content, String extra) {
         String fields = extra == null || extra.isBlank() ? "" : "," + extra;
         return """

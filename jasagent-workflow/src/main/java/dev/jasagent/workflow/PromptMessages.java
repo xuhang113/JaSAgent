@@ -6,10 +6,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 按固定顺序把工作流状态收成发给模型的消息。
+ */
 final class PromptMessages {
+    /**
+     * 禁止实例化。组装只通过静态方法完成。
+     */
     private PromptMessages() {
     }
 
+    /**
+     * 依次放入系统提示、摘要、近几轮、纠正、当前用户输入，以及已经拿到的工具结果。
+     *
+     * @param state 当前图状态
+     * @return 按该顺序排列的消息
+     */
     static List<ChatMessage> assemble(WorkflowState state) {
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(new ChatMessage("system", system(state)));
@@ -30,6 +42,12 @@ final class PromptMessages {
         return List.copyOf(messages);
     }
 
+    /**
+     * 把角色、规则、技能和未完成任务收成一条系统提示。
+     *
+     * @param state 当前图状态
+     * @return 系统提示正文
+     */
     private static String system(WorkflowState state) {
         StringBuilder text = new StringBuilder();
         text.append("role: ").append(StateValues.text(state, "role")).append('\n');

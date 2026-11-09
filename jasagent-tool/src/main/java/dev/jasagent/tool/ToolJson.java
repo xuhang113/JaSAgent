@@ -5,10 +5,22 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 解析工具参数里的一小段 JSON，并按键取出文本、整数和字符串列表。
+ */
 final class ToolJson {
+    /**
+     * 禁止实例化。解析只通过静态方法完成。
+     */
     private ToolJson() {
     }
 
+    /**
+     * 把一个 JSON 对象收成保持原顺序的映射。null、非对象、尾部还有内容或语法不对时返回空映射。
+     *
+     * @param raw 工具参数原文
+     * @return 解析出的键值；无法当成一个完整对象时返回空映射
+     */
     static Map<String, Object> parse(String raw) {
         if (raw == null) {
             return Map.of();
@@ -30,11 +42,26 @@ final class ToolJson {
         }
     }
 
+    /**
+     * 取出某个键的文本并去掉两端空白。
+     *
+     * @param values 已解析的参数
+     * @param key 参数名
+     * @return 该键的文本；缺失时返回空串
+     */
     static String text(Map<String, Object> values, String key) {
         Object value = values.get(key);
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 取出某个键的整数。数字或整数字符串都认，缺失或格式不对时用兜底值。
+     *
+     * @param values 已解析的参数
+     * @param key 参数名
+     * @param fallback 缺失或不是整数时返回的值
+     * @return 解析出的整数或兜底值
+     */
     static int number(Map<String, Object> values, String key, int fallback) {
         Object value = values.get(key);
         if (value instanceof Number number) {
@@ -50,6 +77,13 @@ final class ToolJson {
         }
     }
 
+    /**
+     * 取出某个键的字符串列表。值本身是列表时逐项去空白；否则按逗号或换行拆开一段文本。
+     *
+     * @param values 已解析的参数
+     * @param key 参数名
+     * @return 去掉空白项后的字符串；没有内容时返回空列表
+     */
     @SuppressWarnings("unchecked")
     static List<String> strings(Map<String, Object> values, String key) {
         Object value = values.get(key);
@@ -75,14 +109,27 @@ final class ToolJson {
         return rows;
     }
 
+    /**
+     * 在一段 JSON 文本上向前读取，只处理工具参数里会出现的对象、数组、字符串和数字。
+     */
     private static final class Cursor {
         private final String text;
         private int index;
 
+        /**
+         * 从这段文本的开头开始读。
+         *
+         * @param text 待解析的 JSON 文本
+         */
         private Cursor(String text) {
             this.text = text;
         }
 
+        /**
+         * 读取一个 JSON 对象，键按出现顺序放入映射。
+         *
+         * @return 对象里的键和值
+         */
         private Map<String, Object> object() {
             expect('{');
             Map<String, Object> values = new LinkedHashMap<>();
@@ -108,6 +155,11 @@ final class ToolJson {
             throw new IllegalArgumentException("json");
         }
 
+        /**
+         * 读取当前位置的一个值。布尔保留原值，null 收成空串，带小数点的数收成浮点，其余数字收成整数。
+         *
+         * @return 读到的值
+         */
         private Object value() {
             skip();
             if (index >= text.length()) {
@@ -152,6 +204,11 @@ final class ToolJson {
             return Integer.parseInt(number);
         }
 
+        /**
+         * 读取一个 JSON 数组。
+         *
+         * @return 按顺序排列的元素
+         */
         private List<Object> array() {
             expect('[');
             List<Object> values = new ArrayList<>();
@@ -173,6 +230,11 @@ final class ToolJson {
             throw new IllegalArgumentException("json");
         }
 
+        /**
+         * 读取一个带转义的 JSON 字符串。
+         *
+         * @return 反转义后的文本
+         */
         private String string() {
             expect('"');
             StringBuilder value = new StringBuilder();
@@ -203,6 +265,11 @@ final class ToolJson {
             throw new IllegalArgumentException("json");
         }
 
+        /**
+         * 读取反斜杠 u 后面的四位十六进制，并收成一个字符。
+         *
+         * @return 对应的字符
+         */
         private char unicode() {
             if (index + 4 > text.length()) {
                 throw new IllegalArgumentException("json");
@@ -212,6 +279,11 @@ final class ToolJson {
             return (char) code;
         }
 
+        /**
+         * 跳过空白后要求下一个字符就是给定字符，并越过它。字符不符时抛出格式错误。
+         *
+         * @param expected 当前位置必须出现的字符
+         */
         private void expect(char expected) {
             skip();
             if (index >= text.length() || text.charAt(index) != expected) {
@@ -220,16 +292,30 @@ final class ToolJson {
             index++;
         }
 
+        /**
+         * 看当前位置是不是给定字符，不移动读取位置。
+         *
+         * @param expected 要对照的字符
+         * @return 当前位置正好是该字符时为 true
+         */
         private boolean peek(char expected) {
             return index < text.length() && text.charAt(index) == expected;
         }
 
+        /**
+         * 越过当前位置起连续的空白。
+         */
         private void skip() {
             while (index < text.length() && Character.isWhitespace(text.charAt(index))) {
                 index++;
             }
         }
 
+        /**
+         * 判断读取位置是否已经到文本末尾。
+         *
+         * @return 没有剩余字符时为 true
+         */
         private boolean done() {
             return index >= text.length();
         }

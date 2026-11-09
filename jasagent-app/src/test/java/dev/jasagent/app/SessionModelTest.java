@@ -20,7 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 确认每个会话记住自己的模型，重启运行时后不串号，别的用户也不能改。
+ */
 class SessionModelTest {
+    /**
+     * 两个会话一开始都是 deepseek-flash。只把第一个改成 deepseek-v4-pro，关掉再打开运行时后仍然各自保持。发消息时日志里的 model 行对应该会话，不出现另一个会话的模型。
+     * 副作用：创建临时目录、用户、会话和执行。断言失败则测试失败。
+     */
     @Test
     void eachSessionKeepsItsModelAcrossRestart() throws Exception {
         Path home = Files.createTempDirectory("jasagent-model-home");
@@ -68,6 +75,10 @@ class SessionModelTest {
         }
     }
 
+    /**
+     * 其他用户修改会话模型时得到 AUTH，所有者看到的模型仍是 deepseek-flash，模型列表里没有 ai-gateway。
+     * 副作用：创建所有者和另一名用户。断言失败则测试失败。
+     */
     @Test
     void otherUserCannotChangeModel() throws Exception {
         Path home = Files.createTempDirectory("jasagent-model-auth-home");
@@ -88,6 +99,11 @@ class SessionModelTest {
         }
     }
 
+    /**
+     * 造一个不访问网络的目录：DeepSeek 只有 flash 和 v4-pro，Gateway 永远不可达。
+     *
+     * @return 测试用的模型目录
+     */
     private static SessionModelCatalog fixedCatalog() {
         return new SessionModelCatalog(
                 new LlmSettings("placeholder-deepseek-key", false, "", "", "", false, "", Duration.ofSeconds(60)),
@@ -95,6 +111,15 @@ class SessionModelTest {
                 url -> false);
     }
 
+    /**
+     * 轮询执行详情里的日志，直到出现指定片段。
+     *
+     * @param runtime 被观察的运行时
+     * @param userId 所有者登录名
+     * @param executionId 执行编号
+     * @param marker 日志里必须出现的文字
+     * @return 含该片段的日志
+     */
     private static String awaitLog(LocalRuntime runtime, String userId, String executionId, String marker) throws Exception {
         String logs = "";
         for (int attempt = 0; attempt < 80; attempt++) {

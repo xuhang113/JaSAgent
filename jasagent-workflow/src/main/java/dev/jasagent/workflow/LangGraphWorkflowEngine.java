@@ -20,11 +20,24 @@ import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 
+/**
+ * 用 LangGraph4j 执行或恢复工作流，并把图结果收成一次运行记录。
+ */
 public final class LangGraphWorkflowEngine {
     private final WorkflowGraph graph;
     private final ObjectStreamStateSerializer<WorkflowState> serializer;
     private final Map<String, BaseCheckpointSaver> savers = new HashMap<>();
 
+    /**
+     * 接上聊天、工具、插件、检索、评估和子工作流，并准备状态序列化器。任一协作者缺失时立即失败。
+     *
+     * @param chat 节点向模型要回复的入口
+     * @param tools 节点调用工具的入口
+     * @param plugins 节点各阶段调用插件的入口
+     * @param retriever 检索节点使用的入口
+     * @param evaluator 评估节点使用的入口
+     * @param subagents 子工作流节点使用的入口
+     */
     public LangGraphWorkflowEngine(
             ChatModel chat,
             ToolCaller tools,
@@ -43,14 +56,33 @@ public final class LangGraphWorkflowEngine {
                 serializer);
     }
 
+    /**
+     * 在虚拟线程上从头执行一份工作流请求。
+     *
+     * @param request 含定义、输入、检查点和提示的请求
+     * @return 完成后给出运行结果的阶段
+     */
     public CompletionStage<WorkflowRun> execute(WorkflowRequest request) {
         return VirtualIo.supply(() -> run(request, false));
     }
 
+    /**
+     * 在虚拟线程上从该执行已有的检查点继续。
+     *
+     * @param request 与暂停时同一执行编号的请求
+     * @return 完成后给出继续运行结果的阶段
+     */
     public CompletionStage<WorkflowRun> resume(WorkflowRequest request) {
         return VirtualIo.supply(() -> run(request, true));
     }
 
+    /**
+     * 打开检查点并编译图，然后从头输入或从中断处恢复。中断收成暂停，正常状态收成成功，异常收成失败。
+     *
+     * @param request 工作流请求
+     * @param resume 为 true 时从检查点继续，而不是重新写入初始状态
+     * @return 这次调用对应的运行结果
+     */
     private WorkflowRun run(WorkflowRequest request, boolean resume) {
         BaseCheckpointSaver saver = null;
         String dsl = "";
@@ -80,6 +112,15 @@ public final class LangGraphWorkflowEngine {
         }
     }
 
+    /**
+     * 把异常收成失败的运行记录，带上错误码、已生成的图描述和异常链。
+     *
+     * @param request 失败所属的请求
+     * @param error 执行过程中的异常
+     * @param dsl 已经生成的图描述；编译前失败时为空串
+     * @param saver 已经打开的检查点保存器；还没打开时为 null
+     * @return 状态为失败的运行结果
+     */
     private WorkflowRun failed(WorkflowRequest request, Throwable error, String dsl, BaseCheckpointSaver saver) {
         AgentException agent = agent(error, request.executionId());
         return new WorkflowRun(
@@ -96,6 +137,18 @@ public final class LangGraphWorkflowEngine {
                 "");
     }
 
+    /**
+     * 从当前图状态取出输出、插件错误、评估结论、纠正来源和思考，收成运行记录。
+     *
+     * @param request 提供执行编号的请求
+     * @param state 图的当前状态
+     * @param status 要写入的执行状态
+     * @param errorCode 错误码；成功和暂停时为空
+     * @param dsl 编译后的图描述
+     * @param saver 实际使用的检查点保存器
+     * @param detail 附加细节；正常快照为空串
+     * @return 按这些状态拼好的运行结果
+     */
     private WorkflowRun snapshot(
             WorkflowRequest request,
             WorkflowState state,
@@ -127,6 +180,12 @@ public final class LangGraphWorkflowEngine {
                 StateValues.text(state, "thinking"));
     }
 
+    /**
+     * 按 JDBC 地址复用或打开检查点保存器。同一地址在这个引擎里只打开一次。
+     *
+     * @param request 含检查点文件和 JDBC 地址的请求
+     * @return 可复用的检查点保存器
+     */
     private BaseCheckpointSaver saver(WorkflowRequest request) throws Exception {
         String key = CheckpointSavers.cacheKey(request.jdbcUrl());
         BaseCheckpointSaver existing = savers.get(key);
@@ -138,6 +197,12 @@ public final class LangGraphWorkflowEngine {
         return created;
     }
 
+    /**
+     * 取工作流节点里最大的步数上限，用来估算图的递归限制。没有写上限时至少按 1 计。
+     *
+     * @param request 工作流请求
+     * @return 节点上出现过的最大步数
+     */
     private static int maxSteps(WorkflowRequest request) {
         int steps = 1;
         for (WorkflowDefinition.NodeSpec node : request.workflow().nodes()) {
@@ -148,6 +213,12 @@ public final class LangGraphWorkflowEngine {
         return steps;
     }
 
+    /**
+     * 把请求里的身份、输入、提示、近几轮和纠正铺进图的初始状态，并把命中、工具文本和输出先放成空。
+     *
+     * @param request 要开始的工作流请求
+     * @return 交给图的初始键值
+     */
     private static Map<String, Object> initial(WorkflowRequest request) {
         PromptContext context = request.context();
         Map<String, Object> state = new HashMap<>();
@@ -192,6 +263,13 @@ public final class LangGraphWorkflowEngine {
         return state;
     }
 
+    /**
+     * 在异常链里查找业务异常；找不到时把根因收成工作流错误。
+     *
+     * @param error 图执行抛出的异常
+     * @param executionId 写进错误的执行编号
+     * @return 可放进失败结果的业务异常
+     */
     private static AgentException agent(Throwable error, String executionId) {
         Throwable current = error;
         while (current != null) {
@@ -208,6 +286,12 @@ public final class LangGraphWorkflowEngine {
                 root);
     }
 
+    /**
+     * 把异常链和每个异常栈上的类名拼成一段文本，供失败细节排查。
+     *
+     * @param error 要展开的异常
+     * @return 类名和栈上类名拼成的文本
+     */
     private static String chain(Throwable error) {
         StringBuilder text = new StringBuilder();
         Throwable current = error;
