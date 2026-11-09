@@ -41,6 +41,7 @@ import dev.jasagent.api.trace.TraceWriter;
 import dev.jasagent.persist.CheckpointStores;
 import dev.jasagent.persist.ExecutionRow;
 import dev.jasagent.plugin.PluginToolCatalog;
+import dev.jasagent.tool.WorkspaceTools;
 import dev.jasagent.workflow.ChatModel;
 import dev.jasagent.workflow.Evaluator;
 import dev.jasagent.workflow.LangGraphWorkflowEngine;
@@ -327,9 +328,6 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         synchronized (exec) {
             save(exec, false);
             boolean hold = exec.suspended || pending(exec);
-            if (exec.resuming && !exec.modelNode && !exec.suspended) {
-                hold = false;
-            }
             if (!"FAILED".equals(exec.status) && hold) {
                 future.completeExceptionally(new CancellationException("suspended"));
                 hang(exec);
@@ -411,9 +409,6 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         WorkflowRun result = engine.execute(request).toCompletableFuture().join();
         synchronized (exec) {
             boolean hold = exec.suspended || pending(exec);
-            if (exec.resuming && !exec.modelNode && !exec.suspended) {
-                hold = false;
-            }
             if (hold) {
                 if (result.output() != null && !result.output().isBlank()) {
                     exec.output = result.output();
@@ -536,7 +531,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
 
     private static boolean pending(Exec exec) {
         for (Map<String, Object> pass : exec.passes) {
-            if (PassDecision.PENDING.name().equals(pass.get("decision"))) {
+            if (PassDecision.PENDING.name().equals(String.valueOf(pass.get("decision")))
+                    && Boolean.TRUE.equals(pass.get("blocked"))) {
                 return true;
             }
         }
@@ -566,17 +562,22 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             if (recorded == null) {
                 recorded = addPass(exec, name, "tool");
             }
+            recorded.put("requested", Boolean.TRUE);
             exec.append("pass " + name + " " + recorded.get("decision"));
             String decision = String.valueOf(recorded.get("decision"));
-            if (PassDecision.PENDING.name().equals(decision) && !(exec.resuming && !exec.modelNode)) {
-                exec.suspended = true;
-                exec.status = "SUSPENDED";
-                recordTool(exec, name, "approval-required");
-                return CompletableFuture.completedFuture("approval-required");
-            }
             if (PassDecision.DENY.name().equals(decision)) {
                 recordTool(exec, name, "denied");
                 return CompletableFuture.completedFuture("denied");
+            }
+            boolean waiting = PassDecision.PENDING.name().equals(decision);
+            if (waiting && !WorkspaceTools.runsWithoutApproval(name, arguments)) {
+                recorded.put("blocked", Boolean.TRUE);
+                if (!(exec.resuming && !exec.modelNode)) {
+                    exec.suspended = true;
+                    exec.status = "SUSPENDED";
+                }
+                recordTool(exec, name, "approval-required");
+                return CompletableFuture.completedFuture("approval-required");
             }
         }
         String result;
@@ -585,10 +586,12 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         } else if ("rag.search".equals(name)) {
             exec.retrievals.add(retrieval(arguments));
             result = "retrieved";
+        } else if (WorkspaceTools.supports(name)) {
+            result = WorkspaceTools.execute(Path.of(exec.workspace), name, arguments);
         } else if (pluginNames().contains(name)) {
             result = callPlugin(exec, name, arguments);
         } else {
-            result = "";
+            result = "未知工具 " + name;
         }
         recordTool(exec, name, result);
         return CompletableFuture.completedFuture(result);

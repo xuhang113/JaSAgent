@@ -141,14 +141,12 @@
                 <pre>{{ tool.content }}</pre>
               </div>
             </details>
-            <div v-if="turnReply(message) || turnThinking(message) || message.status || message.errorCode" class="bubble assistant">
+            <div v-if="turnReply(message) || turnThinking(message) || message.errorCode" class="bubble assistant">
               <details v-if="turnThinking(message)" class="thinking">
                 <summary @click="foldDetails">思考</summary>
                 <div class="thinking-body">{{ turnThinking(message) }}</div>
               </details>
-              <strong>执行输出</strong>
-              <div v-if="turnReply(message)">{{ turnReply(message) }}</div>
-              <small v-if="message.executionId" class="muted mono-num">{{ message.executionId }} {{ message.status }}</small>
+              <div v-if="turnReply(message)" class="assistant-text">{{ turnReply(message) }}</div>
               <small v-if="message.errorCode" class="execution-error">{{ message.errorCode }}</small>
             </div>
           </article>

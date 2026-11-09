@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,9 +57,9 @@ class RuntimeResumeFoundationTest {
                     pool.shutdownNow();
                 }
                 assertEquals(executionId, String.valueOf(resumed.get("executionId")), resumed.toString());
-                String status = String.valueOf(resumed.get("status"));
-                assertNotEquals("SUSPENDED", status, resumed.toString());
-                assertTrue("SUCCEEDED".equals(status) || "FAILED".equals(status), resumed.toString());
+                assertEquals("SUSPENDED", String.valueOf(resumed.get("status")), resumed.toString());
+                assertFalse(String.valueOf(resumed.get("retrievals")).contains("sourceScope"), resumed.toString());
+                assertNotEquals("RUNNING", String.valueOf(resumed.get("status")));
             } finally {
                 second.close();
             }

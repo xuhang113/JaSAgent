@@ -25,9 +25,10 @@ class RestartResumeTest {
         auth.addUser(new AddUser("restart-user", "test-password-1".toCharArray(), null, false)).toCompletableFuture().join();
         Session session = auth.login("restart-user", "test-password-1".toCharArray()).toCompletableFuture().join();
         auth.selectWorkspace(session.token(), workspace, List.of(workspace), workspace).toCompletableFuture().join();
+        writeCallRag(workspace);
         LocalRuntime first = new LocalRuntime(auth, Map.of(PassSettings.ENABLED, "true"));
         try {
-            Map<String, Object> created = first.submit("restart-user", session.token(), "answer-with-tool", "hi");
+            Map<String, Object> created = first.submit("restart-user", session.token(), "call-rag", "hello");
             String executionId = String.valueOf(created.get("executionId"));
             Map<String, Object> suspended = await(first, "restart-user", executionId, "SUSPENDED");
             String traceId = String.valueOf(suspended.get("traceId"));
@@ -111,10 +112,11 @@ class RestartResumeTest {
         auth.addUser(new AddUser("resume-user", "test-password-1".toCharArray(), null, false)).toCompletableFuture().join();
         Session session = auth.login("resume-user", "test-password-1".toCharArray()).toCompletableFuture().join();
         auth.selectWorkspace(session.token(), workspace, List.of(workspace), workspace).toCompletableFuture().join();
+        writeCallRag(workspace);
         LocalRuntime first = new LocalRuntime(auth, Map.of(PassSettings.ENABLED, "true"));
         String executionId;
         try {
-            Map<String, Object> created = first.submit("resume-user", session.token(), "answer-with-tool", "hi");
+            Map<String, Object> created = first.submit("resume-user", session.token(), "call-rag", "hello");
             executionId = String.valueOf(created.get("executionId"));
             Map<String, Object> suspended = await(first, "resume-user", executionId, "SUSPENDED");
             assertEquals("SUSPENDED", suspended.get("status"));
@@ -181,6 +183,14 @@ class RestartResumeTest {
                 "JASAGENT_JDBC_URL", "jdbc:postgresql://127.0.0.1:1/jasagent?connectTimeout=1&socketTimeout=1&loginTimeout=1"));
         assertFalse(runtime.storageReachable());
         runtime.close();
+    }
+
+    private static void writeCallRag(Path workspace) throws Exception {
+        Path file = workspace.resolve("jasagent").resolve("workflows").resolve("call-rag.json");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, """
+                {"id":"call-rag","nodes":[{"id":"search","type":"tool","tool":"rag.search"},{"id":"done","type":"end"}]}
+                """);
     }
 
     private static void blockPath(Path path) throws Exception {

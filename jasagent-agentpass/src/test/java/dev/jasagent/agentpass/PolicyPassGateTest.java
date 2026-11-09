@@ -92,6 +92,33 @@ class PolicyPassGateTest {
     }
 
     @Test
+    void unmatchedReadOnlyToolRuns() throws Exception {
+        Path userDirectory = root.resolve("user-a").resolve("jasagent");
+        PassGate gate = gate(userDirectory);
+        Pass listed = join(gate.acquire(new PassRequest("user-a", "exec-1", "list_directory", null, "hash")));
+        Pass read = join(gate.acquire(new PassRequest("user-a", "exec-1", "read_file", null, "hash")));
+        Pass shell = join(gate.acquire(new PassRequest("user-a", "exec-1", "run_shell_command", null, "hash")));
+        assertEquals(PassDecision.ALLOW, listed.decision());
+        assertEquals("read-only", listed.reason());
+        assertEquals(PassDecision.ALLOW, read.decision());
+        assertEquals(PassDecision.PENDING, shell.decision());
+        assertEquals("approval-required", shell.reason());
+    }
+
+    @Test
+    void userDenyStillBlocksReadOnlyTool() throws Exception {
+        Path userDirectory = root.resolve("user-a").resolve("jasagent");
+        writePolicy(userDirectory, """
+                rules:
+                - tool: list_directory
+                  decision: DENY
+                """);
+        Pass pass = join(gate(userDirectory).acquire(new PassRequest("user-a", "exec-1", "list_directory", null, "hash")));
+        assertEquals(PassDecision.DENY, pass.decision());
+        assertEquals("policy", pass.reason());
+    }
+
+    @Test
     void emptyPolicyFileIsPending() throws Exception {
         Path userDirectory = root.resolve("user-a").resolve("jasagent");
         writePolicy(userDirectory, "\n# none\n");

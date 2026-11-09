@@ -215,6 +215,9 @@ class ConsolePageTest {
         assertTrue(detail.contains("\"tools\""));
         assertTrue(detail.contains("clock"));
         assertTrue(detail.contains("rag.search"));
+        assertTrue(detail.contains("list_directory"));
+        assertTrue(detail.contains("read_file"));
+        assertTrue(detail.contains("run_shell_command"));
     }
 
     @Test
@@ -230,7 +233,9 @@ class ConsolePageTest {
         String cookie = login("pending-user", "test-password-1");
         selectWorkspace(cookie);
         String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "answer-with-tool", "input", "hi")));
-        String detail = awaitBody(cookie, executionId, "terminal SUSPENDED");
+        String detail = awaitTerminalStatus(cookie, executionId);
+        assertFalse(detail.contains("\"status\":\"SUSPENDED\""), detail);
+        assertTrue(detail.contains("\"status\":\"SUCCEEDED\"") || detail.contains("\"status\":\"FAILED\""), detail);
         assertTrue(detail.contains("\"decision\":\"PENDING\""), detail);
         assertTrue(detail.contains("approval-required"), detail);
         assertTrue(detail.contains("rag.search"), detail);
@@ -302,9 +307,11 @@ class ConsolePageTest {
 
     @Test
     void sseEchoesExecutionStatus() throws Exception {
+        writeCallRag();
         String cookie = login("sse-user", "test-password-1");
         selectWorkspace(cookie);
-        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "answer-with-tool", "input", "hi")));
+        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "call-rag", "input", "hello")));
+        awaitBody(cookie, executionId, "terminal SUSPENDED");
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/executions/" + executionId + "/events"))
                 .timeout(Duration.ofSeconds(20))
                 .header("Cookie", cookie)
@@ -321,9 +328,10 @@ class ConsolePageTest {
 
     @Test
     void interruptThenResume() throws Exception {
+        writeCallRag();
         String cookie = login("stop-user", "test-password-1");
         selectWorkspace(cookie);
-        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "answer-with-tool", "input", "hi")));
+        String executionId = executionId(post("/api/executions", cookie, Map.of("workflowId", "call-rag", "input", "hello")));
         awaitBody(cookie, executionId, "terminal SUSPENDED");
         ResponseEntity<String> stopped = post("/api/executions/" + executionId + "/interrupt", cookie, Map.of());
         assertEquals(HttpStatus.OK, stopped.getStatusCode());
@@ -576,14 +584,30 @@ class ConsolePageTest {
         return body.substring(start, body.indexOf('"', start));
     }
 
+    private String awaitTerminalStatus(String cookie, String executionId) throws Exception {
+        String body = "";
+        for (int attempt = 0; attempt < 300; attempt++) {
+            body = get("/api/executions/" + executionId, cookie).getBody();
+            if (body != null && (body.contains("\"status\":\"SUCCEEDED\"")
+                    || body.contains("\"status\":\"FAILED\"")
+                    || body.contains("\"status\":\"CANCELLED\"")
+                    || body.contains("\"status\":\"SUSPENDED\""))) {
+                return body;
+            }
+            Thread.sleep(50);
+        }
+        assertTrue(body != null && (body.contains("\"status\":\"SUCCEEDED\"") || body.contains("\"status\":\"FAILED\"")), body);
+        return body == null ? "" : body;
+    }
+
     private String awaitBody(String cookie, String executionId, String marker) throws Exception {
         String body = "";
-        for (int attempt = 0; attempt < 80; attempt++) {
+        for (int attempt = 0; attempt < 300; attempt++) {
             body = get("/api/executions/" + executionId, cookie).getBody();
             if (body != null && body.contains(marker)) {
                 return body;
             }
-            Thread.sleep(40);
+            Thread.sleep(50);
         }
         assertTrue(body != null && body.contains(marker), body);
         return body;

@@ -133,7 +133,8 @@ public final class LlmRouter implements LlmClient {
                 raw.completionTokens(),
                 raw.totalTokens(),
                 fallback,
-                thinking);
+                thinking,
+                raw.toolCalls());
         Stages.join(store.save(new LlmCall(
                 request.executionId(),
                 request.task() == null ? "" : request.task().wireName(),

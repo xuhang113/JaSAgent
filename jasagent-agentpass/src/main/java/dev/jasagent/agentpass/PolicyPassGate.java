@@ -7,6 +7,7 @@ import dev.jasagent.api.pass.Pass;
 import dev.jasagent.api.pass.PassDecision;
 import dev.jasagent.api.pass.PassGate;
 import dev.jasagent.api.pass.PassRequest;
+import dev.jasagent.api.tool.ReadOnlyTools;
 
 import java.nio.file.Path;
 import java.util.Optional;
@@ -40,6 +41,9 @@ public final class PolicyPassGate implements PassGate {
         Optional<PassDecision> matched = UserPolicy.read(policy).match(request.toolName(), request.pluginId());
         if (matched.isPresent()) {
             return new Pass(matched.get(), "policy");
+        }
+        if (ReadOnlyTools.is(request.toolName())) {
+            return new Pass(PassDecision.ALLOW, "read-only");
         }
         return new Pass(PassDecision.PENDING, "approval-required");
     }

@@ -9,6 +9,10 @@ import dev.jasagent.api.llm.LlmClient;
 import dev.jasagent.api.llm.LlmEmbedRequest;
 import dev.jasagent.api.llm.LlmEmbedResponse;
 import dev.jasagent.api.llm.LlmMessage;
+import dev.jasagent.api.llm.LlmToolCall;
+import dev.jasagent.api.llm.ToolDefinition;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -16,9 +20,12 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatResponseMetadata;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.model.output.TokenUsage;
 
@@ -27,6 +34,7 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 
 public final class LangChain4jLlmClient implements LlmClient {
+    private static final ObjectMapper JSON = new ObjectMapper();
     private final ChatModel chatModel;
     private final EmbeddingModel embeddingModel;
 
@@ -69,6 +77,7 @@ public final class LangChain4jLlmClient implements LlmClient {
             ChatResponse response = chatModel.chat(toRequest(request));
             String text = "";
             String thinking = "";
+            List<LlmToolCall> calls = new ArrayList<>();
             if (response.aiMessage() != null) {
                 if (response.aiMessage().text() != null) {
                     text = response.aiMessage().text();
@@ -76,15 +85,33 @@ public final class LangChain4jLlmClient implements LlmClient {
                 if (response.aiMessage().thinking() != null) {
                     thinking = response.aiMessage().thinking();
                 }
+                if (response.aiMessage().hasToolExecutionRequests()) {
+                    for (ToolExecutionRequest call : response.aiMessage().toolExecutionRequests()) {
+                        calls.add(new LlmToolCall(
+                                call.id() == null ? "" : call.id(),
+                                call.name() == null ? "" : call.name(),
+                                call.arguments() == null ? "{}" : call.arguments()));
+                    }
+                }
             }
             if (thinking.isBlank()) {
                 thinking = reasoningFrom(response);
+            }
+            if (calls.isEmpty()) {
+                calls.addAll(ToolCallText.fromCompletionJson(rawBody(response)));
+            }
+            if (calls.isEmpty()) {
+                List<LlmToolCall> written = ToolCallText.parse(text);
+                if (!written.isEmpty()) {
+                    calls.addAll(written);
+                    text = "";
+                }
             }
             TokenUsage usage = response.tokenUsage();
             int prompt = count(usage == null ? null : usage.inputTokenCount());
             int completion = count(usage == null ? null : usage.outputTokenCount());
             int total = usage == null || usage.totalTokenCount() == null ? prompt + completion : usage.totalTokenCount();
-            return new LlmChatResponse("", "", text, prompt, completion, total, false, thinking);
+            return new LlmChatResponse("", "", text, prompt, completion, total, false, thinking, calls);
         } catch (RuntimeException ex) {
             throw failure(request.executionId(), ex);
         }
@@ -103,9 +130,13 @@ public final class LangChain4jLlmClient implements LlmClient {
     }
 
     private static String reasoningFrom(ChatResponse response) {
+        return ReasoningText.fromCompletionJson(rawBody(response));
+    }
+
+    private static String rawBody(ChatResponse response) {
         if (response.metadata() instanceof OpenAiChatResponseMetadata metadata
                 && metadata.rawHttpResponse() != null) {
-            return ReasoningText.fromCompletionJson(metadata.rawHttpResponse().body());
+            return metadata.rawHttpResponse().body();
         }
         return "";
     }
@@ -121,6 +152,59 @@ public final class LangChain4jLlmClient implements LlmClient {
         if (request.model() != null && !request.model().isBlank()) {
             builder.modelName(request.model());
         }
+        List<ToolSpecification> tools = specifications(request.tools());
+        if (!tools.isEmpty()) {
+            builder.toolSpecifications(tools);
+        }
+        return builder.build();
+    }
+
+    private static List<ToolSpecification> specifications(List<ToolDefinition> tools) {
+        List<ToolSpecification> specs = new ArrayList<>();
+        if (tools == null) {
+            return specs;
+        }
+        for (ToolDefinition tool : tools) {
+            if (tool == null || tool.name() == null || tool.name().isBlank()) {
+                continue;
+            }
+            specs.add(ToolSpecification.builder()
+                    .name(tool.name())
+                    .description(tool.description() == null ? "" : tool.description())
+                    .parameters(schema(tool.parametersJson()))
+                    .build());
+        }
+        return specs;
+    }
+
+    private static JsonObjectSchema schema(String json) {
+        JsonObjectSchema.Builder builder = JsonObjectSchema.builder();
+        if (json == null || json.isBlank()) {
+            return builder.build();
+        }
+        try {
+            JsonNode root = JSON.readTree(json);
+            JsonNode properties = root.get("properties");
+            if (properties != null && properties.isObject()) {
+                properties.fields().forEachRemaining(entry -> {
+                    JsonNode property = entry.getValue();
+                    String description = property.path("description").asText("");
+                    if ("integer".equals(property.path("type").asText())) {
+                        builder.addIntegerProperty(entry.getKey(), description);
+                    } else {
+                        builder.addStringProperty(entry.getKey(), description);
+                    }
+                });
+            }
+            JsonNode required = root.get("required");
+            if (required != null && required.isArray() && !required.isEmpty()) {
+                List<String> names = new ArrayList<>();
+                required.forEach(node -> names.add(node.asText()));
+                builder.required(names);
+            }
+        } catch (Exception ex) {
+            return JsonObjectSchema.builder().build();
+        }
         return builder.build();
     }
 
@@ -131,6 +215,9 @@ public final class LangChain4jLlmClient implements LlmClient {
             case "system" -> SystemMessage.from(text);
             case "user" -> UserMessage.from(text);
             case "assistant" -> AiMessage.from(text);
+            case "tool" -> UserMessage.from("工具结果:\n" + text);
+            case "correction" -> UserMessage.from("纠正:\n" + text);
+            case "summary" -> UserMessage.from("摘要:\n" + text);
             default -> throw new AgentException(ErrorCode.LLM, "不支持的消息角色", executionId, null);
         };
     }

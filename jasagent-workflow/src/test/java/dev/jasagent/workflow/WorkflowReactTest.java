@@ -80,7 +80,17 @@ class WorkflowReactTest {
         assertEquals("act", act.id());
         assertEquals("react", act.type());
         assertEquals(6, act.maxSteps());
-        assertEquals(List.of("clock", "rag.search"), act.tools());
+        assertEquals(List.of(
+                "clock",
+                "list_directory",
+                "glob_files",
+                "grep_files",
+                "search_files",
+                "search_workspace",
+                "read_file",
+                "read_files",
+                "run_shell_command",
+                "rag.search"), act.tools());
         assertEquals(Boolean.TRUE, act.grounding());
 
         WorkflowDefinition.NodeSpec grade = definition.nodes().get(2);

@@ -798,8 +798,11 @@ describe('助手回复上的思考', () => {
     expect(block.get('.thinking-body').text()).toBe('先核对时钟再回答')
     const html = bubble.element.innerHTML
     expect(html.indexOf('thinking')).toBeGreaterThanOrEqual(0)
-    expect(html.indexOf('思考')).toBeLessThan(html.indexOf('执行输出'))
+    expect(html.indexOf('思考')).toBeLessThan(html.indexOf('模型未配置'))
     expect(html.indexOf('thinking')).toBeLessThan(html.indexOf('模型未配置'))
+    expect(bubble.text()).not.toContain('执行输出')
+    expect(bubble.text()).not.toContain('exec-1')
+    expect(bubble.text()).not.toContain('SUSPENDED')
     expect(wrapper.find('.right-rail .thinking').exists()).toBe(false)
     await wrapper.get('[data-tab="trace"]').trigger('click')
     expect(wrapper.get('.right-rail').text()).not.toContain('先核对时钟再回答')
