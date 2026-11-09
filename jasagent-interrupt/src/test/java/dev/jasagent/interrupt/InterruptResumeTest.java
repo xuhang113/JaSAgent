@@ -269,7 +269,7 @@ class InterruptResumeTest {
                 }), node("after", ignored -> CompletableFuture.completedFuture("after-ok"))),
                 firstTracer,
                 new MemoryTrace(),
-                Map.of())) {
+                sqliteCheckpoint())) {
             CompletableFuture<ExecutionSnapshot> running = first.start(executionId, USER, executionId, workspace()).toCompletableFuture();
             assertTrue(hold.entered.await(10, TimeUnit.SECONDS));
             join(first.interrupt(executionId, USER));
@@ -284,7 +284,7 @@ class InterruptResumeTest {
                         node("after", ignored -> CompletableFuture.completedFuture("after-ok"))),
                 secondTracer,
                 new MemoryTrace(),
-                Map.of())) {
+                sqliteCheckpoint())) {
             ExecutionSnapshot resumed = join(second.resume(executionId, USER));
             assertEquals(savedTrace, resumed.traceId());
             assertEquals(0, secondTracer.roots.get());
@@ -366,7 +366,7 @@ class InterruptResumeTest {
         String executionId = id();
         MemoryTrace trace = new MemoryTrace();
         Hold hold = hold("slow");
-        try (CheckpointRunControl control = CheckpointRunControl.open(temp, List.of(hold.task), new RecordingTracer("d".repeat(32)), trace, Map.of())) {
+        try (CheckpointRunControl control = CheckpointRunControl.open(temp, List.of(hold.task), new RecordingTracer("d".repeat(32)), trace, sqliteCheckpoint())) {
             CompletableFuture<ExecutionSnapshot> running = control.start(executionId, USER, executionId, workspace()).toCompletableFuture();
             assertTrue(hold.entered.await(10, TimeUnit.SECONDS));
             join(control.interrupt(executionId, USER));
@@ -380,7 +380,7 @@ class InterruptResumeTest {
         String executionId = id();
         MemoryTrace trace = new MemoryTrace();
         Hold hold = hold("slow");
-        try (CheckpointRunControl control = CheckpointRunControl.open(temp, List.of(hold.task), new RecordingTracer("e".repeat(32)), trace, Map.of())) {
+        try (CheckpointRunControl control = CheckpointRunControl.open(temp, List.of(hold.task), new RecordingTracer("e".repeat(32)), trace, sqliteCheckpoint())) {
             CompletableFuture<ExecutionSnapshot> running = control.start(executionId, USER, executionId, workspace()).toCompletableFuture();
             assertTrue(hold.entered.await(10, TimeUnit.SECONDS));
             join(control.interrupt(executionId, USER));
@@ -411,8 +411,12 @@ class InterruptResumeTest {
         }
     }
 
+    private static Map<String, String> sqliteCheckpoint() {
+        return Map.of("JASAGENT_CHECKPOINT", "sqlite");
+    }
+
     private CheckpointRunControl open(Path workspace, List<NodeTask> nodes) {
-        return CheckpointRunControl.open(workspace, nodes, new RecordingTracer("f".repeat(32)), new MemoryTrace(), Map.of());
+        return CheckpointRunControl.open(workspace, nodes, new RecordingTracer("f".repeat(32)), new MemoryTrace(), sqliteCheckpoint());
     }
 
     private String workspace() {

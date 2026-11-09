@@ -482,7 +482,7 @@ class WorkflowReactTest {
                         ]}
                         """),
                 blank(),
-                null);
+                "jdbc:sqlite:" + database.toAbsolutePath());
         WorkflowRun run = join(engine(null, tool, null, null, null, null).execute(workflowRequest));
         assertEquals("SUCCEEDED", run.status());
     }
@@ -497,11 +497,23 @@ class WorkflowReactTest {
     }
 
     @Test
-    void defaultCheckpointSaverIsSqlite() {
-        WorkflowRun run = join(engine(null, null, null, null, null, null).execute(request("""
-                {"id":"end-only","nodes":[{"id":"done","type":"end"}]}
-                """, "结束", blank())));
-        assertEquals("org.bsc.langgraph4j.checkpoint.SQLiteSaverV2", run.checkpointSaver());
+    void defaultCheckpointSaverIsMysql() {
+        Path database = temp.resolve("unused-default.db");
+        WorkflowRequest workflowRequest = new WorkflowRequest(
+                "mysql-default-" + System.nanoTime(),
+                "session-1",
+                "user-1",
+                database,
+                "结束",
+                WorkflowParser.parse("""
+                        {"id":"end-only","nodes":[{"id":"done","type":"end"}]}
+                        """),
+                blank(),
+                null);
+        WorkflowRun run = join(engine(null, null, null, null, null, null).execute(workflowRequest));
+        assertEquals("SUCCEEDED", run.status(), run.detail());
+        assertEquals("org.bsc.langgraph4j.checkpoint.MySQLSaverV2", run.checkpointSaver());
+        assertFalse(Files.exists(database));
     }
 
     @Test
@@ -530,6 +542,7 @@ class WorkflowReactTest {
         assertLoads("org.bsc.langgraph4j.dsl.JsonDslGenerator");
         assertLoads("org.bsc.langgraph4j.checkpoint.SQLiteSaverV2");
         assertLoads("org.bsc.langgraph4j.checkpoint.PostgresSaverV2");
+        assertLoads("org.bsc.langgraph4j.checkpoint.MySQLSaverV2");
         assertLoads("org.bsc.langgraph4j.otel.OTELWrapCallTraceHook");
         assertMissing("org.springframework.context.ApplicationContext");
         assertMissing("org.springframework.ai.chat.model.ChatModel");
@@ -612,15 +625,16 @@ class WorkflowReactTest {
     }
 
     private WorkflowRequest request(String json, String input, PromptContext context) {
+        Path database = temp.resolve("workflow-" + System.nanoTime() + ".db");
         return new WorkflowRequest(
                 "exec-" + System.nanoTime(),
                 "session-1",
                 "user-1",
-                temp.resolve("workflow-" + System.nanoTime() + ".db"),
+                database,
                 input,
                 WorkflowParser.parse(json),
                 context,
-                null);
+                "jdbc:sqlite:" + database.toAbsolutePath());
     }
 
     private LangGraphWorkflowEngine engine(

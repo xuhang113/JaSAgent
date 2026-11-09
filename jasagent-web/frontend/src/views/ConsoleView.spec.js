@@ -118,10 +118,17 @@ beforeEach(() => {
       return { role: 'user', text: '请给出时间', executionId: 'exec-1' }
     }
     if (path === '/api/sessions' && method === 'POST') {
-      return { sessionId: 's-new', title: '新会话 1' }
+      return { sessionId: 's-new', title: '新会话' }
     }
     if (path === '/api/sessions') {
       return state.sessions
+    }
+    if (method === 'PATCH' && String(path).startsWith('/api/sessions/')) {
+      const title = options.body && options.body.title
+      const sessionId = String(path).split('/').pop()
+      state.sessions = state.sessions.map((item) => item.sessionId === sessionId ? { ...item, title } : item)
+      state.session = { ...state.session, title }
+      return { sessionId, title }
     }
     if (String(path).startsWith('/api/sessions/')) {
       return state.session
@@ -748,6 +755,59 @@ describe('助手回复上的思考', () => {
     expect(wrapper.find('.bubble.assistant').exists()).toBe(true)
     expect(wrapper.find('.thinking').exists()).toBe(false)
     expect(wrapper.get('.bubble.assistant').text()).not.toContain('思考')
+    wrapper.unmount()
+  })
+})
+
+describe('会话标题', () => {
+  it('新建会话使用新会话，而不是带序号的会话 1', async () => {
+    const wrapper = await mountConsole()
+    await buttonByText(wrapper, '新建').trigger('click')
+    await flushPromises()
+    expect(api).toHaveBeenCalledWith('/api/sessions', { method: 'POST', body: { title: '新会话' } })
+    const bodies = api.mock.calls.map((call) => JSON.stringify(call[1] && call[1].body))
+    expect(bodies.some((body) => body && body.includes('会话 1'))).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('单击标题后回车保存，Esc 取消', async () => {
+    const wrapper = await mountConsole()
+    await wrapper.get('.session-title').trigger('click')
+    await flushPromises()
+    const input = wrapper.get('.session-title-input')
+    expect(input.element.value).toBe('检查会话')
+    await input.setValue('  改过的标题  ')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+    expect(api).toHaveBeenCalledWith('/api/sessions/s1', { method: 'PATCH', body: { title: '改过的标题' } })
+    expect(wrapper.get('.session-title').text()).toBe('改过的标题')
+
+    api.mockClear()
+    await wrapper.get('.session-title').trigger('click')
+    await flushPromises()
+    const again = wrapper.get('.session-title-input')
+    await again.setValue('不会保存')
+    await again.trigger('keydown.esc')
+    await flushPromises()
+    expect(api.mock.calls.filter((call) => call[1] && call[1].method === 'PATCH')).toEqual([])
+    expect(wrapper.get('.session-title').text()).toBe('改过的标题')
+    wrapper.unmount()
+  })
+
+  it('改名入口和空标题都不发请求', async () => {
+    const wrapper = await mountConsole()
+    await wrapper.get('.session-rename').trigger('click')
+    await flushPromises()
+    const input = wrapper.get('.session-title-input')
+    await input.setValue('   ')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+    expect(api.mock.calls.filter((call) => call[1] && call[1].method === 'PATCH')).toEqual([])
+    expect(wrapper.get('.session-title').text()).toBe('检查会话')
+    expect(rule(css, '.console-layout .session-title-input')).toMatch(/border-radius:\s*8px/)
+    expect(rule(css, '.console-layout .session-title-input')).toMatch(/color:\s*#1b1b18/)
+    expect(rule(css, '.console-layout .session-rename')).toMatch(/border-radius:\s*8px/)
+    expect(rule(css, '.console-layout .session-rename')).toMatch(/color:\s*#1b1b18/)
     wrapper.unmount()
   })
 })

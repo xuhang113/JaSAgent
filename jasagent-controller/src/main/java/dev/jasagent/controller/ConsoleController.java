@@ -5,6 +5,7 @@ import dev.jasagent.api.exec.ConsoleApi;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -63,6 +64,11 @@ public class ConsoleController {
     @PostMapping("/api/sessions")
     public Map<String, Object> createSession(@RequestBody Map<String, String> body, HttpServletRequest request) {
         return console.createSession(session(request).login(), body.get("title"));
+    }
+
+    @PatchMapping("/api/sessions/{id}")
+    public Map<String, Object> renameSession(@PathVariable("id") String id, @RequestBody Map<String, String> body, HttpServletRequest request) {
+        return console.renameSession(session(request).login(), id, body.get("title"));
     }
 
     @GetMapping("/api/sessions/{id}")

@@ -38,6 +38,7 @@ import dev.jasagent.core.QueueAgentScheduler;
 import dev.jasagent.interrupt.CheckpointRunControl;
 import dev.jasagent.interrupt.NodeTask;
 import dev.jasagent.api.trace.TraceWriter;
+import dev.jasagent.persist.CheckpointStores;
 import dev.jasagent.persist.ExecutionRow;
 import dev.jasagent.plugin.PluginToolCatalog;
 import dev.jasagent.workflow.ChatModel;
@@ -107,10 +108,15 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             opened = null;
         }
         this.journal = opened;
+        try {
+            CheckpointStores.prepare(this.environment);
+        } catch (RuntimeException ignored) {
+            // 健康检查会把连不上的检查点报成 storage down。
+        }
     }
 
     public boolean storageReachable() {
-        return journal != null && journal.reachable();
+        return journal != null && journal.reachable() && CheckpointStores.reachable(environment);
     }
 
     List<String> observedChildTraceIds() {
@@ -371,7 +377,6 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         for (Map<String, Object> skill : skills) {
             skillLines.add(skill.get("name") + " " + skill.get("description"));
         }
-        String jdbc = environment.get("JASAGENT_JDBC_URL");
         WorkflowRequest request = new WorkflowRequest(
                 exec.executionId,
                 exec.sessionId,
@@ -380,7 +385,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 exec.pendingInput == null ? "" : exec.pendingInput,
                 definition,
                 new PromptContext("assistant", ruleLines, skillLines, List.of(), "", List.of(), List.of()),
-                jdbc == null || jdbc.isBlank() ? null : jdbc);
+                CheckpointStores.workflowJdbc(environment, database));
         WorkflowRun result = engine.execute(request).toCompletableFuture().join();
         synchronized (exec) {
             boolean hold = exec.suspended || pending(exec);
@@ -714,10 +719,27 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         Map<String, Object> stored = new LinkedHashMap<>();
         stored.put("sessionId", sessionId);
         stored.put("userId", userId);
-        stored.put("title", title == null || title.isBlank() ? "新会话" : title.trim());
+        String requested = title == null ? "" : title.trim();
+        boolean automatic = automaticTitle(requested);
+        stored.put("title", automatic ? "新会话" : limitTitle(requested, 80));
+        stored.put("titleCustom", !automatic);
         stored.put("createdAt", Instant.now().toString());
         stored.put("messages", new ArrayList<>());
         writeJson(conversationFile(userId, sessionId), stored);
+        return sessionSummary(stored);
+    }
+
+    @Override
+    public Map<String, Object> renameSession(String userId, String sessionId, String title) {
+        Path file = conversationFile(userId, sessionId);
+        Map<String, Object> stored = readOwned(userId, file);
+        String cleaned = title == null ? "" : title.trim();
+        if (cleaned.isEmpty()) {
+            throw new AgentException(ErrorCode.WORKFLOW, "会话标题不能为空");
+        }
+        stored.put("title", limitTitle(cleaned, 80));
+        stored.put("titleCustom", true);
+        writeJson(file, stored);
         return sessionSummary(stored);
     }
 
@@ -752,6 +774,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         }
         Path file = conversationFile(userId, sessionId);
         Map<String, Object> stored = readOwned(userId, file);
+        boolean first = messages(stored).isEmpty();
         String chosen = workflowId == null || workflowId.isBlank() ? "answer-with-tool" : workflowId;
         Map<String, Object> created = submit(userId, token, chosen, text, sessionId);
         Map<String, Object> message = new LinkedHashMap<>();
@@ -763,6 +786,12 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         Exec exec = owned(userId, String.valueOf(created.get("executionId")));
         for (Map<String, Object> agent : exec.agents) {
             agents(stored).add(new LinkedHashMap<>(agent));
+        }
+        if (first && !titleEdited(stored)) {
+            String summary = summarizeTitle(text);
+            if (!summary.isEmpty()) {
+                stored.put("title", summary);
+            }
         }
         writeJson(file, stored);
         return message;
@@ -1103,11 +1132,55 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         if (configuration == null) {
             return env;
         }
-        String url = configuration.get("JASAGENT_JDBC_URL");
-        if (url != null && !url.isBlank()) {
-            env.put("JASAGENT_JDBC_URL", url);
+        for (String key : List.of(
+                "JASAGENT_JDBC_URL",
+                "JASAGENT_JDBC_USER",
+                "JASAGENT_JDBC_PASSWORD",
+                "JASAGENT_CHECKPOINT",
+                "JASAGENT_CHECKPOINT_JDBC_URL",
+                "JASAGENT_CHECKPOINT_JDBC_USER",
+                "JASAGENT_CHECKPOINT_JDBC_PASSWORD")) {
+            String value = configuration.get(key);
+            if (value != null && !value.isBlank()) {
+                env.put(key, value);
+            }
         }
         return env;
+    }
+
+    private static boolean automaticTitle(String title) {
+        if (title == null || title.isBlank()) {
+            return true;
+        }
+        String trimmed = title.trim();
+        return "新会话".equals(trimmed) || trimmed.matches("新会话\\s+\\d+") || trimmed.matches("会话\\s*\\d+");
+    }
+
+    private static boolean titleEdited(Map<String, Object> stored) {
+        Object flag = stored.get("titleCustom");
+        if (flag instanceof Boolean value) {
+            return value;
+        }
+        Object title = stored.get("title");
+        return !automaticTitle(title == null ? "" : String.valueOf(title));
+    }
+
+    private static String summarizeTitle(String text) {
+        if (text == null) {
+            return "";
+        }
+        String normalized = text.replace('\r', ' ').replace('\n', ' ').trim();
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        return limitTitle(normalized, 40);
+    }
+
+    private static String limitTitle(String title, int max) {
+        if (title.length() <= max) {
+            return title;
+        }
+        return title.substring(0, max);
     }
 
     private CheckpointRunControl controlFor(Exec exec) {

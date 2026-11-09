@@ -128,9 +128,7 @@ public final class LangGraphWorkflowEngine {
     }
 
     private BaseCheckpointSaver saver(WorkflowRequest request) throws Exception {
-        String key = CheckpointSavers.postgres(request.jdbcUrl())
-                ? request.jdbcUrl()
-                : request.checkpointDatabase().toString();
+        String key = CheckpointSavers.cacheKey(request.jdbcUrl());
         BaseCheckpointSaver existing = savers.get(key);
         if (existing != null) {
             return existing;

@@ -12,6 +12,8 @@ public interface ConsoleApi {
 
     Map<String, Object> createSession(String userId, String title);
 
+    Map<String, Object> renameSession(String userId, String sessionId, String title);
+
     Map<String, Object> deleteSession(String userId, String sessionId);
 
     Map<String, Object> session(String userId, String sessionId);

@@ -27,6 +27,7 @@ chmod 600 "$JASAGENT_ADDRESS_FILE"
 chmod 600 "$JASAGENT_LOG_FILE"
 
 jasagent_load_model_env
+jasagent_load_checkpoint_env
 # nohup 之后再 setsid，避免服务留在调用方的进程组里，脚本一退就被一起停掉。
 pid="$(nohup python3 - "$JASAGENT_JAVA" "$JASAGENT_JAR" "$host" "$port" "$JASAGENT_LOG_FILE" <<'PY'
 import os
@@ -43,7 +44,7 @@ os.dup2(fd, 1)
 os.dup2(fd, 2)
 if fd > 2:
     os.close(fd)
-os.execv(java, [java, "-jar", jar, "server", "--server.address=" + host, "--server.port=" + port])
+os.execv(java, [java, "--add-opens", "java.base/jdk.internal.loader=ALL-UNNAMED", "--add-opens", "java.base/java.net=ALL-UNNAMED", "-jar", jar, "server", "--server.address=" + host, "--server.port=" + port])
 PY
 )"
 pid="$(printf '%s' "$pid" | tr -d '[:space:]')"

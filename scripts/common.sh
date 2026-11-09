@@ -239,6 +239,31 @@ jasagent_section_is_gateway() {
   [[ "$name" == "gateway" || "$name" == "ai gateway" || "$name" == "ai-gateway" ]]
 }
 
+jasagent_load_checkpoint_env() {
+  if [[ "${JASAGENT_CHECKPOINT:-}" == "sqlite" || "${JASAGENT_CHECKPOINT:-}" == "postgres" ]]; then
+    return 0
+  fi
+  if [[ -n "${JASAGENT_CHECKPOINT_JDBC_URL:-}" ]]; then
+    export JASAGENT_CHECKPOINT="${JASAGENT_CHECKPOINT:-mysql}"
+    return 0
+  fi
+  local file password
+  file="${HOME}/.config/urag-mysql-root.password"
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+  IFS= read -r password < "$file" || return 0
+  password="${password%$'\r'}"
+  if [[ -z "$password" ]]; then
+    return 0
+  fi
+  export JASAGENT_CHECKPOINT=mysql
+  export JASAGENT_CHECKPOINT_JDBC_URL="jdbc:mysql://127.0.0.1:3306/urag?connectTimeout=2000&socketTimeout=5000&allowPublicKeyRetrieval=true&useSSL=false&sslMode=DISABLED"
+  export JASAGENT_CHECKPOINT_JDBC_USER="${JASAGENT_CHECKPOINT_JDBC_USER:-root}"
+  export JASAGENT_CHECKPOINT_JDBC_PASSWORD="$password"
+  echo "检查点使用本机 MySQL 127.0.0.1:3306/urag。" >&2
+}
+
 jasagent_load_model_env() {
   local file section line key value
   local gw_base="" gw_model="" gw_key="" ds_key="" in_gateway=0 first="" last=""

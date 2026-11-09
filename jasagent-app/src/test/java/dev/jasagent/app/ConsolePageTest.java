@@ -357,6 +357,85 @@ class ConsolePageTest {
     }
 
     @Test
+    void newSessionUsesPlaceholderUntilFirstMessage() throws Exception {
+        String cookie = login("title-new", "test-password-1");
+        assertEquals("新会话", field(post("/api/sessions", cookie, Map.of("title", "会话 1")).getBody(), "title"));
+        assertEquals("新会话", field(post("/api/sessions", cookie, Map.of("title", "  新会话 2  ")).getBody(), "title"));
+        assertEquals("新会话", field(post("/api/sessions", cookie, Map.of("title", "   ")).getBody(), "title"));
+        assertEquals("甲的会话", field(post("/api/sessions", cookie, Map.of("title", " 甲的会话 ")).getBody(), "title"));
+    }
+
+    @Test
+    void ownerCanRenameSession() throws Exception {
+        String cookie = login("title-rename", "test-password-1");
+        String sessionId = sessionId(post("/api/sessions", cookie, Map.of("title", "待改名")));
+        ResponseEntity<String> renamed = patch("/api/sessions/" + sessionId, cookie, Map.of("title", "  手改标题  "));
+        assertEquals(HttpStatus.OK, renamed.getStatusCode());
+        assertEquals("手改标题", field(renamed.getBody(), "title"));
+        assertEquals("手改标题", field(get("/api/sessions/" + sessionId, cookie).getBody(), "title"));
+    }
+
+    @Test
+    void otherUserCannotRenameSession() throws Exception {
+        String alpha = login("title-a", "test-password-1");
+        String beta = login("title-b", "test-password-1");
+        String sessionId = sessionId(post("/api/sessions", alpha, Map.of("title", "甲的标题")));
+        ResponseEntity<String> response = patch("/api/sessions/" + sessionId, beta, Map.of("title", "乙改的"));
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertTrue(response.getBody().contains("AUTH"));
+        assertEquals("甲的标题", field(get("/api/sessions/" + sessionId, alpha).getBody(), "title"));
+    }
+
+    @Test
+    void blankRenameKeepsTitle() throws Exception {
+        String cookie = login("title-blank", "test-password-1");
+        String sessionId = sessionId(post("/api/sessions", cookie, Map.of("title", "原标题")));
+        ResponseEntity<String> response = patch("/api/sessions/" + sessionId, cookie, Map.of("title", "   "));
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("原标题", field(get("/api/sessions/" + sessionId, cookie).getBody(), "title"));
+    }
+
+    @Test
+    void firstMessageSummarizesTitleWithoutReplacingEdits() throws Exception {
+        String cookie = login("title-msg", "test-password-1");
+        selectWorkspace(cookie);
+        String sessionId = sessionId(post("/api/sessions", cookie, Map.of("title", "新会话")));
+        ResponseEntity<String> empty = post("/api/sessions/" + sessionId + "/messages", cookie, Map.of("text", "   ", "workflowId", "answer-with-tool"));
+        assertEquals(HttpStatus.BAD_REQUEST, empty.getStatusCode());
+        assertEquals("新会话", field(get("/api/sessions/" + sessionId, cookie).getBody(), "title"));
+
+        String text = "  请把这段话当成标题\n下一行  ";
+        post("/api/sessions/" + sessionId + "/messages", cookie, Map.of("text", text, "workflowId", "answer-with-tool"));
+        assertEquals("请把这段话当成标题 下一行", field(get("/api/sessions/" + sessionId, cookie).getBody(), "title"));
+
+        post("/api/sessions/" + sessionId + "/messages", cookie, Map.of("text", "后来的另一句不该覆盖", "workflowId", "answer-with-tool"));
+        assertEquals("请把这段话当成标题 下一行", field(get("/api/sessions/" + sessionId, cookie).getBody(), "title"));
+
+        String custom = sessionId(post("/api/sessions", cookie, Map.of("title", "甲的会话")));
+        post("/api/sessions/" + custom + "/messages", cookie, Map.of("text", "别覆盖自定义标题", "workflowId", "answer-with-tool"));
+        assertEquals("甲的会话", field(get("/api/sessions/" + custom, cookie).getBody(), "title"));
+
+        String renamed = sessionId(post("/api/sessions", cookie, Map.of("title", "新会话")));
+        patch("/api/sessions/" + renamed, cookie, Map.of("title", "手改之后"));
+        post("/api/sessions/" + renamed + "/messages", cookie, Map.of("text", "这条不该变成标题", "workflowId", "answer-with-tool"));
+        assertEquals("手改之后", field(get("/api/sessions/" + renamed, cookie).getBody(), "title"));
+
+        String longId = sessionId(post("/api/sessions", cookie, Map.of("title", "新会话")));
+        String longText = "甲".repeat(50);
+        post("/api/sessions/" + longId + "/messages", cookie, Map.of("text", longText, "workflowId", "answer-with-tool"));
+        assertEquals("甲".repeat(40), field(get("/api/sessions/" + longId, cookie).getBody(), "title"));
+    }
+
+    @Test
+    void consoleScriptEditsSessionTitle() {
+        String script = consoleScript();
+        assertTrue(script.contains("改名"), script);
+        assertTrue(script.contains("PATCH"), script);
+        assertTrue(script.contains("新会话"), script);
+        assertFalse(script.contains("新会话 \" +") || script.contains("新会话 ' +"), script);
+    }
+
+    @Test
     void messageCreatesExecution() throws Exception {
         String cookie = login("msg-user", "test-password-1");
         selectWorkspace(cookie);
@@ -420,6 +499,10 @@ class ConsolePageTest {
 
     private ResponseEntity<String> post(String path, String cookie, Map<String, String> body) {
         return exchange(path, HttpMethod.POST, cookie, body);
+    }
+
+    private ResponseEntity<String> patch(String path, String cookie, Map<String, String> body) {
+        return exchange(path, HttpMethod.PATCH, cookie, body);
     }
 
     private ResponseEntity<String> get(String path, String cookie) {

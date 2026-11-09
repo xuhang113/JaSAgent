@@ -3,6 +3,8 @@ package dev.jasagent.interrupt;
 import dev.jasagent.api.concurrent.VirtualIo;
 import dev.jasagent.api.persist.DataDirectory;
 import dev.jasagent.api.event.TraceEvent;
+import dev.jasagent.persist.CheckpointBackend;
+import dev.jasagent.persist.CheckpointStores;
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
 import dev.jasagent.api.exec.ExecutionId;
@@ -16,8 +18,6 @@ import dev.jasagent.api.trace.TraceWriter;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.checkpoint.BaseCheckpointSaver;
 import org.bsc.langgraph4j.checkpoint.Checkpoint;
-import org.bsc.langgraph4j.checkpoint.PostgresSaverV2;
-import org.bsc.langgraph4j.checkpoint.SQLiteSaverV2;
 import org.bsc.langgraph4j.serializer.std.ObjectStreamStateSerializer;
 import org.bsc.langgraph4j.state.AgentState;
 
@@ -44,6 +44,7 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
 
     private final BaseCheckpointSaver saver;
     private final Path sqliteFile;
+    private final String threadPrefix;
     private final List<NodeTask> nodes;
     private final AgentTracer tracer;
     private final TraceWriter trace;
@@ -54,11 +55,13 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
     private CheckpointRunControl(
             BaseCheckpointSaver saver,
             Path sqliteFile,
+            String threadPrefix,
             List<NodeTask> nodes,
             AgentTracer tracer,
             TraceWriter trace) {
         this.saver = saver;
         this.sqliteFile = sqliteFile;
+        this.threadPrefix = threadPrefix;
         this.nodes = nodes;
         this.tracer = tracer;
         this.trace = trace;
@@ -76,33 +79,17 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
         List<NodeTask> plan = List.copyOf(Objects.requireNonNull(nodes, "nodes"));
         validate(plan);
         Map<String, String> env = environment == null ? Map.of() : environment;
-        String jdbcUrl = env.get("JASAGENT_JDBC_URL");
         try {
-            ObjectStreamStateSerializer<AgentState> serializer = new ObjectStreamStateSerializer<>(AgentState::new);
-            if (jdbcUrl != null && jdbcUrl.startsWith("jdbc:postgresql:")) {
-                PostgresEndpoint endpoint = PostgresEndpoint.parse(jdbcUrl);
-                BaseCheckpointSaver postgres = PostgresSaverV2.builder()
-                        .host(endpoint.host())
-                        .port(endpoint.port())
-                        .database(endpoint.database())
-                        .user(blank(env.get("JASAGENT_JDBC_USER")))
-                        .password(env.get("JASAGENT_JDBC_PASSWORD") == null ? "" : env.get("JASAGENT_JDBC_PASSWORD"))
-                        .property("connectTimeout", "2")
-                        .property("loginTimeout", "2")
-                        .property("socketTimeout", "2")
-                        .stateSerializer(serializer)
-                        .createTables(true)
-                        .build();
-                return new CheckpointRunControl(postgres, null, plan, tracer, trace);
-            }
             Path sqlite = DataDirectory.of(workspace).resolve("checkpoints.db");
-            Files.createDirectories(sqlite.getParent());
-            BaseCheckpointSaver sqliteSaver = SQLiteSaverV2.builder()
-                    .databasePath(sqlite.toString())
-                    .stateSerializer(serializer)
-                    .createTables(true)
-                    .build();
-            return new CheckpointRunControl(sqliteSaver, sqlite, plan, tracer, trace);
+            Path data = sqlite.getParent();
+            if (data != null) {
+                Files.createDirectories(data);
+            }
+            var selection = CheckpointStores.select(env).withSqlite(sqlite);
+            BaseCheckpointSaver saver = CheckpointStores.open(selection, new ObjectStreamStateSerializer<>(AgentState::new));
+            Path file = selection.backend() == CheckpointBackend.SQLITE ? sqlite.toAbsolutePath() : null;
+            String prefix = selection.backend() == CheckpointBackend.MYSQL ? "run:" : "";
+            return new CheckpointRunControl(saver, file, prefix, plan, tracer, trace);
         } catch (AgentException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -320,7 +307,7 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
                 .state(new HashMap<>(state))
                 .build();
         try {
-            saver.put(RunnableConfig.builder().threadId(executionId).build(), checkpoint);
+            saver.put(RunnableConfig.builder().threadId(threadKey(executionId)).build(), checkpoint);
             return checkpoint;
         } catch (Exception ex) {
             throw new AgentException(ErrorCode.PERSIST, "检查点提交失败", executionId, ex);
@@ -333,7 +320,7 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
 
     private Optional<Checkpoint> find(String executionId) {
         try {
-            return saver.get(RunnableConfig.builder().threadId(executionId).build());
+            return saver.get(RunnableConfig.builder().threadId(threadKey(executionId)).build());
         } catch (AgentException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -348,6 +335,10 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
             }
         }
         throw new AgentException(ErrorCode.WORKFLOW, "检查点里的节点不在当前流程中", executionId, null);
+    }
+
+    private String threadKey(String executionId) {
+        return threadPrefix + executionId;
     }
 
     private Object lock(String executionId) {
@@ -392,10 +383,6 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
     private static String text(Map<String, Object> state, String key) {
         Object value = state == null ? null : state.get(key);
         return value == null ? "" : String.valueOf(value);
-    }
-
-    private static String blank(String value) {
-        return value == null ? "" : value;
     }
 
     private static boolean cancelled(Throwable error) {
@@ -446,31 +433,6 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
                     || !seen.add(node.id())) {
                 throw new AgentException(ErrorCode.WORKFLOW, "节点标识不能为空或重复");
             }
-        }
-    }
-
-    private record PostgresEndpoint(String host, int port, String database) {
-        static PostgresEndpoint parse(String url) {
-            String rest = url.substring("jdbc:postgresql://".length());
-            int slash = rest.indexOf('/');
-            String hostPort = slash < 0 ? rest : rest.substring(0, slash);
-            String database = slash < 0 ? "" : rest.substring(slash + 1);
-            int query = database.indexOf('?');
-            if (query >= 0) {
-                database = database.substring(0, query);
-            }
-            int at = hostPort.lastIndexOf('@');
-            if (at >= 0) {
-                hostPort = hostPort.substring(at + 1);
-            }
-            String host = hostPort;
-            int port = 5432;
-            int colon = hostPort.lastIndexOf(':');
-            if (colon > 0 && hostPort.indexOf(':') == colon) {
-                host = hostPort.substring(0, colon);
-                port = Integer.parseInt(hostPort.substring(colon + 1));
-            }
-            return new PostgresEndpoint(host, port, database);
         }
     }
 }

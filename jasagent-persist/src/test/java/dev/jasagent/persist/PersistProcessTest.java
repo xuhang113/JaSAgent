@@ -5,6 +5,7 @@ import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.StateGraph;
 import org.bsc.langgraph4j.checkpoint.Checkpoint;
+import org.bsc.langgraph4j.checkpoint.MySQLSaverV2;
 import org.bsc.langgraph4j.checkpoint.SQLiteSaverV2;
 import org.bsc.langgraph4j.state.AgentState;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -37,6 +39,7 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -82,7 +85,7 @@ class PersistProcessTest {
         }
         assertTrue(Files.isRegularFile(workspace.resolve("jasagent")));
         assertFalse(Files.isDirectory(workspace.resolve("jasagent")));
-        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, Map.of())) {
+        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, sqliteCheckpoint())) {
             Path sqlite = workspace.resolve(".jasagent").resolve("data").resolve("checkpoints.db");
             assertEquals(sqlite.toAbsolutePath(), checkpoints.sqliteFile());
             assertTrue(Files.isRegularFile(sqlite));
@@ -190,7 +193,7 @@ class PersistProcessTest {
     void nodeCheckpointUsesSqliteSaver() throws Exception {
         Path workspace = temp.resolve("workspace");
         String executionId = UUID.randomUUID().toString();
-        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, Map.of())) {
+        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, sqliteCheckpoint())) {
             assertEquals(CheckpointBackend.SQLITE, checkpoints.backend());
             assertInstanceOf(SQLiteSaverV2.class, checkpoints.saver());
             Path sqlite = workspace.resolve(".jasagent").resolve("data").resolve("checkpoints.db");
@@ -205,7 +208,7 @@ class PersistProcessTest {
     void graphCompileUsesCheckpointSaver() throws Exception {
         Path workspace = temp.resolve("workspace");
         String executionId = UUID.randomUUID().toString();
-        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, Map.of())) {
+        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, sqliteCheckpoint())) {
             StateGraph<AgentState> graph = new StateGraph<>(AgentState::new)
                     .addNode("find", node_async(state -> Map.<String, Object>of("seen", "yes")))
                     .addEdge(START, "find")
@@ -226,11 +229,11 @@ class PersistProcessTest {
     void checkpointSurvivesReopen() throws Exception {
         Path workspace = temp.resolve("workspace");
         String executionId = UUID.randomUUID().toString();
-        try (NodeCheckpoints first = NodeCheckpoints.open(workspace, Map.of())) {
+        try (NodeCheckpoints first = NodeCheckpoints.open(workspace, sqliteCheckpoint())) {
             join(first.commitBeforeNextNode(executionId, "find", "act", Map.<String, Object>of("step", "find"), () -> {
             }));
         }
-        try (NodeCheckpoints second = NodeCheckpoints.open(workspace, Map.of())) {
+        try (NodeCheckpoints second = NodeCheckpoints.open(workspace, sqliteCheckpoint())) {
             Optional<Checkpoint> latest = join(second.latest(executionId));
             assertTrue(latest.isPresent());
             assertEquals("find", latest.get().nodeId());
@@ -243,7 +246,7 @@ class PersistProcessTest {
     void failedCheckpointDoesNotEnterNextNode() throws Exception {
         Path workspace = temp.resolve("workspace");
         String executionId = UUID.randomUUID().toString();
-        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, Map.of())) {
+        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, sqliteCheckpoint())) {
             AtomicBoolean entered = new AtomicBoolean(false);
             Map<String, Object> state = new HashMap<>();
             state.put("bad", new Object());
@@ -267,10 +270,60 @@ class PersistProcessTest {
     }
 
     @Test
+    void defaultCheckpointUsesMysqlAndKeepsExistingTables() throws Exception {
+        Path workspace = temp.resolve("workspace");
+        CheckpointSelection selection = CheckpointStores.select(Map.of());
+        assertEquals(CheckpointBackend.MYSQL, selection.backend());
+        assertTrue(selection.jdbcUrl().startsWith("jdbc:mysql://127.0.0.1:3306/urag"), selection.jdbcUrl());
+        assertFalse(selection.jdbcUrl().contains("password="), selection.toString());
+        assertFalse(selection.toString().contains(selection.password()));
+        Set<String> before = mysqlTables(selection);
+        assertTrue(before.stream().anyMatch(name -> name.equalsIgnoreCase("source_document")), before.toString());
+        String executionId = UUID.randomUUID().toString();
+        try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, Map.of())) {
+            assertEquals(CheckpointBackend.MYSQL, checkpoints.backend());
+            assertInstanceOf(MySQLSaverV2.class, checkpoints.saver());
+            assertNull(checkpoints.sqliteFile());
+            join(checkpoints.commitBeforeNextNode(executionId, "find", "act", Map.<String, Object>of("step", "find"), () -> {
+            }));
+        }
+        try (NodeCheckpoints again = NodeCheckpoints.open(workspace, Map.of())) {
+            Optional<Checkpoint> latest = join(again.latest(executionId));
+            assertTrue(latest.isPresent());
+            assertEquals("find", latest.get().nodeId());
+            assertEquals("act", latest.get().nextNodeId());
+            assertEquals("find", latest.get().state().get("step"));
+        }
+        Set<String> after = mysqlTables(selection);
+        assertTrue(after.containsAll(before), after.toString());
+        for (String table : List.of("LG4JThread", "LG4JThreadTag", "LG4JCheckpoint")) {
+            assertTrue(after.stream().anyMatch(table::equalsIgnoreCase), table + " " + after);
+        }
+        assertFalse(Files.exists(workspace.resolve(".jasagent").resolve("data").resolve("checkpoints.db")));
+    }
+
+    @Test
     void executionDatabaseHasNoCustomCheckpointTable() throws Exception {
         Set<String> names = tableNames(temp.resolve("workspace"));
         for (String table : CHECKPOINT_TABLES) {
             assertFalse(names.contains(table), table);
+        }
+    }
+
+    private static Map<String, String> sqliteCheckpoint() {
+        return Map.of("JASAGENT_CHECKPOINT", "sqlite");
+    }
+
+    private static Set<String> mysqlTables(CheckpointSelection selection) throws Exception {
+        Class.forName("com.mysql.cj.jdbc.Driver");
+        try (Connection connection = DriverManager.getConnection(selection.jdbcUrl(), selection.user(), selection.password());
+             ResultSet rows = connection.createStatement().executeQuery(
+                     "select table_name from information_schema.tables where table_schema = database()")) {
+            Set<String> names = new HashSet<>();
+            while (rows.next()) {
+                names.add(rows.getString(1));
+            }
+            return names;
         }
     }
 

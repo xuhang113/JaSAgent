@@ -7,12 +7,9 @@ import dev.jasagent.api.persist.DataDirectory;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.checkpoint.BaseCheckpointSaver;
 import org.bsc.langgraph4j.checkpoint.Checkpoint;
-import org.bsc.langgraph4j.checkpoint.PostgresSaverV2;
-import org.bsc.langgraph4j.checkpoint.SQLiteSaverV2;
 import org.bsc.langgraph4j.serializer.std.ObjectStreamStateSerializer;
 import org.bsc.langgraph4j.state.AgentState;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
@@ -31,32 +28,12 @@ public final class NodeCheckpoints implements AutoCloseable {
     }
 
     public static NodeCheckpoints open(Path workspace, Map<String, String> environment) {
-        JdbcSettings settings = JdbcSettings.resolve(workspace, environment);
         try {
-            if (settings.postgresql()) {
-                PostgresEndpoint endpoint = PostgresEndpoint.parse(settings.url());
-                BaseCheckpointSaver saver = PostgresSaverV2.builder()
-                        .host(endpoint.host())
-                        .port(endpoint.port())
-                        .database(endpoint.database())
-                        .user(settings.user())
-                        .password(settings.password())
-                        .property("connectTimeout", "2")
-                        .property("loginTimeout", "2")
-                        .property("socketTimeout", "2")
-                        .stateSerializer(new ObjectStreamStateSerializer<>(AgentState::new))
-                        .createTables(true)
-                        .build();
-                return new NodeCheckpoints(CheckpointBackend.POSTGRES, saver, null);
-            }
             Path sqlite = DataDirectory.of(workspace).resolve("checkpoints.db");
-            Files.createDirectories(sqlite.getParent());
-            BaseCheckpointSaver saver = SQLiteSaverV2.builder()
-                    .databasePath(sqlite.toString())
-                    .stateSerializer(new ObjectStreamStateSerializer<>(AgentState::new))
-                    .createTables(true)
-                    .build();
-            return new NodeCheckpoints(CheckpointBackend.SQLITE, saver, sqlite);
+            CheckpointSelection selection = CheckpointStores.select(environment).withSqlite(sqlite);
+            BaseCheckpointSaver saver = CheckpointStores.open(selection, new ObjectStreamStateSerializer<>(AgentState::new));
+            Path file = selection.backend() == CheckpointBackend.SQLITE ? sqlite.toAbsolutePath() : null;
+            return new NodeCheckpoints(selection.backend(), saver, file);
         } catch (AgentException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -108,30 +85,5 @@ public final class NodeCheckpoints implements AutoCloseable {
 
     @Override
     public void close() {
-    }
-
-    private record PostgresEndpoint(String host, int port, String database) {
-        static PostgresEndpoint parse(String url) {
-            String rest = url.substring("jdbc:postgresql://".length());
-            int slash = rest.indexOf('/');
-            String hostPort = slash < 0 ? rest : rest.substring(0, slash);
-            String database = slash < 0 ? "" : rest.substring(slash + 1);
-            int query = database.indexOf('?');
-            if (query >= 0) {
-                database = database.substring(0, query);
-            }
-            int at = hostPort.lastIndexOf('@');
-            if (at >= 0) {
-                hostPort = hostPort.substring(at + 1);
-            }
-            String host = hostPort;
-            int port = 5432;
-            int colon = hostPort.lastIndexOf(':');
-            if (colon > 0 && hostPort.indexOf(':') == colon) {
-                host = hostPort.substring(0, colon);
-                port = Integer.parseInt(hostPort.substring(colon + 1));
-            }
-            return new PostgresEndpoint(host, port, database);
-        }
     }
 }

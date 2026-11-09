@@ -26,10 +26,25 @@
       <div class="session-list">
         <p v-if="sessions.length === 0" class="muted">无会话。</p>
         <div v-for="item in sessions" :key="item.sessionId" class="session-row" :class="{ active: item.sessionId === activeSessionId }">
-          <button type="button" class="session-switch" @click="switchSession(item.sessionId)">
-            <strong>{{ item.title }}</strong>
+          <div v-if="editingSessionId === item.sessionId" class="session-edit">
+            <input
+              v-model="editingTitle"
+              class="session-title-input"
+              :data-session-title-input="item.sessionId"
+              aria-label="会话标题"
+              maxlength="80"
+              @click.stop
+              @keydown.enter.prevent="commitRename(item)"
+              @keydown.esc.prevent="cancelRename"
+              @blur="onRenameBlur(item)"
+            />
+            <small class="mono-num">{{ item.sessionId.slice(0, 8) }}</small>
+          </div>
+          <button v-else type="button" class="session-switch" @click="switchSession(item.sessionId)">
+            <strong class="session-title" @click.stop="beginRename(item)">{{ item.title }}</strong>
             <small class="mono-num">{{ item.sessionId.slice(0, 8) }}</small>
           </button>
+          <button type="button" class="session-rename" @click.stop="beginRename(item)">改名</button>
           <el-button size="small" text type="danger" class="cursor-session-delete" @click="removeSession(item.sessionId)">删除</el-button>
         </div>
       </div>
@@ -290,7 +305,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '../api'
@@ -319,6 +334,9 @@ const workspaceOptions = ref([])
 const sessions = ref([])
 const activeSessionId = ref('')
 const activeTitle = ref('')
+const editingSessionId = ref('')
+const editingTitle = ref('')
+const skipRenameBlur = ref(false)
 const agents = ref([])
 const corrections = ref([])
 const workflows = ref([])
@@ -690,9 +708,57 @@ async function loadSessions() {
 }
 
 async function createSession() {
-  const created = await api('/api/sessions', { method: 'POST', body: { title: '新会话 ' + (sessions.value.length + 1) } })
+  const created = await api('/api/sessions', { method: 'POST', body: { title: '新会话' } })
   await loadSessions()
   await switchSession(created.sessionId)
+}
+
+function beginRename(item) {
+  editingSessionId.value = item.sessionId
+  editingTitle.value = item.title || ''
+  skipRenameBlur.value = false
+  nextTick(() => {
+    const input = document.querySelector('[data-session-title-input="' + item.sessionId + '"]')
+    if (input) {
+      input.focus()
+      input.select()
+    }
+  })
+}
+
+function cancelRename() {
+  skipRenameBlur.value = true
+  editingSessionId.value = ''
+  editingTitle.value = ''
+}
+
+function onRenameBlur(item) {
+  if (skipRenameBlur.value) {
+    skipRenameBlur.value = false
+    return
+  }
+  commitRename(item)
+}
+
+async function commitRename(item) {
+  if (editingSessionId.value !== item.sessionId) {
+    return
+  }
+  const title = editingTitle.value.trim()
+  if (!title || title === String(item.title || '').trim()) {
+    cancelRename()
+    return
+  }
+  editingSessionId.value = ''
+  try {
+    const saved = await api('/api/sessions/' + item.sessionId, { method: 'PATCH', body: { title } })
+    item.title = saved.title || title
+    if (activeSessionId.value === item.sessionId) {
+      activeTitle.value = item.title
+    }
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
 }
 
 async function switchSession(sessionId) {
@@ -762,6 +828,7 @@ async function sendMessage() {
     messages.value.push(message)
     executionId.value = message.executionId
     cliInput.value = text
+    await loadSessions()
     await switchSession(activeSessionId.value)
     watchExecution(message.executionId)
   } catch (error) {
