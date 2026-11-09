@@ -330,6 +330,20 @@ h3 {
   white-space: nowrap;
 }
 
+.console-layout .model-select .el-select__selection {
+  height: 26px;
+  overflow: hidden;
+}
+
+.console-layout .model-select .el-select__placeholder {
+  position: static;
+  top: auto;
+  z-index: auto;
+  width: 100%;
+  transform: none;
+  color: #1b1b18;
+}
+
 .console-layout .composer-actions .el-button.cursor-btn-primary {
   flex: none;
   height: 28px;
