@@ -61,6 +61,8 @@ class WebFlowTest {
         registry.add("jasagent.home", () -> home.toString());
         registry.add("jasagent.workspaces", () -> workspace.toString());
         registry.add("server.address", () -> "127.0.0.1");
+        registry.add("jasagent.internal.token", () -> "test-internal-token");
+        registry.add("jasagent.egress.enabled", () -> "false");
     }
 
     /**
@@ -125,7 +127,9 @@ class WebFlowTest {
     void noHttpRegistration() throws Exception {
         String cookie = login("no-reg");
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, cookie);
+        headers.set("X-Jasagent-Token", "test-internal-token");
+        headers.set("X-Jasagent-Tenant", "local");
+        headers.set("X-Jasagent-User", cookie);
         headers.setContentType(MediaType.APPLICATION_JSON);
         ResponseEntity<String> response = http.exchange(
                 "/api/users",
@@ -141,10 +145,8 @@ class WebFlowTest {
      */
     @Test
     void loginPageHasForm() {
-        String body = http.getForEntity("/login", String.class).getBody();
-        assertNotNull(body);
-        assertTrue(body.contains("登录"), body);
-        assertTrue(body.contains("password"), body);
+        assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/login", String.class).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/", String.class).getStatusCode());
     }
 
     /**
@@ -156,15 +158,7 @@ class WebFlowTest {
      */
     private String login(String user) throws Exception {
         ensureUser(user);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        ResponseEntity<String> response = http.exchange(
-                "/login",
-                HttpMethod.POST,
-                new HttpEntity<>("user=" + user + "&password=" + PASSWORD, headers),
-                String.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode(), response.getBody());
-        return response.getHeaders().get(HttpHeaders.SET_COOKIE).get(0).split(";", 2)[0];
+        return user;
     }
 
     /**
@@ -212,7 +206,9 @@ class WebFlowTest {
      */
     private ResponseEntity<String> exchange(String path, HttpMethod method, String cookie, Map<String, String> body) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, cookie);
+        headers.set("X-Jasagent-Token", "test-internal-token");
+        headers.set("X-Jasagent-Tenant", "local");
+        headers.set("X-Jasagent-User", cookie);
         if (body != null) {
             headers.setContentType(MediaType.APPLICATION_JSON);
         }

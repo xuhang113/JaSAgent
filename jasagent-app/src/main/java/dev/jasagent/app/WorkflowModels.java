@@ -10,6 +10,7 @@ import dev.jasagent.api.llm.LlmMessage;
 import dev.jasagent.api.llm.LlmTask;
 import dev.jasagent.api.llm.LlmToolCall;
 import dev.jasagent.api.llm.ToolDefinition;
+import dev.jasagent.llm.GrokLlmClient;
 import dev.jasagent.llm.LangChain4jLlmClient;
 import dev.jasagent.llm.LlmRouter;
 import dev.jasagent.llm.LlmSettings;
@@ -52,6 +53,7 @@ final class WorkflowModels {
     static boolean configured() {
         LlmSettings settings = LlmSettings.fromEnvironment();
         return present(settings.deepseekApiKey())
+                || settings.grokConfigured()
                 || (present(settings.gatewayBaseUrl()) && present(settings.gatewayApiKey()) && present(settings.gatewayModel()));
     }
 
@@ -93,11 +95,13 @@ final class WorkflowModels {
         LlmClient gateway = present(settings.gatewayBaseUrl()) && present(settings.gatewayApiKey())
                 ? LangChain4jLlmClient.gateway(settings)
                 : new UnavailableClient();
+        LlmClient grok = settings.grokConfigured() ? GrokLlmClient.create(settings) : new UnavailableClient();
         LlmRouter router = new LlmRouter(
                 settings,
                 () -> true,
                 deepseek,
                 gateway,
+                grok,
                 call -> CompletableFuture.completedFuture(null),
                 (executionId, line) -> CompletableFuture.completedFuture(null));
         return request -> {
@@ -141,15 +145,7 @@ final class WorkflowModels {
         if (settings.deepseekThinking() || configuration == null || !truthy(configuration.get("jasagent.deepseek.thinking"))) {
             return settings;
         }
-        return new LlmSettings(
-                settings.deepseekApiKey(),
-                true,
-                settings.gatewayBaseUrl(),
-                settings.gatewayApiKey(),
-                settings.gatewayModel(),
-                settings.gatewayEmbeddings(),
-                settings.gatewayEmbeddingModel(),
-                settings.timeout());
+        return settings.withDeepseekThinking(true);
     }
 
     /**

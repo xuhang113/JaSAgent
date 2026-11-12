@@ -24,11 +24,11 @@ import java.util.Map;
 
 /**
  * 按环境变量和本机 MySQL 配置选出检查点后端，并打开对应的 langgraph4j 存储器。
- * 没写明数据库时先读 my.cnf，再读本机 urag 库口令，最后落到 MySQL。
+ * 没写明数据库时先读 my.cnf，再读本机 MySQL 口令，最后落到 jasagent 库。
  */
 public final class CheckpointStores {
-    /** 本机 urag 库的默认地址，指向 127.0.0.1:3306，连接超时短，并关闭 SSL。 */
-    static final String DEFAULT_MYSQL_URL = "jdbc:mysql://127.0.0.1:3306/urag"
+    /** 本机 jasagent 库的默认地址，指向 127.0.0.1:3306，连接超时短，并关闭 SSL。 */
+    static final String DEFAULT_MYSQL_URL = "jdbc:mysql://127.0.0.1:3306/jasagent"
             + "?connectTimeout=2000&socketTimeout=5000&allowPublicKeyRetrieval=true&useSSL=false&sslMode=DISABLED";
 
     /** 不创建实例。选库和打开存储器都走静态方法。 */
@@ -214,7 +214,7 @@ public final class CheckpointStores {
     }
 
     /**
-     * 环境没写明数据库时，先读 my.cnf 的客户端段；没有可用口令再读本机 urag 根口令，并连到默认的 urag 库。两处都没有口令时抛出持久化异常。
+     * 环境没写明数据库时，先读 my.cnf 的客户端段；没有可用口令再读本机 MySQL 根口令，并连到默认的 jasagent 库。两处都没有口令时抛出持久化异常。
      *
      * @param env 进程环境，用来补用户名
      * @return MySQL 检查点选择
@@ -229,11 +229,11 @@ public final class CheckpointStores {
             throw new AgentException(ErrorCode.PERSIST, "没有找到本机 MySQL 检查点配置");
         }
         String user = first(env.get("JASAGENT_CHECKPOINT_JDBC_USER"), "root");
-        return new CheckpointSelection(CheckpointBackend.MYSQL, null, DEFAULT_MYSQL_URL, user, password, "127.0.0.1", 3306, "urag");
+        return new CheckpointSelection(CheckpointBackend.MYSQL, null, DEFAULT_MYSQL_URL, user, password, "127.0.0.1", 3306, "jasagent");
     }
 
     /**
-     * 从一条 MySQL JDBC 地址里拆出主机、端口、库名和账号。口令不够时依次用检查点环境变量、通用 JDBC 环境变量和本机 urag 口令补上。
+     * 从一条 MySQL JDBC 地址里拆出主机、端口、库名和账号。口令不够时依次用检查点环境变量、通用 JDBC 环境变量和本机 MySQL 口令补上。
      *
      * @param url 以 jdbc:mysql: 开头的地址
      * @param env 进程环境
@@ -346,28 +346,17 @@ public final class CheckpointStores {
     }
 
     /**
-     * 读取用户主目录下 urag MySQL 根口令文件的第一行。
+     * 读取用户主目录下 MySQL 根口令文件的第一行。
      *
      * @return 去掉首尾空白后的口令；文件不存在或读失败时为空串
      */
+    /**
+     * 读取本机 MySQL 根口令。具体文件位置和失败时的空串由 {@link UragMysql} 处理，这里不打印口令。
+     *
+     * @return 口令；没有时是空串
+     */
     private static String readUragPassword() {
-        Path file = Path.of(System.getProperty("user.home", ""), ".config", "urag-mysql-root.password");
-        if (!Files.isRegularFile(file)) {
-            return "";
-        }
-        try {
-            String line = Files.readString(file, StandardCharsets.UTF_8);
-            int newline = line.indexOf('\n');
-            if (newline >= 0) {
-                line = line.substring(0, newline);
-            }
-            if (line.endsWith("\r")) {
-                line = line.substring(0, line.length() - 1);
-            }
-            return line.trim();
-        } catch (Exception ex) {
-            return "";
-        }
+        return UragMysql.readPassword();
     }
 
     /**

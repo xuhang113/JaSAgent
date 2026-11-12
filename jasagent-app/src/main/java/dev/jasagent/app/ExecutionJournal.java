@@ -28,6 +28,15 @@ final class ExecutionJournal {
     private final ExecutionStore store;
 
     /**
+     * 返回打开时用的执行库，供会话账本复用同一条连接设置。
+     *
+     * @return 执行库
+     */
+    ExecutionDatabase database() {
+        return database;
+    }
+
+    /**
      * 保存已经打开的库和它上面的执行存储，供后续同步调用。
      * 副作用：只持有这两个对象，不另开连接。
      *

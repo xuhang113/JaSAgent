@@ -14,6 +14,7 @@ import java.util.Map;
  * @param gatewayEmbeddings 为 true 时允许走网关做向量嵌入
  * @param gatewayEmbeddingModel 网关嵌入模型名
  * @param timeout 单次模型调用的最长等待时间
+ * @param grokApiKey Grok 的访问密钥；空表示没有配置 Grok。不会出现在 {@link #toString()} 里
  */
 public record LlmSettings(
         String deepseekApiKey,
@@ -23,7 +24,8 @@ public record LlmSettings(
         String gatewayModel,
         boolean gatewayEmbeddings,
         String gatewayEmbeddingModel,
-        Duration timeout) {
+        Duration timeout,
+        String grokApiKey) {
 
     /**
      * 超时没给出时改成 60 秒，保证后面的客户端总能拿到一个有限的等待上限。
@@ -36,11 +38,39 @@ public record LlmSettings(
      * @param gatewayEmbeddings 是否启用网关嵌入，这里原样保留
      * @param gatewayEmbeddingModel 网关嵌入模型名，这里原样保留
      * @param timeout 调用超时；为 null 时改成 60 秒
+     * @param grokApiKey Grok 密钥，这里原样保留；null 收成空串
      */
     public LlmSettings {
         if (timeout == null) {
             timeout = Duration.ofSeconds(60);
         }
+        if (grokApiKey == null) {
+            grokApiKey = "";
+        }
+    }
+
+    /**
+     * 兼容还没有 Grok 密钥的调用。Grok 密钥按空串处理，DeepSeek 和网关字段保持不变。
+     *
+     * @param deepseekApiKey DeepSeek 的访问密钥
+     * @param deepseekThinking 是否打开 DeepSeek 思考
+     * @param gatewayBaseUrl 网关根地址
+     * @param gatewayApiKey 网关密钥
+     * @param gatewayModel 网关聊天模型名
+     * @param gatewayEmbeddings 是否启用网关嵌入
+     * @param gatewayEmbeddingModel 网关嵌入模型名
+     * @param timeout 调用超时；为 null 时改成 60 秒
+     */
+    public LlmSettings(
+            String deepseekApiKey,
+            boolean deepseekThinking,
+            String gatewayBaseUrl,
+            String gatewayApiKey,
+            String gatewayModel,
+            boolean gatewayEmbeddings,
+            String gatewayEmbeddingModel,
+            Duration timeout) {
+        this(deepseekApiKey, deepseekThinking, gatewayBaseUrl, gatewayApiKey, gatewayModel, gatewayEmbeddings, gatewayEmbeddingModel, timeout, "");
     }
 
     /**
@@ -67,7 +97,36 @@ public record LlmSettings(
                 env.get("JASAGENT_GATEWAY_MODEL"),
                 truthy(env.get("JASAGENT_GATEWAY_EMBEDDINGS")),
                 env.get("JASAGENT_GATEWAY_EMBEDDING_MODEL"),
-                timeout(env.get("JASAGENT_LLM_TIMEOUT_SECONDS")));
+                timeout(env.get("JASAGENT_LLM_TIMEOUT_SECONDS")),
+                grokKey(env));
+    }
+
+    /**
+     * 复制一份设置并改掉 DeepSeek 思考开关。Grok 密钥和网关字段保持原值。
+     *
+     * @param thinking 新的思考开关
+     * @return 只改了思考开关的新设置
+     */
+    public LlmSettings withDeepseekThinking(boolean thinking) {
+        return new LlmSettings(
+                deepseekApiKey,
+                thinking,
+                gatewayBaseUrl,
+                gatewayApiKey,
+                gatewayModel,
+                gatewayEmbeddings,
+                gatewayEmbeddingModel,
+                timeout,
+                grokApiKey);
+    }
+
+    /**
+     * Grok 密钥是否已配置。
+     *
+     * @return 密钥非空白时为 true
+     */
+    public boolean grokConfigured() {
+        return !isBlank(grokApiKey);
     }
 
     /**
@@ -110,5 +169,36 @@ public record LlmSettings(
      */
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    /**
+     * 按顺序取 Grok 密钥：进程里的 JASAGENT_GROK_API_KEY、XAI_API_KEY，然后是启动时放进进程的那一份。
+     *
+     * @param env 环境变量
+     * @return 第一个非空白密钥；都没有时是空串
+     */
+    private static String grokKey(Map<String, String> env) {
+        String named = env.get("JASAGENT_GROK_API_KEY");
+        if (!isBlank(named)) {
+            return named.trim();
+        }
+        String xai = env.get("XAI_API_KEY");
+        if (!isBlank(xai)) {
+            return xai.trim();
+        }
+        return GrokCredentials.current();
+    }
+
+    /**
+     * 返回不含任何密钥的摘要，避免设置对象被日志打出时带上 DeepSeek、网关或 Grok 的密钥。
+     *
+     * @return 只含是否配置和超时的文本
+     */
+    @Override
+    public String toString() {
+        return "LlmSettings[deepseekConfigured=" + !isBlank(deepseekApiKey)
+                + ", gatewayConfigured=" + gatewayConfigured()
+                + ", grokConfigured=" + grokConfigured()
+                + ", timeout=" + timeout + "]";
     }
 }

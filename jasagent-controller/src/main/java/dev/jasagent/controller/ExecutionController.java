@@ -1,8 +1,8 @@
 package dev.jasagent.controller;
 
-import dev.jasagent.api.auth.AuthService;
-import dev.jasagent.api.auth.Session;
 import dev.jasagent.api.exec.ExecutionApi;
+import dev.jasagent.api.runtime.AssignedExecution;
+import dev.jasagent.api.runtime.CallerScope;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -21,23 +21,20 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** 执行、工作区切换和检索的 HTTP 入口。身份取自过滤器放进请求的会话。 */
+/** 执行、工作区切换和检索的 HTTP 入口。身份取自网关请求头，不读取登录会话。 */
 @RestController
 public class ExecutionController {
     private final ExecutionApi executions;
-    private final AuthService auth;
     private final WorkspaceList workspaces;
 
     /**
-     * 注入执行接口、登录服务和允许的工作区。
+     * 注入执行接口和允许的工作区。
      *
      * @param executions 提交、查询、中断、恢复和检索
-     * @param auth 用来改当前会话的工作区
      * @param workspaces 允许选中的工作区
      */
-    public ExecutionController(ExecutionApi executions, AuthService auth, WorkspaceList workspaces) {
+    public ExecutionController(ExecutionApi executions, WorkspaceList workspaces) {
         this.executions = executions;
-        this.auth = auth;
         this.workspaces = workspaces;
     }
 
@@ -50,9 +47,14 @@ public class ExecutionController {
      */
     @PostMapping("/api/executions")
     public ResponseEntity<Map<String, Object>> submit(@RequestBody Map<String, String> body, HttpServletRequest request) {
-        Session session = session(request);
-        Map<String, Object> created = executions.submit(session.login(), session.token(), body.get("workflowId"), body.getOrDefault("input", ""));
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(created);
+        CallerScope caller = caller(request);
+        AssignedExecution.bind(body.get("executionId"));
+        try {
+            Map<String, Object> created = executions.submit(caller.userId(), "", body.get("workflowId"), body.getOrDefault("input", ""));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(created);
+        } finally {
+            AssignedExecution.clear();
+        }
     }
 
     /**
@@ -63,7 +65,7 @@ public class ExecutionController {
      */
     @GetMapping("/api/executions")
     public List<Map<String, Object>> list(HttpServletRequest request) {
-        return executions.list(session(request).login());
+        return executions.list(caller(request).userId());
     }
 
     /**
@@ -75,7 +77,7 @@ public class ExecutionController {
      */
     @GetMapping("/api/executions/{id}")
     public Map<String, Object> detail(@PathVariable("id") String id, HttpServletRequest request) {
-        return executions.detail(session(request).login(), id);
+        return executions.detail(caller(request).userId(), id);
     }
 
     /**
@@ -87,7 +89,7 @@ public class ExecutionController {
      */
     @GetMapping("/api/executions/{id}/logs")
     public Map<String, String> logs(@PathVariable("id") String id, HttpServletRequest request) {
-        return Map.of("logs", executions.logs(session(request).login(), id));
+        return Map.of("logs", executions.logs(caller(request).userId(), id));
     }
 
     /**
@@ -99,7 +101,7 @@ public class ExecutionController {
      */
     @PostMapping("/api/executions/{id}/interrupt")
     public Map<String, Object> interrupt(@PathVariable("id") String id, HttpServletRequest request) {
-        return executions.interrupt(session(request).login(), id);
+        return executions.interrupt(caller(request).userId(), id);
     }
 
     /**
@@ -111,7 +113,7 @@ public class ExecutionController {
      */
     @PostMapping("/api/executions/{id}/resume")
     public Map<String, Object> resume(@PathVariable("id") String id, HttpServletRequest request) {
-        return executions.resume(session(request).login(), id);
+        return executions.resume(caller(request).userId(), id);
     }
 
     /**
@@ -123,7 +125,7 @@ public class ExecutionController {
      */
     @GetMapping(value = "/api/executions/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter events(@PathVariable("id") String id, HttpServletRequest request) {
-        Session session = session(request);
+        String userId = caller(request).userId();
         SseEmitter emitter = new SseEmitter(0L);
         AtomicBoolean open = new AtomicBoolean(true);
         emitter.onCompletion(() -> open.set(false));
@@ -134,7 +136,7 @@ public class ExecutionController {
                 String previous = "";
                 String previousThinking = null;
                 while (open.get()) {
-                    Map<String, Object> detail = executions.detail(session.login(), id);
+                    Map<String, Object> detail = executions.detail(userId, id);
                     String status = String.valueOf(detail.get("status"));
                     String thinking = detail.get("thinking") == null ? "" : String.valueOf(detail.get("thinking"));
                     String signature = status + "\n" + detail.get("logs") + "\n" + detail.get("output") + "\n" + thinking;
@@ -183,9 +185,9 @@ public class ExecutionController {
      */
     @PostMapping("/api/workspace")
     public Map<String, String> workspace(@RequestBody Map<String, String> body, HttpServletRequest request) {
-        Session session = session(request);
-        Session updated = auth.selectWorkspace(session.token(), Path.of(body.get("path")), workspaces.paths(), Path.of("").toAbsolutePath()).toCompletableFuture().join();
-        return Map.of("workspace", updated.workspace());
+        CallerScope caller = caller(request);
+        List<String> allowed = workspaces.paths().stream().map(Path::toString).toList();
+        return executions.bindWorkspace(caller.userId(), body.get("path"), allowed);
     }
 
     /**
@@ -197,21 +199,21 @@ public class ExecutionController {
      */
     @PostMapping("/api/rag/search")
     public Map<String, Object> search(@RequestBody Map<String, Object> body, HttpServletRequest request) {
-        Session session = session(request);
+        CallerScope caller = caller(request);
         @SuppressWarnings("unchecked")
         List<String> scopes = body.get("scopes") instanceof List<?> list
                 ? list.stream().map(String::valueOf).toList()
                 : List.of("user", "workspace");
-        return executions.search(session.login(), session.token(), String.valueOf(body.get("query")), scopes);
+        return executions.search(caller.userId(), "", String.valueOf(body.get("query")), scopes);
     }
 
     /**
-     * 取出过滤器放入请求的当前会话。
+     * 取出过滤器放入请求的网关身份。
      *
      * @param request 当前 HTTP 请求
-     * @return 已登录会话
+     * @return 租户、用户和会话
      */
-    private static Session session(HttpServletRequest request) {
-        return (Session) request.getAttribute("jasagent.session");
+    private static CallerScope caller(HttpServletRequest request) {
+        return GatewayRequests.require(request);
     }
 }

@@ -72,6 +72,14 @@ public interface ConsoleApi {
     Map<String, Object> models(String userId);
 
     /**
+     * 读取这个用户已经选定的工作区。还没选时是空串。
+     *
+     * @param userId 网关用户 id
+     * @return 工作区绝对路径；没有时是空串
+     */
+    String workspace(String userId);
+
+    /**
      * 删除一场属于该用户的会话文件。
      *
      * @param userId 会话所属的用户登录名

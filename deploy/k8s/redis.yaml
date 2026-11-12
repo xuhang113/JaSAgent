@@ -1,0 +1,59 @@
+# 集群内 Redis。现有 Java 模块不读取它，连通性测试从 agent 访问这个 Service。
+# 只在集群内监听，不设口令，也不使用 gVisor。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jasagent-redis
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jasagent
+        app.kubernetes.io/component: redis
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: redis
+          image: redis:7
+          imagePullPolicy: IfNotPresent
+          args: ["--save", "", "--appendonly", "no", "--protected-mode", "no"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+            failureThreshold: 20
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jasagent-redis
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: redis
+spec:
+  selector:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis

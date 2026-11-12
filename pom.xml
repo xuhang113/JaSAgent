@@ -22,6 +22,9 @@
     <module>jasagent-interrupt</module>
     <module>jasagent-exception</module>
     <module>jasagent-agentpass</module>
+    <module>jasagent-agentpass-server</module>
+    <module>jasagent-agentpass-starter</module>
+    <module>jasagent-agentpass-rag</module>
     <module>jasagent-trace</module>
     <module>jasagent-otel</module>
     <module>jasagent-evaluation</module>
@@ -29,6 +32,8 @@
     <module>jasagent-web</module>
     <module>jasagent-cli</module>
     <module>jasagent-app</module>
+    <module>jasagent-gateway</module>
+    <module>jasagent-sidecar</module>
   </modules>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

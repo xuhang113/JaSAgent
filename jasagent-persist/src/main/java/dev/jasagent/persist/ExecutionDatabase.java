@@ -34,10 +34,18 @@ public final class ExecutionDatabase implements AutoCloseable {
      */
     public static ExecutionDatabase open(Path workspace, Map<String, String> environment) {
         JdbcSettings settings = JdbcSettings.resolve(workspace, environment);
+        DataSource dataSource = new DriverDataSource(settings.url(), settings.user(), settings.password());
+        if (settings.mysql()) {
+            try (java.sql.Connection connection = dataSource.getConnection()) {
+                MysqlSchemas.ensure(connection);
+            } catch (java.sql.SQLException ex) {
+                throw new IllegalStateException("执行库无法打开");
+            }
+            return new ExecutionDatabase(settings, dataSource);
+        }
         if (!settings.postgresql()) {
             createH2Parent(settings.url());
         }
-        DataSource dataSource = new DriverDataSource(settings.url(), settings.user(), settings.password());
         Flyway.configure()
                 .dataSource(dataSource)
                 .locations("classpath:dev/jasagent/persist/db/migration")

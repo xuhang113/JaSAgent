@@ -25,6 +25,14 @@ final class SessionModelCatalog {
      * AI Gateway 模型在会话和执行里使用的供应商标识。
      */
     static final String GATEWAY = "ai-gateway";
+    /**
+     * Grok 在会话里使用的供应商标识。只有密钥已装入时才会出现在可选列表中。
+     */
+    static final String GROK = "grok";
+    /**
+     * 可选列表里的 Grok 模型 id。
+     */
+    static final String GROK_MODEL = "grok-4.7";
 
     private final LlmSettings settings;
     private final DeepSeekModels deepseek;
@@ -85,6 +93,9 @@ final class SessionModelCatalog {
                 }
             }
             options.add(new ModelChoice(id, GATEWAY, collide ? id + "（Gateway）" : id));
+        }
+        if (settings.grokConfigured()) {
+            options.add(new ModelChoice(GROK_MODEL, GROK, GROK_MODEL));
         }
         return List.copyOf(options);
     }

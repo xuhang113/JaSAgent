@@ -1,7 +1,9 @@
 /**
- * 调用本机控制台接口。JSON 体会自动序列化，失败时抛出带状态码和 errorCode 的错误。
+ * 调用网关控制台接口。页面由网关提供时与网关同源，path 以 / 开头。
+ * 开发服务器把 /api、/login、/logout、/health 转到 http://127.0.0.1:18721。
+ * JSON 体会自动序列化，失败时抛出带状态码和 errorCode 的错误。
  *
- * @param path 以 / 开头的接口路径
+ * @param path 以 / 开头的网关路径
  * @param options method、headers、body；body 可以是对象、字符串或表单
  * @return 解析后的 JSON；空响应返回 null
  */

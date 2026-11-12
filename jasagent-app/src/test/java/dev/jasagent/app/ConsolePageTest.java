@@ -65,6 +65,8 @@ class ConsolePageTest {
         registry.add("jasagent.home", () -> home.toString());
         registry.add("jasagent.workspaces", () -> workspace.toString());
         registry.add("server.address", () -> "127.0.0.1");
+        registry.add("jasagent.internal.token", () -> "test-internal-token");
+        registry.add("jasagent.egress.enabled", () -> "false");
     }
 
     /**
@@ -85,9 +87,7 @@ class ConsolePageTest {
      */
     @Test
     void loginPageReferencesVueBuild() {
-        String body = page("/login");
-        assertTrue(body.contains("id=\"app\""));
-        assertTrue(body.contains("/assets/"));
+        assertConsoleGone();
     }
 
     /**
@@ -96,9 +96,7 @@ class ConsolePageTest {
      */
     @Test
     void consoleScriptHasCliAndChat() {
-        String script = consoleScript();
-        assertTrue(script.contains("CLI"));
-        assertTrue(script.contains("对话"));
+        assertConsoleGone();
     }
 
     /**
@@ -107,7 +105,7 @@ class ConsolePageTest {
      */
     @Test
     void consoleScriptHasContextButton() {
-        assertTrue(consoleScript().contains("上下文"));
+        assertConsoleGone();
     }
 
     /**
@@ -116,7 +114,7 @@ class ConsolePageTest {
      */
     @Test
     void consoleScriptHasPassActions() {
-        assertTrue(consoleScript().contains("通行证"));
+        assertConsoleGone();
     }
 
     /**
@@ -125,7 +123,7 @@ class ConsolePageTest {
      */
     @Test
     void consoleScriptHasRetrieval() {
-        assertTrue(consoleScript().contains("溯源"));
+        assertConsoleGone();
     }
 
     /**
@@ -134,7 +132,7 @@ class ConsolePageTest {
      */
     @Test
     void consoleScriptHasEvaluation() {
-        assertTrue(consoleScript().contains("评估"));
+        assertConsoleGone();
     }
 
     /**
@@ -143,7 +141,7 @@ class ConsolePageTest {
      */
     @Test
     void consoleScriptHasSseEcho() {
-        assertTrue(consoleScript().contains("SSE"));
+        assertConsoleGone();
     }
 
     /**
@@ -152,9 +150,7 @@ class ConsolePageTest {
      */
     @Test
     void consoleScriptShowsExecutionError() {
-        String script = consoleScript();
-        assertTrue(script.contains("execution-error"), "页面没有显示执行错误");
-        assertTrue(script.contains("errorCode"), script);
+        assertConsoleGone();
     }
 
     /**
@@ -163,16 +159,7 @@ class ConsolePageTest {
      */
     @Test
     void consoleScriptUsesLiveEndpoints() {
-        String script = consoleScript();
-        assertTrue(script.contains("EventSource"), "控制台脚本没有 EventSource");
-        assertTrue(script.contains("/api/executions/"), "控制台脚本没有执行接口");
-        assertTrue(script.contains("/interrupt"), "控制台脚本没有中止接口");
-        assertTrue(script.contains("/resume"), "控制台脚本没有恢复接口");
-        assertTrue(script.contains("/api/sessions"), "控制台脚本没有会话接口");
-        assertTrue(script.contains("/api/skills"), "控制台脚本没有技能接口");
-        assertTrue(script.contains("/skill:"), "控制台脚本没有技能引用");
-        assertTrue(script.contains("vue"), "控制台脚本不是 Vue 构建");
-        assertTrue(script.contains("element-plus") || script.contains("el-button"), "控制台脚本没有 Element Plus");
+        assertConsoleGone();
     }
 
     /**
@@ -429,7 +416,9 @@ class ConsolePageTest {
         awaitBody(cookie, executionId, "terminal SUSPENDED");
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/executions/" + executionId + "/events"))
                 .timeout(Duration.ofSeconds(20))
-                .header("Cookie", cookie)
+                .header("X-Jasagent-Token", "test-internal-token")
+                .header("X-Jasagent-Tenant", "local")
+                .header("X-Jasagent-User", cookie)
                 .header("Accept", "text/event-stream")
                 .GET()
                 .build();
@@ -587,11 +576,7 @@ class ConsolePageTest {
      */
     @Test
     void consoleScriptEditsSessionTitle() {
-        String script = consoleScript();
-        assertTrue(script.contains("改名"), script);
-        assertTrue(script.contains("PATCH"), script);
-        assertTrue(script.contains("新会话"), script);
-        assertFalse(script.contains("新会话 \" +") || script.contains("新会话 ' +"), script);
+        assertConsoleGone();
     }
 
     /**
@@ -655,6 +640,15 @@ class ConsolePageTest {
      * @param path 页面路径
      * @return HTML 正文
      */
+    /**
+     * 确认 agent 不再提供登录页、首页和静态入口。
+     */
+    private void assertConsoleGone() {
+        assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/login", String.class).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/", String.class).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/index.html", String.class).getStatusCode());
+    }
+
     private String page(String path) {
         String body = http.getForEntity(path, String.class).getBody();
         assertNotNull(body);
@@ -671,11 +665,7 @@ class ConsolePageTest {
      */
     private String login(String user, String password) throws Exception {
         ensureUser(user, password);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        ResponseEntity<String> response = http.exchange("/login", HttpMethod.POST, new HttpEntity<>("user=" + user + "&password=" + password, headers), String.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        return response.getHeaders().get(HttpHeaders.SET_COOKIE).get(0).split(";", 2)[0];
+        return user;
     }
 
     /**
@@ -735,7 +725,9 @@ class ConsolePageTest {
      */
     private ResponseEntity<String> exchange(String path, HttpMethod method, String cookie, Map<String, String> body) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, cookie);
+        headers.set("X-Jasagent-Token", "test-internal-token");
+        headers.set("X-Jasagent-Tenant", "local");
+        headers.set("X-Jasagent-User", cookie);
         if (body != null) {
             headers.setContentType(MediaType.APPLICATION_JSON);
         }

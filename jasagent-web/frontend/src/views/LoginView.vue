@@ -2,9 +2,9 @@
   <div class="login-wrap">
     <el-card class="login-card">
       <h1>登录</h1>
-      <p class="muted">JaSAgent 管理控制台</p>
+      <p class="muted">JaSAgent 网关管理</p>
       <el-form @submit.prevent="submit">
-        <el-form-item label="用户">
+        <el-form-item label="登录名">
           <el-input v-model="user" name="user" autocomplete="username" />
         </el-form-item>
         <el-form-item label="口令">

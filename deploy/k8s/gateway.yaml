@@ -1,0 +1,131 @@
+# 网关对外端口 18721。业务容器使用 gVisor。
+# 粘性库代码只连接 127.0.0.1:3306，并从 user.home 读取口令文件，所以同 Pod 里放一个只监听回环的转发。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jasagent-gateway
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jasagent
+        app.kubernetes.io/component: gateway
+    spec:
+      runtimeClassName: gvisor
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 10001
+      containers:
+        - name: mysql-bridge
+          image: jasagent-mysql-bridge:0.1.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - jasagent-mysql.jasagent.svc.cluster.local
+            - "3306"
+            - "3306"
+          readinessProbe:
+            exec:
+              command: ["bash", "-c", "echo >/dev/tcp/127.0.0.1/3306"]
+            periodSeconds: 5
+            failureThreshold: 20
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 192Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+        - name: gateway
+          image: jasagent-gateway:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 18721
+          env:
+            - name: JASAGENT_PORT
+              value: "18721"
+            - name: JASAGENT_GATEWAY_AGENTS
+              value: jasagent-agent-0.jasagent.svc.cluster.local:18731,jasagent-agent-1.jasagent.svc.cluster.local:18732
+            - name: JASAGENT_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-internal
+                  key: token
+            - name: JAVA_TOOL_OPTIONS
+              value: -Duser.home=/var/lib/jasagent
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: home
+              mountPath: /var/lib/jasagent
+            - name: tmp
+              mountPath: /tmp
+            - name: mysql-password
+              mountPath: /var/lib/jasagent/.config/urag-mysql-root.password
+              subPath: urag-mysql-root.password
+              readOnly: true
+      volumes:
+        - name: home
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: mysql-password
+          secret:
+            secretName: jasagent-mysql
+            defaultMode: 0444
+            items:
+              - key: password
+                path: urag-mysql-root.password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jasagent-gateway
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: gateway
+spec:
+  selector:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: gateway
+  ports:
+    - name: http
+      port: 18721
+      targetPort: http

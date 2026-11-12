@@ -54,6 +54,8 @@ class AgentPassDisabledWebTest {
         registry.add("jasagent.home", () -> home.toString());
         registry.add("jasagent.workspaces", () -> workspace.toString());
         registry.add("server.address", () -> "127.0.0.1");
+        registry.add("jasagent.internal.token", () -> "test-internal-token");
+        registry.add("jasagent.egress.enabled", () -> "false");
         registry.add("jasagent.agentpass.enabled", () -> "false");
     }
 
@@ -100,11 +102,7 @@ class AgentPassDisabledWebTest {
      */
     private String login(String user, String password) throws Exception {
         auth.addUser(new AddUser(user, password.toCharArray(), null, false)).toCompletableFuture().join();
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        ResponseEntity<String> response = http.exchange("/login", HttpMethod.POST, new HttpEntity<>("user=" + user + "&password=" + password, headers), String.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        return response.getHeaders().get(HttpHeaders.SET_COOKIE).get(0).split(";", 2)[0];
+        return user;
     }
 
     /**
@@ -141,7 +139,9 @@ class AgentPassDisabledWebTest {
      */
     private ResponseEntity<String> exchange(String path, HttpMethod method, String cookie, Map<String, String> body) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, cookie);
+        headers.set("X-Jasagent-Token", "test-internal-token");
+        headers.set("X-Jasagent-Tenant", "local");
+        headers.set("X-Jasagent-User", cookie);
         if (body != null) {
             headers.setContentType(MediaType.APPLICATION_JSON);
         }

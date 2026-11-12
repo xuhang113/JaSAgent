@@ -66,38 +66,38 @@ public final class CliCommands {
                 return 0;
             }
             String base = baseUrl(home);
-            String token = RemoteCommands.token(home);
+            String userId = loggedInUser(auth);
             RemoteCommands remote = new RemoteCommands();
             if ("status".equals(args[0])) {
-                System.out.println(remote.call("GET", base + "/api/executions/" + encode(value(args, "--execution")), token, null));
+                System.out.println(remote.call("GET", base + "/api/executions/" + encode(value(args, "--execution")), userId, null));
                 return 0;
             }
             if ("logs".equals(args[0])) {
-                System.out.println(remote.call("GET", base + "/api/executions/" + encode(value(args, "--execution")) + "/logs", token, null));
+                System.out.println(remote.call("GET", base + "/api/executions/" + encode(value(args, "--execution")) + "/logs", userId, null));
                 return 0;
             }
             if ("interrupt".equals(args[0])) {
-                System.out.println(remote.call("POST", base + "/api/executions/" + encode(value(args, "--execution")) + "/interrupt", token, "{}"));
+                System.out.println(remote.call("POST", base + "/api/executions/" + encode(value(args, "--execution")) + "/interrupt", userId, "{}"));
                 return 0;
             }
             if ("resume".equals(args[0])) {
-                System.out.println(remote.call("POST", base + "/api/executions/" + encode(value(args, "--execution")) + "/resume", token, "{}"));
+                System.out.println(remote.call("POST", base + "/api/executions/" + encode(value(args, "--execution")) + "/resume", userId, "{}"));
                 return 0;
             }
             if ("workflows".equals(args[0])) {
-                System.out.println(remote.call("GET", base + "/api/workflows", token, null));
+                System.out.println(remote.call("GET", base + "/api/workflows", userId, null));
                 return 0;
             }
             if ("run".equals(args[0])) {
                 String body = "{\"workflowId\":\"" + json(value(args, "--workflow")) + "\",\"input\":\"" + json(value(args, "--input")) + "\"}";
-                System.out.println(remote.call("POST", base + "/api/executions", token, body));
+                System.out.println(remote.call("POST", base + "/api/executions", userId, body));
                 return 0;
             }
             if ("pass".equals(args[0]) && args.length > 1 && ("approve".equals(args[1]) || "deny".equals(args[1]))) {
                 String decision = "approve".equals(args[1]) ? "ALLOW" : "DENY";
                 String body = "{\"decision\":\"" + decision + "\"}";
                 String url = base + "/api/executions/" + encode(value(args, "--execution")) + "/passes/" + encode(value(args, "--pass"));
-                System.out.println(remote.call("POST", url, token, body));
+                System.out.println(remote.call("POST", url, userId, body));
                 return 0;
             }
             System.out.println("未知命令");
@@ -117,6 +117,24 @@ public final class CliCommands {
      * @param home 用来定位默认运行目录的家目录
      * @return 不带末尾斜杠的基址
      */
+    /**
+     * 从本机已记住的会话取出登录名，作为网关用户 id。没有会话时是空串。不打印令牌。
+     *
+     * @param auth 本机认证服务
+     * @return 登录名；没有已登录会话时是空串
+     */
+    private static String loggedInUser(LocalAuthService auth) {
+        try {
+            String token = RemoteCommands.token(auth.directories().homeRoot());
+            if (token == null || token.isBlank()) {
+                return "";
+            }
+            return auth.authenticate(token).toCompletableFuture().join().login();
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
     private static String baseUrl(Path home) throws Exception {
         String configured = System.getenv("JASAGENT_BASE_URL");
         if (configured != null && !configured.isBlank()) {

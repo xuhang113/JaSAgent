@@ -18,9 +18,15 @@ import dev.jasagent.api.llm.ChatMessage;
 import dev.jasagent.api.llm.ChatResponse;
 import dev.jasagent.api.llm.Embedding;
 import dev.jasagent.api.llm.TokenUsage;
+import dev.jasagent.api.pass.ExternalEgress;
 import dev.jasagent.api.pass.PassDecision;
+import dev.jasagent.api.pass.TicketRequest;
 import dev.jasagent.api.persist.DataDirectory;
 import dev.jasagent.api.pass.PassGate;
+import dev.jasagent.api.runtime.AssignedExecution;
+import dev.jasagent.api.runtime.CallerScope;
+import dev.jasagent.api.runtime.GatewayHeaders;
+import dev.jasagent.api.tool.ReadOnlyTools;
 import dev.jasagent.api.pass.PassRequest;
 import dev.jasagent.api.plugin.CallStats;
 import dev.jasagent.api.tool.ToolCall;
@@ -40,6 +46,8 @@ import dev.jasagent.interrupt.NodeTask;
 import dev.jasagent.api.trace.TraceWriter;
 import dev.jasagent.persist.CheckpointStores;
 import dev.jasagent.persist.ExecutionRow;
+import dev.jasagent.persist.SessionLedger;
+import dev.jasagent.persist.UragMysql;
 import dev.jasagent.plugin.PluginToolCatalog;
 import dev.jasagent.llm.ThinkingLive;
 import dev.jasagent.tool.WorkspaceTools;
@@ -91,6 +99,17 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     private final ChatModel workflowChat;
     private final SessionModelCatalog catalog;
     private final ExecutionJournal journal;
+    private final SessionLedger ledger;
+    private final boolean egressEnabled;
+    private final HttpOneTimeTicketClient ticketClient;
+    private final RemoteRagClient remoteRag = new RemoteRagClient();
+    private final String ragTarget;
+    private final AtomicInteger observedModelCalls = new AtomicInteger();
+    private final AtomicInteger observedToolCalls = new AtomicInteger();
+    /**
+     * 按租户、用户、会话记下的工具参数。只作同进程缓存，归属以 MySQL 里的会话行为准。
+     */
+    private final Map<String, List<String>> toolNotes = new ConcurrentHashMap<>();
     private final SavedTraceTracer traces = new SavedTraceTracer();
     private final Map<String, String> environment;
     private final Map<String, CheckpointRunControl> controls = new ConcurrentHashMap<>();
@@ -137,6 +156,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         this.modelReady = WorkflowModels.configured();
         ChatModel delegated = WorkflowModels.chat(configuration, this::modelFor);
         this.workflowChat = request -> {
+            observedModelCalls.incrementAndGet();
             Exec current = request == null ? null : executions.get(request.executionId());
             int mark = 0;
             if (current != null) {
@@ -157,6 +177,23 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             opened = null;
         }
         this.journal = opened;
+        SessionLedger sessions = null;
+        if (opened != null && opened.database().settings().mysql()) {
+            try {
+                sessions = SessionLedger.open(opened.database());
+            } catch (RuntimeException ignored) {
+                sessions = null;
+            }
+        }
+        this.ledger = sessions;
+        this.egressEnabled = configuration != null && "true".equalsIgnoreCase(configuration.get("jasagent.egress.enabled"));
+        String ticketUrl = configuration == null ? "" : configuration.get("jasagent.egress.ticket-url");
+        if (ticketUrl == null || ticketUrl.isBlank()) {
+            ticketUrl = ExternalEgress.TICKET_ENDPOINT;
+        }
+        this.ticketClient = this.egressEnabled ? new HttpOneTimeTicketClient(ticketUrl) : null;
+        String rag = configuration == null ? "" : configuration.get("jasagent.rag.base-url");
+        this.ragTarget = rag == null || rag.isBlank() ? ExternalEgress.RAG_TARGET : rag;
         try {
             CheckpointStores.prepare(this.environment);
         } catch (RuntimeException ignored) {
@@ -241,13 +278,37 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             String provider,
             String model) {
         requireJournal();
-        Session session = auth.authenticate(token).toCompletableFuture().join();
-        if (session.workspace() == null || session.workspace().isBlank()) {
-            throw new AgentException(ErrorCode.WORKFLOW, "未选择工作区");
+        String workspace;
+        String keptToken;
+        CallerScope scope = CallerScope.current();
+        if (scope != null || token == null || token.isBlank()) {
+            if (scope != null && !userId.equals(scope.userId())) {
+                throw new AgentException(ErrorCode.AUTH, GatewayHeaders.OWNER_MISMATCH);
+            }
+            String tenant = scope == null ? GatewayHeaders.TENANT_LOCAL : scope.tenantId();
+            String chosen = sessionId == null || sessionId.isBlank() ? "" : sessionId;
+            if (scope != null && !scope.sessionId().isBlank() && !chosen.isBlank() && !scope.sessionId().equals(chosen)) {
+                throw new AgentException(ErrorCode.AUTH, "网关会话与请求会话不一致");
+            }
+            if (ledger != null && !chosen.isBlank()) {
+                ledger.assertOwner(tenant, userId, chosen);
+            }
+            workspace = workspaceOf(tenant, userId);
+            if (workspace.isBlank()) {
+                throw new AgentException(ErrorCode.WORKFLOW, "未选择工作区");
+            }
+            keptToken = "";
+        } else {
+            Session session = auth.authenticate(token).toCompletableFuture().join();
+            if (session.workspace() == null || session.workspace().isBlank()) {
+                throw new AgentException(ErrorCode.WORKFLOW, "未选择工作区");
+            }
+            workspace = Path.of(session.workspace()).toAbsolutePath().normalize().toString();
+            keptToken = session.token();
         }
-        String id = UUID.randomUUID().toString();
-        String workspace = Path.of(session.workspace()).toAbsolutePath().normalize().toString();
-        Exec exec = new Exec(id, userId, workspace, session.token());
+        String id = assignedExecutionId();
+        Exec exec = new Exec(id, userId, workspace, keptToken);
+        exec.tenantId = scope == null ? GatewayHeaders.TENANT_LOCAL : scope.tenantId();
         String sessionKey = sessionId == null || sessionId.isBlank() ? id : sessionId;
         exec.sessionId = sessionKey;
         exec.selectedProvider = provider == null ? "" : provider;
@@ -423,8 +484,91 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     @Override
     public Map<String, Object> search(String userId, String token, String query, List<String> scopes) {
-        auth.authenticate(token).toCompletableFuture().join();
+        if (token == null || token.isBlank()) {
+            CallerScope scope = CallerScope.current();
+            if (scope == null || !userId.equals(scope.userId())) {
+                throw new AgentException(ErrorCode.AUTH, "缺少网关身份");
+            }
+        } else {
+            Session session = auth.authenticate(token).toCompletableFuture().join();
+            if (!userId.equals(session.login())) {
+                throw new AgentException(ErrorCode.AUTH, "不能读取其他用户的执行");
+            }
+        }
         return retrieval(query);
+    }
+
+    /**
+     * 把工作区记到 MySQL。直接调用且还没有账本时，退回登录会话上的工作区选择，不改口令实现。
+     *
+     * @param userId 网关用户 id
+     * @param path 请求里的路径
+     * @param allowlist 允许的工作区文本
+     * @return 含 workspace 的映射
+     */
+    @Override
+    public Map<String, String> bindWorkspace(String userId, String path, List<String> allowlist) {
+        List<Path> paths = new ArrayList<>();
+        if (allowlist != null) {
+            for (String item : allowlist) {
+                if (item != null && !item.isBlank()) {
+                    paths.add(Path.of(item));
+                }
+            }
+        }
+        Path selected = auth.directories().checkWorkspace(path == null ? null : Path.of(path), paths, Path.of("").toAbsolutePath())
+                .toCompletableFuture()
+                .join();
+        String tenant = CallerScope.tenantOrLocal();
+        if (ledger != null) {
+            ledger.saveWorkspace(tenant, userId, selected.toString());
+        }
+        return Map.of("workspace", selected.toString());
+    }
+
+    /**
+     * 读取这个用户在当前租户下的工作区。
+     *
+     * @param userId 用户 id
+     * @return 工作区路径；没有时是空串
+     */
+    @Override
+    public String workspace(String userId) {
+        if (ledger == null) {
+            return "";
+        }
+        return ledger.workspace(CallerScope.tenantOrLocal(), userId);
+    }
+
+    /**
+     * 本进程里模型实际被请求的次数。冲突拒绝的调用不应增加它。
+     *
+     * @return 次数
+     */
+    int observedModelCalls() {
+        return observedModelCalls.get();
+    }
+
+    /**
+     * 本进程里工具实际开始执行的次数。被拒绝的调用不增加它。
+     *
+     * @return 次数
+     */
+    int observedToolCalls() {
+        return observedToolCalls.get();
+    }
+
+    /**
+     * 按租户、用户和会话读出已经记下的工具参数，用来核对同进程里的两次调用没有串数据。
+     *
+     * @param tenantId 租户 id
+     * @param userId 用户 id
+     * @param sessionId 会话 id
+     * @return 工具名和参数，没有时是空列表
+     */
+    List<String> scopedToolNotes(String tenantId, String userId, String sessionId) {
+        List<String> notes = toolNotes.get(scopeKey(tenantId, userId, sessionId));
+        return notes == null ? List.of() : List.copyOf(notes);
     }
 
     /**
@@ -924,6 +1068,18 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         String result;
         if ("clock".equals(name)) {
             result = Instant.now().toString();
+        } else if ("rag.search".equals(name) && egressEnabled) {
+            ExternalEgress.Outcome outcome = ExternalEgress.permit(
+                    PassDecision.ALLOW,
+                    ExternalEgress.Kind.EXTERNAL,
+                    ticketClient,
+                    new TicketRequest(exec.tenantId, exec.userId, exec.sessionId, exec.executionId, ragTarget, name));
+            if (!outcome.invoke()) {
+                recordTool(exec, name, outcome.detail(), elapsed(started), arguments);
+                return CompletableFuture.completedFuture(outcome.detail());
+            }
+            result = remoteRag.search(ragTarget, arguments, outcome.detail(), exec.executionId, exec.sessionId, exec.executionId);
+            exec.retrievals.add(retrieval(result));
         } else if ("rag.search".equals(name)) {
             exec.retrievals.add(retrieval(arguments));
             result = "retrieved";
@@ -934,6 +1090,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         } else {
             result = "未知工具 " + name;
         }
+        observedToolCalls.incrementAndGet();
+        noteTool(exec, name, arguments);
         recordTool(exec, name, result, elapsed(started), arguments);
         return CompletableFuture.completedFuture(result);
     }
@@ -1003,7 +1161,11 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             }
         }
         if (exec == null || !userId.equals(exec.userId)) {
-            throw new AgentException(ErrorCode.AUTH, "不能读取其他用户的执行");
+            throw new AgentException(ErrorCode.AUTH, exec == null ? "不能读取其他用户的执行" : GatewayHeaders.OWNER_MISMATCH);
+        }
+        CallerScope scope = CallerScope.current();
+        if (scope != null && exec.tenantId != null && !exec.tenantId.isBlank() && !scope.tenantId().equals(exec.tenantId)) {
+            throw new AgentException(ErrorCode.AUTH, GatewayHeaders.OWNER_MISMATCH);
         }
         overlay(exec);
         return exec;
@@ -1055,14 +1217,24 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     @Override
     public List<Map<String, Object>> workflows(String userId, String token) {
-        Session session = auth.authenticate(token).toCompletableFuture().join();
-        if (!userId.equals(session.login())) {
-            throw new AgentException(ErrorCode.AUTH, "不能读取其他用户的执行");
+        String workspace;
+        if (token == null || token.isBlank()) {
+            CallerScope scope = CallerScope.current();
+            if (scope != null && !userId.equals(scope.userId())) {
+                throw new AgentException(ErrorCode.AUTH, GatewayHeaders.OWNER_MISMATCH);
+            }
+            workspace = workspaceOf(CallerScope.tenantOrLocal(), userId);
+        } else {
+            Session session = auth.authenticate(token).toCompletableFuture().join();
+            if (!userId.equals(session.login())) {
+                throw new AgentException(ErrorCode.AUTH, "不能读取其他用户的执行");
+            }
+            workspace = session.workspace();
         }
         LinkedHashSet<String> ids = new LinkedHashSet<>();
         ids.add("answer-with-tool");
-        if (session.workspace() != null && !session.workspace().isBlank()) {
-            Path root = Path.of(session.workspace()).resolve("jasagent").resolve("workflows");
+        if (workspace != null && !workspace.isBlank()) {
+            Path root = Path.of(workspace).resolve("jasagent").resolve("workflows");
             if (Files.isDirectory(root)) {
                 try (Stream<Path> files = Files.list(root)) {
                     files.filter(path -> Files.isRegularFile(path) && path.getFileName().toString().endsWith(".json"))
@@ -1111,6 +1283,21 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     @Override
     public List<Map<String, Object>> sessions(String userId) {
+        if (ledger != null) {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (SessionLedger.Row row : ledger.list(CallerScope.tenantOrLocal(), userId)) {
+                Map<String, Object> stored = new LinkedHashMap<>();
+                stored.put("sessionId", row.sessionId());
+                stored.put("userId", row.userId());
+                stored.put("title", row.title());
+                stored.put("titleCustom", row.titleCustom());
+                stored.put("model", row.model());
+                stored.put("modelProvider", row.provider());
+                stored.put("createdAt", row.createdAt());
+                rows.add(sessionSummary(stored));
+            }
+            return rows;
+        }
         Path root = conversations(userId);
         if (!Files.isDirectory(root)) {
             return List.of();
@@ -1154,8 +1341,10 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         stored.put("model", SessionModelCatalog.DEFAULT_MODEL);
         stored.put("modelProvider", SessionModelCatalog.DEEPSEEK);
         stored.put("createdAt", Instant.now().toString());
+        stored.put("tenantId", CallerScope.tenantOrLocal());
         stored.put("messages", new ArrayList<>());
-        writeJson(conversationFile(userId, sessionId), stored);
+        stored.put("corrections", new ArrayList<>());
+        storeSession(stored);
         return sessionSummary(stored);
     }
 
@@ -1178,7 +1367,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         }
         stored.put("title", limitTitle(cleaned, 80));
         stored.put("titleCustom", true);
-        writeJson(file, stored);
+        storeSession(stored);
         return sessionSummary(stored);
     }
 
@@ -1199,7 +1388,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         SessionModelCatalog.ModelChoice choice = catalog.require(model, provider);
         stored.put("model", choice.id());
         stored.put("modelProvider", choice.provider());
-        writeJson(file, stored);
+        storeSession(stored);
         return sessionSummary(stored);
     }
 
@@ -1237,10 +1426,14 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     public Map<String, Object> deleteSession(String userId, String sessionId) {
         Path file = conversationFile(userId, sessionId);
         Map<String, Object> stored = readOwned(userId, file);
-        try {
-            Files.deleteIfExists(file);
-        } catch (Exception ex) {
-            throw new AgentException(ErrorCode.INTERNAL, "会话无法删除", null, ex);
+        if (ledger != null) {
+            ledger.delete(CallerScope.tenantOrLocal(), userId, sessionId);
+        } else {
+            try {
+                Files.deleteIfExists(file);
+            } catch (Exception ex) {
+                throw new AgentException(ErrorCode.INTERNAL, "会话无法删除", null, ex);
+            }
         }
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("sessionId", stored.get("sessionId"));
@@ -1312,7 +1505,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             SessionModelCatalog.ModelChoice choice = catalog.require(model, provider);
             stored.put("model", choice.id());
             stored.put("modelProvider", choice.provider());
-            writeJson(file, stored);
+            storeSession(stored);
         }
         boolean first = messages(stored).isEmpty();
         String chosen = workflowId == null || workflowId.isBlank() ? "answer-with-tool" : workflowId;
@@ -1340,7 +1533,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 stored.put("title", summary);
             }
         }
-        writeJson(file, stored);
+        storeSession(stored);
         return message;
     }
 
@@ -1467,7 +1660,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     @Override
     public Map<String, Object> addCorrection(String userId, String sessionId, String text, String executionId) {
-        readOwned(userId, conversationFile(userId, sessionId));
+        Map<String, Object> stored = readOwned(userId, conversationFile(userId, sessionId));
         if (text == null || text.isBlank()) {
             throw new AgentException(ErrorCode.WORKFLOW, "纠正 note 不能为空");
         }
@@ -1479,6 +1672,11 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         note.put("createdAt", Instant.now().toString());
         note.put("source", "USER");
         note.put("text", text);
+        if (ledger != null) {
+            correctionsIn(stored).add(note);
+            storeSession(stored);
+            return note;
+        }
         writeJson(correctionFile(userId, sessionId, noteId), note);
         return note;
     }
@@ -1492,7 +1690,10 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     @Override
     public List<Map<String, Object>> corrections(String userId, String sessionId) {
-        readOwned(userId, conversationFile(userId, sessionId));
+        Map<String, Object> stored = readOwned(userId, conversationFile(userId, sessionId));
+        if (ledger != null) {
+            return List.copyOf(correctionsIn(stored));
+        }
         Path root = auth.directories().userDirectory(userId).resolve("corrections").resolve(sessionId);
         if (!Files.isDirectory(root)) {
             return List.of();
@@ -1659,15 +1860,120 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      * @return 合并后的目录
      */
     private Catalog catalog(String userId, String token) {
+        if (token == null || token.isBlank()) {
+            CallerScope scope = CallerScope.current();
+            if (scope != null && !userId.equals(scope.userId())) {
+                throw new AgentException(ErrorCode.AUTH, GatewayHeaders.OWNER_MISMATCH);
+            }
+            return loadCatalog(userId, workspaceOf(CallerScope.tenantOrLocal(), userId));
+        }
         Session session = auth.authenticate(token).toCompletableFuture().join();
         if (!userId.equals(session.login())) {
             throw new AgentException(ErrorCode.AUTH, "不能读取其他用户的目录");
         }
+        return loadCatalog(userId, session.workspace());
+    }
+
+    /**
+     * 装载用户目录和工作区里的规则与技能。工作区空白时只读用户目录。
+     *
+     * @param userId 用户 id
+     * @param workspace 工作区绝对路径，可以是空白
+     * @return 合并后的目录
+     */
+    private Catalog loadCatalog(String userId, String workspace) {
         Path userDirectory = auth.directories().userDirectory(userId);
-        Path workspaceDirectory = session.workspace() == null || session.workspace().isBlank()
-                ? null
-                : Path.of(session.workspace()).resolve("jasagent");
+        Path workspaceDirectory = workspace == null || workspace.isBlank() ? null : Path.of(workspace).resolve("jasagent");
         return new LocalCatalogLoader().load(workspaceDirectory, userDirectory).toCompletableFuture().join();
+    }
+
+    /**
+     * 读取该租户用户已经写入 MySQL 的工作区。没有账本时是空串。
+     *
+     * @param tenantId 租户 id
+     * @param userId 用户 id
+     * @return 工作区路径
+     */
+    private String workspaceOf(String tenantId, String userId) {
+        if (ledger == null) {
+            return "";
+        }
+        String path = ledger.workspace(tenantId, userId);
+        return path == null ? "" : path;
+    }
+
+    /**
+     * 把会话文档写入 MySQL。没有账本时仍写用户目录里的 json，供没有本机库的直接调用使用。
+     * 副作用：覆盖这场会话的文档。
+     *
+     * @param stored 含 sessionId 和 userId 的会话文档
+     */
+    private void storeSession(Map<String, Object> stored) {
+        String sessionId = String.valueOf(stored.get("sessionId"));
+        String userId = String.valueOf(stored.get("userId"));
+        if (ledger == null) {
+            writeJson(conversationFile(userId, sessionId), stored);
+            return;
+        }
+        String created = stored.get("createdAt") == null ? Instant.now().toString() : String.valueOf(stored.get("createdAt"));
+        try {
+            ledger.save(
+                    CallerScope.tenantOrLocal(),
+                    sessionId,
+                    userId,
+                    String.valueOf(stored.get("title")),
+                    SessionModelCatalog.model(stored),
+                    SessionModelCatalog.provider(stored),
+                    Boolean.TRUE.equals(stored.get("titleCustom")),
+                    created,
+                    Instant.now().toString(),
+                    JSON.writeValueAsString(stored));
+        } catch (AgentException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new AgentException(ErrorCode.INTERNAL, "会话无法写入", null, ex);
+        }
+    }
+
+    /**
+     * 取出或创建会话文档里的纠正列表。
+     *
+     * @param stored 会话文档
+     * @return 可变列表
+     */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> correctionsIn(Map<String, Object> stored) {
+        Object value = stored.get("corrections");
+        if (value instanceof List<?> list) {
+            return (List<Map<String, Object>>) list;
+        }
+        List<Map<String, Object>> created = new ArrayList<>();
+        stored.put("corrections", created);
+        return created;
+    }
+
+    /**
+     * 记下这次工具参数，键是租户、用户和会话。
+     *
+     * @param exec 当前执行
+     * @param name 工具名
+     * @param arguments 参数原文
+     */
+    private void noteTool(Exec exec, String name, String arguments) {
+        String key = scopeKey(exec.tenantId, exec.userId, exec.sessionId);
+        toolNotes.computeIfAbsent(key, ignored -> new ArrayList<>()).add(name + "\n" + (arguments == null ? "" : arguments));
+    }
+
+    /**
+     * 拼隔离键。三段用换行分开，避免简单拼接撞车。
+     *
+     * @param tenantId 租户 id
+     * @param userId 用户 id
+     * @param sessionId 会话 id
+     * @return 缓存键
+     */
+    private static String scopeKey(String tenantId, String userId, String sessionId) {
+        return (tenantId == null ? "" : tenantId) + "\n" + (userId == null ? "" : userId) + "\n" + (sessionId == null ? "" : sessionId);
     }
 
     /**
@@ -1711,6 +2017,26 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      * @return 文件内容
      */
     private Map<String, Object> readOwned(String userId, Path file) {
+        if (ledger != null) {
+            String name = file.getFileName().toString();
+            String sessionId = name.endsWith(".json") ? name.substring(0, name.length() - 5) : name;
+            CallerScope scope = CallerScope.current();
+            if (scope != null && !scope.sessionId().isBlank() && !scope.sessionId().equals(sessionId)) {
+                throw new AgentException(ErrorCode.AUTH, "网关会话与请求会话不一致");
+            }
+            if (scope != null && !userId.equals(scope.userId())) {
+                throw new AgentException(ErrorCode.AUTH, GatewayHeaders.OWNER_MISMATCH);
+            }
+            try {
+                String json = ledger.load(CallerScope.tenantOrLocal(), userId, sessionId);
+                return JSON.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {
+                });
+            } catch (AgentException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                throw new AgentException(ErrorCode.INTERNAL, "会话无法读取", null, ex);
+            }
+        }
         Map<String, Object> stored = readJson(file);
         if (!userId.equals(String.valueOf(stored.get("userId")))) {
             throw new AgentException(ErrorCode.AUTH, "不能读取其他用户的会话");
@@ -1807,6 +2133,19 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     /**
+     * 采用网关在请求里指定的执行编号。没有或格式不对时自己生成 UUID。
+     *
+     * @return 这次执行的编号
+     */
+    private static String assignedExecutionId() {
+        String assigned = AssignedExecution.current();
+        if (assigned != null && assigned.matches("[A-Za-z0-9][A-Za-z0-9._:-]{7,63}")) {
+            return assigned;
+        }
+        return UUID.randomUUID().toString();
+    }
+
+    /**
      * 只接受 36 位的 UUID 文本，拒绝带路径分隔符的编号。
      *
      * @param id 会话或笔记编号
@@ -1853,7 +2192,29 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 env.put(key, value);
             }
         }
+        if (blank(env.get("JASAGENT_JDBC_URL")) && blank(env.get("JASAGENT_CHECKPOINT_JDBC_URL"))) {
+            UragMysql mysql = UragMysql.discover();
+            if (mysql != null) {
+                env.put("JASAGENT_JDBC_URL", mysql.url());
+                env.put("JASAGENT_JDBC_USER", mysql.user());
+                env.put("JASAGENT_JDBC_PASSWORD", mysql.password());
+                env.put("JASAGENT_CHECKPOINT", "mysql");
+                env.put("JASAGENT_CHECKPOINT_JDBC_URL", mysql.url());
+                env.put("JASAGENT_CHECKPOINT_JDBC_USER", mysql.user());
+                env.put("JASAGENT_CHECKPOINT_JDBC_PASSWORD", mysql.password());
+            }
+        }
         return env;
+    }
+
+    /**
+     * 判断环境值是否缺失或只有空白。
+     *
+     * @param value 环境变量值
+     * @return 空白时为 true
+     */
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**
@@ -2089,6 +2450,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         if (document == null || document.isBlank()) {
             Exec exec = new Exec(row.executionId(), row.userId(), row.workspacePath(), "");
             exec.sessionId = row.sessionId();
+            exec.tenantId = GatewayHeaders.TENANT_LOCAL;
             exec.status = row.status();
             exec.traceId = row.otelTraceId() == null ? "" : row.otelTraceId();
             exec.rootSpanId = row.otelRootSpanId() == null ? "" : row.otelRootSpanId();
@@ -2288,6 +2650,10 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         private String traceId = "";
         private String rootSpanId = "";
         private String sessionId = "";
+        /**
+         * 这条执行所属的租户。空时按本地租户。另一台 agent 从文档里读回它。
+         */
+        private String tenantId = GatewayHeaders.TENANT_LOCAL;
         private String selectedProvider = "";
         private String selectedModel = "";
         private volatile String status = "ACCEPTED";
@@ -2339,6 +2705,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             body.put("workspace", workspace);
             body.put("token", token);
             body.put("sessionId", sessionId);
+            body.put("tenantId", tenantId);
             body.put("selectedProvider", selectedProvider);
             body.put("selectedModel", selectedModel);
             body.put("traceId", traceId);
@@ -2381,6 +2748,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                     row.workspacePath(),
                     text(state.get("token")));
             exec.sessionId = row.sessionId();
+            String tenant = text(state.get("tenantId"));
+            exec.tenantId = tenant.isBlank() ? GatewayHeaders.TENANT_LOCAL : tenant;
             exec.selectedProvider = text(state.get("selectedProvider"));
             exec.selectedModel = text(state.get("selectedModel"));
             exec.traceId = row.otelTraceId() == null ? text(state.get("traceId")) : row.otelTraceId();

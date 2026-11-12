@@ -1,0 +1,96 @@
+# 示例 RAG 对外和容器端口都是 18751。不使用 gVisor。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jasagent-rag
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: rag
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: rag
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jasagent
+        app.kubernetes.io/component: rag
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: rag
+          image: jasagent-rag:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 18751
+          env:
+            - name: JASAGENT_PORT
+              value: "18751"
+            - name: JASAGENT_CHECKPOINT
+              value: mysql
+            - name: JASAGENT_CHECKPOINT_JDBC_URL
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-mysql
+                  key: jdbc-url
+            - name: JASAGENT_CHECKPOINT_JDBC_USER
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-mysql
+                  key: username
+            - name: JASAGENT_CHECKPOINT_JDBC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-mysql
+                  key: password
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: home
+              mountPath: /var/lib/jasagent
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: home
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jasagent-rag
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: rag
+spec:
+  selector:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: rag
+  ports:
+    - name: http
+      port: 18751
+      targetPort: http

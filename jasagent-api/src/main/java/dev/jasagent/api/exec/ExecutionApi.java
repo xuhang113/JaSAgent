@@ -72,4 +72,14 @@ public interface ExecutionApi {
      * @return 含 reason 和 hits 的检索结果
      */
     Map<String, Object> search(String userId, String token, String query, List<String> scopes);
+
+    /**
+     * 把网关用户当前的工作区记到库里。路径必须落在允许列表中。不改登录口令，也不写登录会话。
+     *
+     * @param userId 网关用户 id
+     * @param path 请求里的工作区路径
+     * @param allowlist 允许的工作区；空列表时只接受当前目录
+     * @return 含 workspace 的映射
+     */
+    Map<String, String> bindWorkspace(String userId, String path, List<String> allowlist);
 }

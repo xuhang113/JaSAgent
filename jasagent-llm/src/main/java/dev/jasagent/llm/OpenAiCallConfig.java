@@ -35,6 +35,14 @@ public record OpenAiCallConfig(
      * 未单独指定模型时，DeepSeek 聊天使用的默认模型名。
      */
     public static final String DEEPSEEK_MODEL = "deepseek-flash";
+    /**
+     * Grok 官方 OpenAI 兼容接口的根地址。LangChain4j 会在它后面接聊天补全或 responses。
+     */
+    public static final String GROK_BASE_URL = "https://api.x.ai/v1";
+    /**
+     * 本进程调用 Grok 时使用的模型名。
+     */
+    public static final String GROK_MODEL = "grok-4.7";
 
     /**
      * 按设置生成 DeepSeek 聊天配置。思考开关决定附加参数是 enabled 还是 disabled。
@@ -68,6 +76,25 @@ public record OpenAiCallConfig(
                 settings.gatewayBaseUrl(),
                 emptyIfNull(settings.gatewayApiKey()),
                 settings.gatewayModel(),
+                settings.timeout(),
+                0,
+                false,
+                false,
+                Map.of(),
+                false);
+    }
+
+    /**
+     * 按设置生成 Grok 聊天配置。不附带 DeepSeek 的思考参数。密钥只放进客户端，不写进日志开关。
+     *
+     * @param settings 含 Grok 密钥和超时的配置
+     * @return 指向 https://api.x.ai/v1 和 grok-4.7 的调用配置
+     */
+    public static OpenAiCallConfig grok(LlmSettings settings) {
+        return new OpenAiCallConfig(
+                GROK_BASE_URL,
+                emptyIfNull(settings.grokApiKey()),
+                GROK_MODEL,
                 settings.timeout(),
                 0,
                 false,

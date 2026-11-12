@@ -258,10 +258,10 @@ jasagent_load_checkpoint_env() {
     return 0
   fi
   export JASAGENT_CHECKPOINT=mysql
-  export JASAGENT_CHECKPOINT_JDBC_URL="jdbc:mysql://127.0.0.1:3306/urag?connectTimeout=2000&socketTimeout=5000&allowPublicKeyRetrieval=true&useSSL=false&sslMode=DISABLED"
+  export JASAGENT_CHECKPOINT_JDBC_URL="jdbc:mysql://127.0.0.1:3306/jasagent?connectTimeout=2000&socketTimeout=5000&allowPublicKeyRetrieval=true&useSSL=false&sslMode=DISABLED"
   export JASAGENT_CHECKPOINT_JDBC_USER="${JASAGENT_CHECKPOINT_JDBC_USER:-root}"
   export JASAGENT_CHECKPOINT_JDBC_PASSWORD="$password"
-  echo "检查点使用本机 MySQL 127.0.0.1:3306/urag。" >&2
+  echo "检查点使用本机 MySQL 127.0.0.1:3306/jasagent。" >&2
 }
 
 jasagent_load_model_env() {

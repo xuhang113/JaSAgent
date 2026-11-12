@@ -2,6 +2,7 @@ package dev.jasagent.app;
 
 import dev.jasagent.agentpass.PassSettings;
 import dev.jasagent.auth.LocalAuthService;
+import dev.jasagent.llm.GrokEnvironment;
 import dev.jasagent.cli.CliCommands;
 import dev.jasagent.controller.StorageStatus;
 import dev.jasagent.controller.WorkspaceList;
@@ -13,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -32,6 +34,7 @@ public class JasagentApplication {
             int code = CliCommands.run(args, Path.of(System.getProperty("user.home")));
             System.exit(code);
         }
+        GrokEnvironment.installDefault();
         SpringApplication application = new SpringApplication(JasagentApplication.class);
         application.setDefaultProperties(Map.of("server.address", "127.0.0.1", "server.port", "18721"));
         application.run(serverArgs(args));
@@ -84,11 +87,18 @@ public class JasagentApplication {
     LocalRuntime localRuntime(LocalAuthService localAuthService,
                               @Value("${jasagent.agentpass.enabled:true}") String agentpassEnabled,
                               @Value("${jasagent.context.compress-at:0.85}") String compressAt,
-                              @Value("${jasagent.deepseek.thinking:false}") String deepseekThinking) {
-        return new LocalRuntime(localAuthService, Map.of(
-                PassSettings.ENABLED, agentpassEnabled,
-                ContextWindow.COMPRESS_AT, compressAt,
-                "jasagent.deepseek.thinking", deepseekThinking));
+                              @Value("${jasagent.deepseek.thinking:false}") String deepseekThinking,
+                              @Value("${jasagent.egress.enabled:false}") String egressEnabled,
+                              @Value("${jasagent.rag.base-url:http://127.0.0.1:18751}") String ragBaseUrl,
+                              @Value("${jasagent.egress.ticket-url:http://127.0.0.1:18741/v1/tickets}") String ticketUrl) {
+        Map<String, String> configuration = new LinkedHashMap<>();
+        configuration.put(PassSettings.ENABLED, agentpassEnabled);
+        configuration.put(ContextWindow.COMPRESS_AT, compressAt);
+        configuration.put("jasagent.deepseek.thinking", deepseekThinking);
+        configuration.put("jasagent.egress.enabled", egressEnabled);
+        configuration.put("jasagent.rag.base-url", ragBaseUrl);
+        configuration.put("jasagent.egress.ticket-url", ticketUrl);
+        return new LocalRuntime(localAuthService, configuration);
     }
 
     /**

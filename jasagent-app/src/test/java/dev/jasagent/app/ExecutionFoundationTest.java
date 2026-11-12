@@ -81,6 +81,8 @@ class ExecutionFoundationTest {
         registry.add("jasagent.home", () -> home.toString());
         registry.add("jasagent.workspaces", () -> workspace.toString());
         registry.add("server.address", () -> "127.0.0.1");
+        registry.add("jasagent.internal.token", () -> "test-internal-token");
+        registry.add("jasagent.egress.enabled", () -> "false");
     }
 
     /**
@@ -172,6 +174,8 @@ class ExecutionFoundationTest {
         try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
             int holdPort = server.getLocalPort();
             assertNotEquals(18721, holdPort);
+            assertNotEquals(18731, holdPort);
+            assertNotEquals(18732, holdPort);
             Thread acceptor = Thread.ofVirtual().start(() -> {
                 try (Socket socket = server.accept()) {
                     Thread.sleep(60_000);
@@ -203,7 +207,9 @@ class ExecutionFoundationTest {
                 assertTrue(running, "中止前执行没有处于 RUNNING。最后详情：" + last);
                 HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/executions/" + executionId + "/interrupt"))
                         .timeout(Duration.ofSeconds(3))
-                        .header("Cookie", cookie)
+                        .header("X-Jasagent-Token", "test-internal-token")
+                        .header("X-Jasagent-Tenant", "local")
+                        .header("X-Jasagent-User", cookie)
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString("{}"))
                         .build();
@@ -246,6 +252,8 @@ class ExecutionFoundationTest {
                 """);
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         assertNotEquals(18721, server.getAddress().getPort());
+        assertNotEquals(18731, server.getAddress().getPort());
+        assertNotEquals(18732, server.getAddress().getPort());
         server.createContext("/note.txt", exchange -> {
             byte[] payload = "hello from link\n".getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/plain");
@@ -352,7 +360,9 @@ class ExecutionFoundationTest {
     private String sse(String cookie, String executionId) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/executions/" + executionId + "/events"))
                 .timeout(Duration.ofSeconds(20))
-                .header("Cookie", cookie)
+                .header("X-Jasagent-Token", "test-internal-token")
+                .header("X-Jasagent-Tenant", "local")
+                .header("X-Jasagent-User", cookie)
                 .header("Accept", "text/event-stream")
                 .GET()
                 .build();
@@ -372,15 +382,7 @@ class ExecutionFoundationTest {
      */
     private String login(String user) throws Exception {
         ensureUser(user);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        ResponseEntity<String> response = http.exchange(
-                "/login",
-                HttpMethod.POST,
-                new HttpEntity<>("user=" + user + "&password=" + PASSWORD, headers),
-                String.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode(), response.getBody());
-        return response.getHeaders().get(HttpHeaders.SET_COOKIE).get(0).split(";", 2)[0];
+        return user;
     }
 
     /**
@@ -428,7 +430,9 @@ class ExecutionFoundationTest {
      */
     private ResponseEntity<String> exchange(String path, HttpMethod method, String cookie, Map<String, String> body) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, cookie);
+        headers.set("X-Jasagent-Token", "test-internal-token");
+        headers.set("X-Jasagent-Tenant", "local");
+        headers.set("X-Jasagent-User", cookie);
         if (body != null) {
             headers.setContentType(MediaType.APPLICATION_JSON);
         }

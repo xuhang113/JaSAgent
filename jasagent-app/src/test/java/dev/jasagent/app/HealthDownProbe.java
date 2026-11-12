@@ -36,7 +36,7 @@ public final class HealthDownProbe {
                     "--server.port=0",
                     "--jasagent.home=" + args[0]);
             String port = context.getEnvironment().getProperty("local.server.port");
-            if (port == null || "18721".equals(port)) {
+            if (port == null || "18721".equals(port) || "18731".equals(port) || "18732".equals(port)) {
                 System.out.println("HEALTH_RESULT refused " + port);
                 System.exit(2);
             }

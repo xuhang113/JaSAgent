@@ -1,0 +1,92 @@
+# 集群内 MySQL。业务容器不把口令写进镜像或清单，只引用 Secret。
+# 中间件用节点默认运行时，不套 gVisor。库名是 jasagent。
+# 新数据目录由 MYSQL_DATABASE 创建。已有数据目录时，scripts/up-stack.sh 再执行 CREATE DATABASE IF NOT EXISTS。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jasagent-mysql
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: mysql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jasagent
+        app.kubernetes.io/component: mysql
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: mysql
+          image: mysql:8.4
+          imagePullPolicy: IfNotPresent
+          args:
+            - --bind-address=0.0.0.0
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_0900_ai_ci
+            - --innodb-buffer-pool-size=134217728
+            - --max-connections=40
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: MYSQL_DATABASE
+              value: jasagent
+            - name: MYSQL_ROOT_HOST
+              value: "%"
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-mysql
+                  key: password
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  umask 077
+                  printf '[client]\nuser=root\npassword=%s\n' "$MYSQL_ROOT_PASSWORD" > /tmp/mysql-client.cnf
+                  mysqladmin --defaults-extra-file=/tmp/mysql-client.cnf ping -h 127.0.0.1 --silent
+                  rm -f /tmp/mysql-client.cnf
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 40
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jasagent-mysql
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: mysql
+spec:
+  selector:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql

@@ -685,6 +685,61 @@ class LlmRouterTest {
      * @param health 网关健康检查的结果
      * @return 路由器和可断言的替身
      */
+    /**
+     * 点名 grok 时只调用 Grok 客户端，不调用 DeepSeek，也不调用网关。
+     */
+    @Test
+    void namedGrokDoesNotCallDeepseek() {
+        LlmSettings settings = new LlmSettings(
+                DEEPSEEK_KEY,
+                false,
+                "https://gateway.example",
+                GATEWAY_KEY,
+                GATEWAY_MODEL,
+                false,
+                "",
+                Duration.ofSeconds(60),
+                "grok-test-key");
+        FakeLlmClient deepseek = new FakeLlmClient();
+        FakeLlmClient gateway = new FakeLlmClient();
+        FakeLlmClient grok = new FakeLlmClient();
+        grok.response = new LlmChatResponse("ignored", "ignored", "from-grok", 1, 1, 2, false);
+        LlmRouter router = new LlmRouter(settings, () -> true, deepseek, gateway, grok, new MemoryStore(), new MemoryTrace());
+        LlmChatResponse response = join(router.chat(chat(LlmTask.REACT, "grok", 1)));
+        assertEquals("grok", response.provider());
+        assertEquals(OpenAiCallConfig.GROK_MODEL, response.model());
+        assertEquals("from-grok", response.text());
+        assertEquals(0, deepseek.chats.size());
+        assertEquals(0, gateway.chats.size());
+        assertEquals(1, grok.chats.size());
+    }
+
+    /**
+     * 自动路由在网关不可用时仍走 DeepSeek，不会因为多了 Grok 客户端就改道。
+     */
+    @Test
+    void automaticRouteStillUsesDeepseekWhenGrokIsConfigured() {
+        LlmSettings settings = new LlmSettings(
+                DEEPSEEK_KEY,
+                false,
+                "   ",
+                GATEWAY_KEY,
+                GATEWAY_MODEL,
+                false,
+                "",
+                Duration.ofSeconds(60),
+                "grok-test-key");
+        FakeLlmClient deepseek = new FakeLlmClient();
+        FakeLlmClient gateway = new FakeLlmClient();
+        FakeLlmClient grok = new FakeLlmClient();
+        LlmRouter router = new LlmRouter(settings, () -> false, deepseek, gateway, grok, new MemoryStore(), new MemoryTrace());
+        LlmChatResponse response = join(router.chat(chat(LlmTask.REACT, null, 1)));
+        assertEquals("deepseek", response.provider());
+        assertEquals(OpenAiCallConfig.DEEPSEEK_MODEL, response.model());
+        assertEquals(1, deepseek.chats.size());
+        assertEquals(0, grok.chats.size());
+    }
+
     private static Fixture open(LlmSettings settings, GatewayHealth health) {
         FakeLlmClient deepseek = new FakeLlmClient();
         FakeLlmClient gateway = new FakeLlmClient();

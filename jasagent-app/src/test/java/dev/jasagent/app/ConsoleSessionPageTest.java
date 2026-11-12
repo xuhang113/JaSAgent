@@ -76,6 +76,8 @@ class ConsoleSessionPageTest {
         registry.add("jasagent.home", () -> home.toString());
         registry.add("jasagent.workspaces", () -> workspace.toString());
         registry.add("server.address", () -> "127.0.0.1");
+        registry.add("jasagent.internal.token", () -> "test-internal-token");
+        registry.add("jasagent.egress.enabled", () -> "false");
     }
 
     /**
@@ -95,13 +97,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleShowsModelSelect() {
-        String script = consoleScript();
-        assertTrue(script.contains("data-model-select"), scriptSnippet(script, "model"));
-        assertTrue(script.contains("data-session-model"), script);
-        String css = consoleCss();
-        assertTrue(css.contains("model-select"), css);
-        assertTrue(css.contains("#1b1b18"), css);
-        assertTrue(css.contains("8px"), css);
+        assertConsoleGone();
     }
 
     /**
@@ -177,9 +173,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleShowsSessionAsMain() {
-        String script = consoleScript();
-        assertTrue(script.contains("session-main"), scriptSnippet(script, "session"));
-        assertTrue(script.contains("子 agent"));
+        assertConsoleGone();
     }
 
     /**
@@ -188,11 +182,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleShowsCorrectionEntry() {
-        String script = consoleScript();
-        assertTrue(script.contains("写下纠正"), scriptSnippet(script, "纠正"));
-        assertTrue(script.contains("追加纠正"), script);
-        assertFalse(script.contains("harness note"), script);
-        assertFalse(script.contains("纠正 note"), script);
+        assertConsoleGone();
     }
 
     /**
@@ -201,15 +191,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void rightRailStaysOpen() {
-        String script = consoleScript();
-        assertTrue(script.contains("data-panels-open\":\"true\""), scriptSnippet(script, "data-panels-open"));
-        assertTrue(script.contains("console-layout"), script);
-        assertTrue(script.contains("right-rail"), script);
-        assertTrue(script.contains("trace-turn"), script);
-        assertFalse(script.contains("turn-trace"), script);
-        assertFalse(script.contains("执行过程"), script);
-        assertFalse(script.contains("data-default-panels\":\"hidden\""), script);
-        assertFalse(script.contains("data-panels-open\":\"false\""), script);
+        assertConsoleGone();
     }
 
     /**
@@ -218,7 +200,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void panelsCanResize() {
-        assertTrue(consoleScript().contains("data-resize"));
+        assertConsoleGone();
     }
 
     /**
@@ -404,7 +386,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleKeepsInterrupt() {
-        assertTrue(consoleScript().contains("中止"));
+        assertConsoleGone();
     }
 
     /**
@@ -413,7 +395,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleKeepsResume() {
-        assertTrue(consoleScript().contains("恢复"));
+        assertConsoleGone();
     }
 
     /**
@@ -422,7 +404,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleKeepsSse() {
-        assertTrue(consoleScript().contains("SSE"));
+        assertConsoleGone();
     }
 
     /**
@@ -431,7 +413,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleKeepsSkillRef() {
-        assertTrue(consoleScript().contains("/skill:"));
+        assertConsoleGone();
     }
 
     /**
@@ -440,7 +422,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleKeepsPasses() {
-        assertTrue(consoleScript().contains("通行证"));
+        assertConsoleGone();
     }
 
     /**
@@ -449,13 +431,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void messagesRuleIsCompact() {
-        String css = consoleCss();
-        int at = css.indexOf(".messages{");
-        assertTrue(at >= 0, "样式里没有 .messages");
-        int end = css.indexOf('}', at);
-        assertTrue(end > at);
-        String rule = css.substring(at, end);
-        assertFalse(rule.contains("180px"), rule);
+        assertConsoleGone();
     }
 
     /**
@@ -464,7 +440,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleUsesLangGraphTimeline() {
-        assertTrue(consoleScript().contains("data-timeline\":\"langgraph\""));
+        assertConsoleGone();
     }
 
     /**
@@ -473,7 +449,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleDropsAlwaysOnExecution() {
-        assertFalse(consoleScript().contains("当前执行"));
+        assertConsoleGone();
     }
 
     /**
@@ -482,17 +458,7 @@ class ConsoleSessionPageTest {
      */
     @Test
     void consoleFoldsThinkingAboveReply() {
-        String script = consoleScript();
-        assertTrue(script.contains("思考"), scriptSnippet(script, "思考"));
-        assertTrue(script.contains("thinking"), scriptSnippet(script, "thinking"));
-        String css = consoleCss();
-        int at = css.indexOf(".thinking{");
-        assertTrue(at >= 0, css);
-        int end = css.indexOf('}', at);
-        assertTrue(end > at, css);
-        String rule = css.substring(at, end);
-        assertTrue(rule.contains("#98a2b3"), rule);
-        assertTrue(rule.contains("12px"), rule);
+        assertConsoleGone();
         String props = readProps();
         assertTrue(props.contains("jasagent.deepseek.thinking=true"), props);
     }
@@ -609,6 +575,15 @@ class ConsoleSessionPageTest {
      * @param path 页面路径
      * @return HTML 正文
      */
+    /**
+     * 确认 agent 不再提供登录页、首页和静态入口。
+     */
+    private void assertConsoleGone() {
+        assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/login", String.class).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/", String.class).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/index.html", String.class).getStatusCode());
+    }
+
     private String page(String path) {
         String body = http.getForEntity(path, String.class).getBody();
         assertNotNull(body);
@@ -624,15 +599,7 @@ class ConsoleSessionPageTest {
      */
     private String login(String user) throws Exception {
         ensureUser(user);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        ResponseEntity<String> response = http.exchange(
-                "/login",
-                HttpMethod.POST,
-                new HttpEntity<>("user=" + user + "&password=" + PASSWORD, headers),
-                String.class);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        return response.getHeaders().get(HttpHeaders.SET_COOKIE).get(0).split(";", 2)[0];
+        return user;
     }
 
     /**
@@ -680,7 +647,9 @@ class ConsoleSessionPageTest {
      */
     private ResponseEntity<String> exchange(String path, HttpMethod method, String cookie, Map<String, String> body) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.COOKIE, cookie);
+        headers.set("X-Jasagent-Token", "test-internal-token");
+        headers.set("X-Jasagent-Tenant", "local");
+        headers.set("X-Jasagent-User", cookie);
         if (body != null) {
             headers.setContentType(MediaType.APPLICATION_JSON);
         }

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# 把当前 Vue 页面写进 src/main/resources/static，供 mvn package 打进 jar。
+# 把网关管理控制台写进 jasagent-gateway 的 gateway-admin。
+# agent 不扫描 dev.jasagent.gateway，也不会提供这份页面。
+# 网关导入 GatewayAdminStaticMount 后，从 classpath:/gateway-admin/ 挂到 /admin/。
 set -euo pipefail
 cd "$(dirname "$0")"
 if ! command -v npm >/dev/null 2>&1; then
@@ -13,4 +15,5 @@ if [[ ! -d node_modules ]]; then
   npm ci
 fi
 npm run build
-rm -rf "$(cd .. && pwd)/target/classes/static"
+root="$(cd .. && pwd)"
+rm -rf "$root/target/classes/static" "$root/target/classes/gateway-admin" "$root/src/main/resources/static" "$root/src/main/resources/gateway-admin"

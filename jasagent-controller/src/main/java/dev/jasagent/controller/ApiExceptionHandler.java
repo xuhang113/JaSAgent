@@ -23,6 +23,9 @@ public class ApiExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("executionId", exception.executionId());
         body.put("errorCode", exception.code().name());
+        if (exception.getMessage() != null && !exception.getMessage().isBlank()) {
+            body.put("message", exception.getMessage());
+        }
         int status = exception.code() == ErrorCode.AUTH ? 401 : 400;
         return ResponseEntity.status(status).body(body);
     }

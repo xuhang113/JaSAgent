@@ -1646,3 +1646,125 @@ h3 {
   height: 28px;
   padding: 0 10px;
 }
+
+.bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.user-text,
+.assistant-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.role-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: #667085;
+}
+
+.role-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.routed-agent {
+  display: inline-flex;
+  gap: 6px;
+  min-width: 0;
+  margin-left: auto;
+  color: #667085;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.routed-label {
+  color: #98a2b3;
+}
+
+a.rail-tool {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: #1b1b18;
+}
+
+.rail-fold {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  padding: 0;
+}
+
+.rail-fold::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 0 auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.right-rail[data-rail-open='false'] .rail-fold::before {
+  transform: rotate(135deg);
+}
+
+.cluster-page {
+  min-height: 100%;
+  background: #f7f7f4;
+  color: #1b1b18;
+}
+
+.cluster-head {
+  gap: 12px;
+}
+
+.cluster-head h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cluster-table {
+  width: calc(100% - 24px);
+  margin: 12px;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 12px;
+}
+
+.cluster-table th,
+.cluster-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e4e4df;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.cluster-table th {
+  color: #667085;
+  font-weight: 600;
+}
+
+.cluster-mark {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 1.5px solid #1b1b18;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.cluster-mark[data-on='true'] {
+  background: #1b1b18;
+}

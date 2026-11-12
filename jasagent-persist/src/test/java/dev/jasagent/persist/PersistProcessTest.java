@@ -340,7 +340,7 @@ class PersistProcessTest {
     }
 
     /**
-     * 未指定后端时应走本机 MySQL，提交后能重开读回，并且不得删掉库里原有的表，也不在工作区留下 SQLite 文件。
+     * 未指定后端时应走本机 jasagent 库，提交后能重开读回，并且不得删掉该库里原有的表，也不在工作区留下 SQLite 文件。
      *
      * @throws Exception 连库、提交或比对表清单失败时抛出
      */
@@ -349,11 +349,11 @@ class PersistProcessTest {
         Path workspace = temp.resolve("workspace");
         CheckpointSelection selection = CheckpointStores.select(Map.of());
         assertEquals(CheckpointBackend.MYSQL, selection.backend());
-        assertTrue(selection.jdbcUrl().startsWith("jdbc:mysql://127.0.0.1:3306/urag"), selection.jdbcUrl());
+        assertTrue(selection.jdbcUrl().startsWith("jdbc:mysql://127.0.0.1:3306/jasagent"), selection.jdbcUrl());
+        assertEquals("jasagent", selection.database());
         assertFalse(selection.jdbcUrl().contains("password="), selection.toString());
         assertFalse(selection.toString().contains(selection.password()));
         Set<String> before = mysqlTables(selection);
-        assertTrue(before.stream().anyMatch(name -> name.equalsIgnoreCase("source_document")), before.toString());
         String executionId = UUID.randomUUID().toString();
         try (NodeCheckpoints checkpoints = NodeCheckpoints.open(workspace, Map.of())) {
             assertEquals(CheckpointBackend.MYSQL, checkpoints.backend());

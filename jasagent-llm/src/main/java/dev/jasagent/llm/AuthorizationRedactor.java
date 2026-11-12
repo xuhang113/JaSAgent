@@ -40,4 +40,19 @@ public final class AuthorizationRedactor {
         cleaned = BEARER.matcher(cleaned).replaceAll("");
         return cleaned;
     }
+
+    /**
+     * 从文本里去掉一份已知密钥的原文。密钥太短时不替换，避免误伤普通单词。
+     *
+     * @param text 可能含密钥的原文
+     * @param secret 要抹掉的密钥；空白时只做授权头脱敏
+     * @return 去掉该密钥后的文本
+     */
+    public static String redactSecret(String text, String secret) {
+        String cleaned = redact(text);
+        if (secret == null || secret.isBlank() || secret.length() < 8 || cleaned.isEmpty()) {
+            return cleaned;
+        }
+        return cleaned.replace(secret, "");
+    }
 }

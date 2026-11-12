@@ -6,3 +6,4 @@ requirements/**/results/
 requirements/**/logs/
 .jasagent/
 node_modules/
+deploy/docker/staging/

@@ -107,6 +107,15 @@ public final class JdbcSettings {
     }
 
     /**
+     * 判断这条连接是不是 MySQL。MySQL 不建 H2 目录，也不跑 H2 那份迁移。
+     *
+     * @return 地址以 jdbc:mysql: 开头时为真
+     */
+    public boolean mysql() {
+        return url != null && url.startsWith("jdbc:mysql:");
+    }
+
+    /**
      * 拼出不含口令的设置摘要。
      *
      * @return 地址、用户，以及是否为 PostgreSQL

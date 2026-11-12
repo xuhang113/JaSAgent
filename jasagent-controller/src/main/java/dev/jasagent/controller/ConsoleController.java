@@ -1,7 +1,8 @@
 package dev.jasagent.controller;
 
-import dev.jasagent.api.auth.Session;
 import dev.jasagent.api.exec.ConsoleApi;
+import dev.jasagent.api.runtime.AssignedExecution;
+import dev.jasagent.api.runtime.CallerScope;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,10 +42,10 @@ public class ConsoleController {
      */
     @GetMapping("/api/me")
     public Map<String, Object> me(HttpServletRequest request) {
-        Session session = session(request);
+        CallerScope caller = caller(request);
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("login", session.login());
-        body.put("workspace", session.workspace() == null ? "" : session.workspace());
+        body.put("login", caller.userId());
+        body.put("workspace", console.workspace(caller.userId()));
         return body;
     }
 
@@ -56,9 +57,9 @@ public class ConsoleController {
      */
     @GetMapping("/api/workspaces")
     public Map<String, Object> workspaces(HttpServletRequest request) {
-        Session session = session(request);
+        CallerScope caller = caller(request);
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("workspace", session.workspace() == null ? "" : session.workspace());
+        body.put("workspace", console.workspace(caller.userId()));
         body.put("workspaces", workspaces.paths().stream().map(Path::toString).toList());
         return body;
     }
@@ -71,8 +72,8 @@ public class ConsoleController {
      */
     @GetMapping("/api/workflows")
     public Object workflows(HttpServletRequest request) {
-        Session session = session(request);
-        return console.workflows(session.login(), session.token());
+        CallerScope caller = caller(request);
+        return console.workflows(caller.userId(), "");
     }
 
     /**
@@ -83,8 +84,8 @@ public class ConsoleController {
      */
     @GetMapping("/api/skills")
     public Object skills(HttpServletRequest request) {
-        Session session = session(request);
-        return console.skills(session.login(), session.token());
+        CallerScope caller = caller(request);
+        return console.skills(caller.userId(), "");
     }
 
     /**
@@ -95,7 +96,7 @@ public class ConsoleController {
      */
     @GetMapping("/api/sessions")
     public Object sessions(HttpServletRequest request) {
-        return console.sessions(session(request).login());
+        return console.sessions(caller(request).userId());
     }
 
     /**
@@ -107,7 +108,7 @@ public class ConsoleController {
      */
     @PostMapping("/api/sessions")
     public Map<String, Object> createSession(@RequestBody Map<String, String> body, HttpServletRequest request) {
-        return console.createSession(session(request).login(), body.get("title"));
+        return console.createSession(caller(request).userId(), body.get("title"));
     }
 
     /**
@@ -118,7 +119,7 @@ public class ConsoleController {
      */
     @GetMapping("/api/models")
     public Map<String, Object> models(HttpServletRequest request) {
-        return console.models(session(request).login());
+        return console.models(caller(request).userId());
     }
 
     /**
@@ -131,7 +132,7 @@ public class ConsoleController {
      */
     @PatchMapping("/api/sessions/{id}")
     public Map<String, Object> patchSession(@PathVariable("id") String id, @RequestBody Map<String, String> body, HttpServletRequest request) {
-        String login = session(request).login();
+        String login = caller(request).userId();
         boolean hasModel = body.get("model") != null && !body.get("model").isBlank();
         boolean hasTitle = body.containsKey("title");
         Map<String, Object> result = null;
@@ -156,7 +157,7 @@ public class ConsoleController {
      */
     @GetMapping("/api/sessions/{id}")
     public Map<String, Object> session(@PathVariable("id") String id, HttpServletRequest request) {
-        return console.session(session(request).login(), id);
+        return console.session(caller(request).userId(), id);
     }
 
     /**
@@ -168,7 +169,7 @@ public class ConsoleController {
      */
     @DeleteMapping("/api/sessions/{id}")
     public Map<String, Object> deleteSession(@PathVariable("id") String id, HttpServletRequest request) {
-        return console.deleteSession(session(request).login(), id);
+        return console.deleteSession(caller(request).userId(), id);
     }
 
     /**
@@ -181,15 +182,20 @@ public class ConsoleController {
      */
     @PostMapping("/api/sessions/{id}/messages")
     public Map<String, Object> message(@PathVariable("id") String id, @RequestBody Map<String, String> body, HttpServletRequest request) {
-        Session session = session(request);
-        return console.appendMessage(
-                session.login(),
-                session.token(),
-                id,
-                body.get("text"),
-                body.get("workflowId"),
-                body.get("model"),
-                body.get("modelProvider"));
+        CallerScope caller = caller(request);
+        AssignedExecution.bind(body.get("executionId"));
+        try {
+            return console.appendMessage(
+                    caller.userId(),
+                    "",
+                    id,
+                    body.get("text"),
+                    body.get("workflowId"),
+                    body.get("model"),
+                    body.get("modelProvider"));
+        } finally {
+            AssignedExecution.clear();
+        }
     }
 
     /**
@@ -201,8 +207,8 @@ public class ConsoleController {
      */
     @GetMapping("/api/sessions/{id}/context")
     public Map<String, Object> context(@PathVariable("id") String id, HttpServletRequest request) {
-        Session session = session(request);
-        return console.context(session.login(), session.token(), id);
+        CallerScope caller = caller(request);
+        return console.context(caller.userId(), "", id);
     }
 
     /**
@@ -218,7 +224,7 @@ public class ConsoleController {
             @PathVariable("id") String id,
             @RequestParam(value = "executionId", required = false) String executionId,
             HttpServletRequest request) {
-        return console.timeline(session(request).login(), id, executionId);
+        return console.timeline(caller(request).userId(), id, executionId);
     }
 
     /**
@@ -231,7 +237,7 @@ public class ConsoleController {
      */
     @PostMapping("/api/sessions/{id}/corrections")
     public Map<String, Object> addCorrection(@PathVariable("id") String id, @RequestBody Map<String, String> body, HttpServletRequest request) {
-        return console.addCorrection(session(request).login(), id, body.get("text"), body.getOrDefault("executionId", ""));
+        return console.addCorrection(caller(request).userId(), id, body.get("text"), body.getOrDefault("executionId", ""));
     }
 
     /**
@@ -243,7 +249,7 @@ public class ConsoleController {
      */
     @GetMapping("/api/sessions/{id}/corrections")
     public Object corrections(@PathVariable("id") String id, HttpServletRequest request) {
-        return console.corrections(session(request).login(), id);
+        return console.corrections(caller(request).userId(), id);
     }
 
     /**
@@ -261,16 +267,16 @@ public class ConsoleController {
             @PathVariable("passId") String passId,
             @RequestBody Map<String, String> body,
             HttpServletRequest request) {
-        return console.decidePass(session(request).login(), id, passId, body.get("decision"));
+        return console.decidePass(caller(request).userId(), id, passId, body.get("decision"));
     }
 
     /**
-     * 取出过滤器放入请求的当前会话。
+     * 取出过滤器放入请求的网关身份。
      *
      * @param request 当前 HTTP 请求
-     * @return 已登录会话
+     * @return 租户、用户和会话
      */
-    private static Session session(HttpServletRequest request) {
-        return (Session) request.getAttribute("jasagent.session");
+    private static CallerScope caller(HttpServletRequest request) {
+        return GatewayRequests.require(request);
     }
 }

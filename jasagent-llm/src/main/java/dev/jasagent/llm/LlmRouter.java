@@ -25,6 +25,7 @@ public final class LlmRouter implements LlmClient {
     private final GatewayHealth health;
     private final LlmClient deepseek;
     private final LlmClient gateway;
+    private final LlmClient grok;
     private final LlmCallStore store;
     private final LlmTrace trace;
     private final HashingEmbedder hashing = new HashingEmbedder();
@@ -40,10 +41,27 @@ public final class LlmRouter implements LlmClient {
      * @param trace 写入执行追踪的出口
      */
     public LlmRouter(LlmSettings settings, GatewayHealth health, LlmClient deepseek, LlmClient gateway, LlmCallStore store, LlmTrace trace) {
+        this(settings, health, deepseek, gateway, null, store, trace);
+    }
+
+    /**
+     * 接上配置、健康检查、DeepSeek、网关、Grok、调用记录和追踪。
+     * 自动路由仍然只在 DeepSeek 和网关之间选择。Grok 只在调用方点名 grok 或模型 grok-4.7 时使用。
+     *
+     * @param settings DeepSeek、网关、Grok 和超时配置
+     * @param health 网关当前是否健康
+     * @param deepseek DeepSeek 聊天客户端
+     * @param gateway 网关聊天和嵌入客户端
+     * @param grok Grok 聊天客户端；没有配置时为 null
+     * @param store 保存每次模型调用的记录
+     * @param trace 写入执行追踪的出口
+     */
+    public LlmRouter(LlmSettings settings, GatewayHealth health, LlmClient deepseek, LlmClient gateway, LlmClient grok, LlmCallStore store, LlmTrace trace) {
         this.settings = settings;
         this.health = health;
         this.deepseek = deepseek;
         this.gateway = gateway;
+        this.grok = grok;
         this.store = store;
         this.trace = trace;
     }
@@ -83,6 +101,9 @@ public final class LlmRouter implements LlmClient {
      * @return 已写上实际供应方、模型名和是否回退的响应
      */
     private LlmChatResponse chatBlocking(LlmChatRequest request) {
+        if (grokRequested(request)) {
+            return chatGrok(request);
+        }
         if (!isBlank(request.model())) {
             return chatChosen(request);
         }
@@ -112,6 +133,33 @@ public final class LlmRouter implements LlmClient {
      * @param request 已经写了模型名的聊天请求
      * @return 该模型的聊天结果
      */
+    /**
+     * 调用方点名 grok，或没点供应方但模型是 grok-4.7 时走 Grok。点名 deepseek 时不因为模型名改道。
+     *
+     * @param request 聊天请求
+     * @return 应该使用 Grok 时为 true
+     */
+    private static boolean grokRequested(LlmChatRequest request) {
+        if ("grok".equals(request.provider())) {
+            return true;
+        }
+        return isBlank(request.provider()) && OpenAiCallConfig.GROK_MODEL.equals(request.model());
+    }
+
+    /**
+     * 只调用 Grok。密钥或客户端缺失时失败，不改走 DeepSeek 或网关。
+     *
+     * @param request 点名了 Grok 的聊天请求
+     * @return Grok 的聊天结果
+     */
+    private LlmChatResponse chatGrok(LlmChatRequest request) {
+        if (grok == null || settings == null || !settings.grokConfigured()) {
+            throw fail(request, "grok 不可用", null);
+        }
+        String model = isBlank(request.model()) ? OpenAiCallConfig.GROK_MODEL : request.model();
+        return invokeWithTimeoutRetry(request, grok, "grok", model, false);
+    }
+
     private LlmChatResponse chatChosen(LlmChatRequest request) {
         String provider = isBlank(request.provider()) ? "deepseek" : request.provider();
         if ("deepseek".equals(provider)) {
@@ -323,8 +371,13 @@ public final class LlmRouter implements LlmClient {
      * @param cause 底层原因，可以为 null
      * @return 带模型错误码的业务异常
      */
-    private static AgentException fail(LlmChatRequest request, String message, Throwable cause) {
-        return new AgentException(ErrorCode.LLM, AuthorizationRedactor.redact(message), request.executionId(), cause);
+    private AgentException fail(LlmChatRequest request, String message, Throwable cause) {
+        String secret = settings == null ? "" : settings.grokApiKey();
+        Throwable safeCause = cause;
+        if (safeCause != null && secret != null && secret.length() >= 8 && String.valueOf(safeCause).contains(secret)) {
+            safeCause = null;
+        }
+        return new AgentException(ErrorCode.LLM, AuthorizationRedactor.redactSecret(message, secret), request.executionId(), safeCause);
     }
 
     /**

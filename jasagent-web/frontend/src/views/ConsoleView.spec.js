@@ -211,7 +211,11 @@ beforeEach(() => {
 async function mountConsole() {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/', component: ConsoleView }]
+    routes: [
+      { path: '/', component: ConsoleView },
+      { path: '/cluster', component: { template: '<div>cluster</div>' } },
+      { path: '/login', component: { template: '<div>login</div>' } }
+    ]
   })
   await router.push('/')
   await router.isReady()
@@ -333,17 +337,19 @@ describe('会话页三列布局', () => {
     expect(rail.get('[data-task-group="done"]').element.open).toBe(false)
     expect(rail.get('[data-task-main] .task-title').text()).toBe('检查会话')
     expect(rail.get('[data-task-main] .task-icon').attributes('data-status')).toBe('进行中')
-    expect(rail.get('[data-task-main] .task-status').text()).toBe('进行中')
+    expect(rail.get('[data-task-main]').find('.task-status').exists()).toBe(false)
     const children = rail.findAll('[data-task-child]')
     expect(children.map((row) => row.get('.task-title').text())).toEqual(['sub-1', '请给出时间', 'sub-done'])
-    expect(children[0].get('.task-status').text()).toBe('进行中')
-    expect(children[1].get('.task-status').text()).toBe('进行中')
-    expect(children[2].get('.task-status').text()).toBe('完成')
+    expect(children[0].get('.task-icon').attributes('data-status')).toBe('进行中')
+    expect(children[1].get('.task-icon').attributes('data-status')).toBe('进行中')
+    expect(children[2].get('.task-icon').attributes('data-status')).toBe('完成')
+    expect(children[2].text()).not.toContain('完成')
+    expect(children[2].find('.task-status').exists()).toBe(false)
     expect(rule(css, '.task-children')).toMatch(/margin-left:\s*16px/)
     expect(rule(css, '.task-children')).toMatch(/border-left:\s*2px solid #c8c8c3/)
     expect(rule(css, '.task-row')).toMatch(/font-size:\s*12px/)
     expect(rule(css, '.task-row')).toMatch(/height:\s*28px/)
-    expect(children[0].get('.task-badge').attributes('data-status')).toBe('进行中')
+    expect(children[0].get('.task-icon').attributes('data-status')).toBe('进行中')
     expect(wrapper.find('[data-back-main]').exists()).toBe(false)
     await children[1].trigger('click')
     await flushPromises()
@@ -356,6 +362,7 @@ describe('会话页三列布局', () => {
     await rail.get('[data-tab="trace"]').trigger('click')
     expect(rail.get('[role="tab"][aria-selected="true"]').text()).toBe('Trace')
     expect(rail.find('[data-pane="tasks"]').exists()).toBe(false)
+    expect(rail.get('.trace-turn').element.open).toBe(false)
     expect(rail.get('[data-pane="trace"]').text()).toContain('2026-11-08T00:00:00Z')
     expect(rail.get('[data-pane="trace"]').text()).not.toContain('溯源')
     expect(rail.get('[data-pane="trace"]').text()).not.toContain('评估')
@@ -1060,7 +1067,7 @@ describe('会话标题', () => {
 })
 
 describe('会话模型', () => {
-  it('输入区能看到当前模型，列表只有接口返回的模型', async () => {
+  it('输入区能看到当前模型，DeepSeek 后面有 grok-4.7', async () => {
     const wrapper = await mountConsole()
     expect(wrapper.get('.composer-dock [data-model-select]').attributes('disabled')).toBeDefined()
     await openSession(wrapper)
@@ -1068,7 +1075,7 @@ describe('会话模型', () => {
     expect(select.attributes('disabled')).toBeUndefined()
     expect(select.element.value).toBe('deepseek|deepseek-flash')
     expect(wrapper.get('[data-session-model]').text()).toBe('deepseek-flash')
-    expect(select.findAll('option').map((item) => item.text())).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
+    expect(select.findAll('option').map((item) => item.text())).toEqual(['deepseek-flash', 'deepseek-v4-pro', 'grok-4.7'])
     expect(select.text()).not.toContain('ai-gateway')
     const actions = wrapper.get('.composer-actions')
     const actionHtml = actions.element.innerHTML
@@ -1144,6 +1151,48 @@ describe('会话模型', () => {
         modelProvider: 'deepseek'
       }
     })
+    wrapper.unmount()
+  })
+})
+
+describe('网关控制台补充', () => {
+  it('人和模型用图标，任务行不再写完成', async () => {
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    const user = wrapper.get('.bubble.user')
+    const assistant = wrapper.get('.bubble.assistant')
+    expect(user.get('.role-icon').attributes('data-role')).toBe('user')
+    expect(assistant.get('.role-icon').attributes('data-role')).toBe('assistant')
+    expect(user.text()).not.toContain('用户')
+    expect(user.text()).not.toContain('助手')
+    expect(assistant.text()).not.toContain('用户')
+    expect(assistant.text()).not.toContain('助手')
+    expect(wrapper.get('[data-task-group="active"] [data-task-child]').text()).not.toContain('完成')
+    wrapper.unmount()
+  })
+
+  it('顶栏显示这一请求落到的实例和地址', async () => {
+    state.execution.agentInstanceId = 'agent-7'
+    state.execution.agentAddress = '10.0.0.7:19001'
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    expect(wrapper.get('[data-routed-instance]').text()).toBe('agent-7')
+    expect(wrapper.get('[data-routed-address]').text()).toBe('10.0.0.7:19001')
+    wrapper.unmount()
+  })
+
+  it('右栏可以收起，Trace 默认不展开', async () => {
+    const wrapper = await mountConsole()
+    await openSession(wrapper)
+    await wrapper.get('[data-tab="trace"]').trigger('click')
+    expect(wrapper.get('.trace-turn').element.open).toBe(false)
+    await wrapper.get('[data-rail-fold]').trigger('click')
+    expect(wrapper.get('.right-rail').attributes('data-rail-open')).toBe('false')
+    expect(wrapper.get('.console-layout').attributes('data-panels-open')).toBe('false')
+    expect(wrapper.find('[data-pane="trace"]').exists()).toBe(false)
+    await wrapper.get('[data-rail-fold]').trigger('click')
+    expect(wrapper.get('.right-rail').attributes('data-rail-open')).toBe('true')
+    expect(wrapper.get('[data-pane="trace"]').exists()).toBe(true)
     wrapper.unmount()
   })
 })

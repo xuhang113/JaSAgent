@@ -1,5 +1,5 @@
 <template>
-  <div class="console-layout" :class="{ 'is-resizing': resizing }" data-layout="three-column" data-panels-open="true" :style="layoutStyle">
+  <div class="console-layout" :class="{ 'is-resizing': resizing }" data-layout="three-column" :data-panels-open="railOpen ? 'true' : 'false'" :style="layoutStyle">
     <aside class="session-column">
       <div class="sidebar-top chrome-bar">
         <div class="sidebar-user">
@@ -21,6 +21,7 @@
       </div>
       <div class="session-head">
         <h2>会话</h2>
+        <router-link class="rail-tool" to="/cluster">集群</router-link>
         <el-button size="small" type="primary" class="cursor-btn-primary" @click="createSession">新建</el-button>
       </div>
       <div class="session-list">
@@ -68,6 +69,12 @@
         <span class="eyebrow">{{ focusedExecutionId ? '子会话' : '对话' }}</span>
         <h2>{{ focusedTitle || activeTitle || '会话' }}</h2>
         <span v-if="activeSessionId" class="session-model" data-session-model>{{ currentModelLabel }}</span>
+        <span v-if="activeSessionId" class="routed-agent" data-routed-agent>
+          <span class="routed-label">实例</span>
+          <span class="mono-num" data-routed-instance>{{ routedAgent.instanceId || '未分配' }}</span>
+          <span class="routed-label">地址</span>
+          <span class="mono-num" data-routed-address>{{ routedAgent.address || '无地址' }}</span>
+        </span>
         <div class="drawer-launcher">
           <button type="button" class="rail-tool" data-drawer-menu aria-haspopup="menu" aria-label="抽屉" :aria-expanded="drawerMenu ? 'true' : 'false'" @click="toggleDrawerMenu">···</button>
           <div v-if="drawerMenu" class="drawer-menu" role="menu" aria-label="抽屉">
@@ -94,7 +101,7 @@
             @click="openSubSession(agent)"
           >
             <strong>{{ agent.agentId }}</strong>
-            <span>{{ resolvedStatus(agent.status, agent.executionId) }}</span>
+            <span class="task-icon" :data-status="statusLabel(resolvedStatus(agent.status, agent.executionId))" aria-hidden="true"></span>
           </button>
         </div>
         <button
@@ -117,7 +124,7 @@
             @click="pickAgent(agent)"
           >
             <strong>{{ agent.agentId }}</strong>
-            <span>{{ resolvedStatus(agent.status, agent.executionId) }}</span>
+            <span class="task-icon" :data-status="statusLabel(resolvedStatus(agent.status, agent.executionId))" aria-hidden="true"></span>
           </button>
         </div>
       </div>
@@ -132,8 +139,8 @@
           <p v-else-if="messages.length === 0" class="empty-thread">在下面输入，开始这一会话。</p>
           <article v-for="(message, index) in visibleMessages" :key="message.executionId || index" class="turn">
             <div class="bubble user">
-              <strong>用户</strong>
-              <div>{{ message.text }}</div>
+              <RoleIcon role="user" />
+              <div class="user-text">{{ message.text }}</div>
             </div>
             <!-- 最后一轮思考默认收起，只显示一行「思考」。 -->
             <details v-if="showThinking(message, index)" class="thinking">
@@ -141,8 +148,11 @@
               <div class="thinking-body">{{ turnThinking(message) }}</div>
             </details>
             <div v-if="turnReply(message) || message.errorCode" class="bubble assistant">
-              <div v-if="turnReply(message)" class="assistant-text">{{ turnReply(message) }}</div>
-              <small v-if="message.errorCode" class="execution-error">{{ message.errorCode }}</small>
+              <RoleIcon role="assistant" />
+              <div class="assistant-body">
+                <div v-if="turnReply(message)" class="assistant-text">{{ turnReply(message) }}</div>
+                <small v-if="message.errorCode" class="execution-error">{{ message.errorCode }}</small>
+              </div>
             </div>
           </article>
         </div>
@@ -185,22 +195,32 @@
     </section>
     <div class="split-handle" :class="{ 'is-active': resizing === 'rail' }" data-resize="rail" @mousedown.prevent="startResize($event, 'rail')"></div>
 
-    <aside class="right-rail">
+    <aside class="right-rail" :data-rail-open="railOpen ? 'true' : 'false'">
       <div class="rail-chrome">
         <div class="rail-tabs chrome-bar" role="tablist" aria-label="执行">
           <button
-            v-for="tab in railTabs"
-            :key="tab.id"
             type="button"
-            class="rail-tab"
-            role="tab"
-            :data-tab="tab.id"
-            :aria-selected="railTab === tab.id ? 'true' : 'false'"
-            @click="selectRailTab(tab.id)"
-          >{{ tab.label }}</button>
+            class="rail-tool rail-fold"
+            data-rail-fold
+            :aria-expanded="railOpen ? 'true' : 'false'"
+            :aria-label="railOpen ? '收起右栏' : '展开右栏'"
+            @click="toggleRail"
+          ></button>
+          <template v-if="railOpen">
+            <button
+              v-for="tab in railTabs"
+              :key="tab.id"
+              type="button"
+              class="rail-tab"
+              role="tab"
+              :data-tab="tab.id"
+              :aria-selected="railTab === tab.id ? 'true' : 'false'"
+              @click="selectRailTab(tab.id)"
+            >{{ tab.label }}</button>
+          </template>
         </div>
       </div>
-      <div class="rail-stage">
+      <div v-if="railOpen" class="rail-stage">
         <div v-if="railTab === 'tasks'" class="rail-pane" role="tabpanel" data-pane="tasks">
           <p v-if="!activeSessionId" class="muted empty-line">未选会话。</p>
           <div v-else class="task-tree" data-task-tree>
@@ -220,7 +240,6 @@
                 <button type="button" class="task-row task-main" data-task-main @click="showMainSession">
                   <span class="task-icon" :data-status="session.status" aria-hidden="true"></span>
                   <span class="task-title">{{ session.title }}</span>
-                  <span v-if="session.status" class="task-status task-badge" :data-status="session.status">{{ session.status }}</span>
                 </button>
                 <div v-if="session.children.length" class="task-children">
                   <button
@@ -233,7 +252,6 @@
                   >
                     <span class="task-icon" :data-status="statusLabel(resolvedStatus(agent.status, agent.executionId))" aria-hidden="true"></span>
                     <span class="task-title">{{ subTitle(agent) }}</span>
-                    <span class="task-status task-badge" :data-status="statusLabel(resolvedStatus(agent.status, agent.executionId))">{{ statusLabel(resolvedStatus(agent.status, agent.executionId)) }}</span>
                   </button>
                 </div>
               </div>
@@ -348,11 +366,13 @@
 </template>
 
 <script setup>
-/** 会话页：中间只放用户气泡、最后一轮思考和助手正文，Trace 在右栏。 */
+/** 会话页：中间是图标、最后一轮思考和回复正文，Trace 在可折叠的右栏。 */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import RoleIcon from '../components/RoleIcon.vue'
 import { api } from '../api'
+import { consoleModels, readRoutedAgent } from '../gateway'
 
 /** 右栏页签：任务、Trace、工具、上下文、日志。id 用来切换面板，label 是按钮文字。 */
 const railTabs = [
@@ -437,8 +457,10 @@ const timelines = ref({})
 const workspaceReady = ref(false)
 /** 左栏宽度，单位像素。 */
 const sessionWidth = ref(260)
-/** 右栏宽度，单位像素。 */
+/** 右栏展开时的宽度，单位像素。 */
 const railWidth = ref(320)
+/** 右栏是否展开。收起后 Trace 和任务都不占中间的宽度。 */
+const railOpen = ref(true)
 /** 正在拖的分隔条。session 是左栏，rail 是右栏，空字符串表示没在拖。 */
 const resizing = ref('')
 /** 右栏当前页签。选中会话后回到 tasks。 */
@@ -464,9 +486,9 @@ let source = null
 /** 执行进行中时每秒补拉详情和时间线的定时器编号。 */
 let poll = 0
 
-/** 三列宽度。左右两栏可拖，中间吃掉剩余空间。 */
+/** 三列宽度。右栏收起时只留折叠按钮那一列，中间吃掉剩余空间。 */
 const layoutStyle = computed(() => ({
-  gridTemplateColumns: sessionWidth.value + 'px 8px minmax(0, 1fr) 8px ' + railWidth.value + 'px'
+  gridTemplateColumns: sessionWidth.value + 'px 8px minmax(0, 1fr) 8px ' + (railOpen.value ? railWidth.value : 36) + 'px'
 }))
 /** 顶栏上的模型名。目录里有就用标签，否则用模型 id。 */
 const currentModelLabel = computed(() => {
@@ -525,6 +547,24 @@ const retrievalRows = computed(() => {
 })
 /** 仍在执行的子 agent，挂在对话上方。 */
 const liveAgents = computed(() => agents.value.filter((agent) => agentIsLive(agent)))
+/**
+ * 当前请求送到的 agent。先看正在查询的执行详情，再从最近一条带地址的消息往回找。
+ * 网关没给实例或地址时，两个字段都是空串，页面显示未分配。
+ */
+const routedAgent = computed(() => {
+  const fromDetail = readRoutedAgent(detail.value)
+  if (fromDetail.instanceId || fromDetail.address) {
+    return fromDetail
+  }
+  const list = messages.value
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const found = readRoutedAgent(list[index])
+    if (found.instanceId || found.address) {
+      return found
+    }
+  }
+  return { instanceId: '', address: '' }
+})
 /** 主会话显示全部消息；点进子任务后只留那一次执行。 */
 const visibleMessages = computed(() => {
   if (!focusedExecutionId.value) {
@@ -617,6 +657,14 @@ onBeforeUnmount(() => {
     window.clearTimeout(timer)
   }
 })
+
+/**
+ * 展开或收起右栏。收起后 Trace 不占位，再点按原来的页签打开。
+ * 副作用：只改 railOpen。
+ */
+function toggleRail() {
+  railOpen.value = !railOpen.value
+}
 
 /**
  * 切换右栏页签，并顺手关上抽屉菜单。
@@ -900,10 +948,10 @@ function showThinking(message, index) {
 }
 
 /**
- * 把执行状态收成右栏用的三个词。
+ * 把执行状态收成图标用的 data-status。页面不再把这三个词写进任务行。
  *
  * @param status 已解析的大写状态
- * @return 进行中、完成或失败
+ * @return 进行中、完成或失败，只交给图标
  */
 function statusLabel(status) {
   const value = normalizeStatus(status)
@@ -1241,13 +1289,16 @@ async function loadSessions() {
   sessions.value = await api('/api/sessions')
 }
 
-/** 读取模型目录。接口失败时清空列表，选择框仍可用默认值。 */
+/**
+ * 读取模型目录。保留接口返回的 DeepSeek，并加上 grok-4.7。
+ * 接口失败或给了空列表时，仍保留 deepseek-flash 和 grok-4.7。
+ * 副作用：改 models。
+ */
 async function loadModels() {
   try {
-    const body = await api('/api/models')
-    models.value = Array.isArray(body.models) ? body.models : []
+    models.value = consoleModels(await api('/api/models'))
   } catch {
-    models.value = []
+    models.value = consoleModels(null)
   }
 }
 
@@ -1671,7 +1722,7 @@ function closeStream() {
   }
 }
 
-/** 按执行详情刷新每条消息的状态、错误和正文。空白思考不覆盖正在流式增长的思考。 */
+/** 按执行详情刷新每条消息的状态、错误、正文，以及网关写上的实例和地址。空白思考不覆盖正在流式增长的思考。 */
 async function refreshMessageOutputs() {
   for (const message of messages.value) {
     if (!message.executionId) {
@@ -1682,6 +1733,13 @@ async function refreshMessageOutputs() {
       message.status = row.status
       message.errorCode = row.errorCode || ''
       message.output = row.output
+      const routed = readRoutedAgent(row)
+      if (routed.instanceId) {
+        message.agentInstanceId = routed.instanceId
+      }
+      if (routed.address) {
+        message.agentAddress = routed.address
+      }
       if (row.thinking) {
         message.thinking = row.thinking
       }

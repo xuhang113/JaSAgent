@@ -15,6 +15,8 @@
 ./scripts/stop.sh
 ```
 
+检查点和溯源使用 MySQL 库 `jasagent`。口令只从本机口令文件读取，不写进仓库。集群一键部署执行 `scripts/up-stack.sh`。
+
 `start.sh` 在后台启动服务。`JASAGENT_HOST` 默认是 `127.0.0.1`，`JASAGENT_PORT` 默认是 `18721`，与 `jasagent-app/src/main/resources/application.properties` 里的 `server.address`、`server.port` 相同。脚本把它们写成 `--server.address` 和 `--server.port`。成功后打印 `http://127.0.0.1:18721`。页面是 `http://127.0.0.1:18721/`，登录地址是 `http://127.0.0.1:18721/login`。还没有登录时，打开页面会重定向到登录地址。已经在运行时打印地址文件里的地址；文件不存在或没有内容时打印 `http://127.0.0.1:18721`，并以 0 退出。`stop.sh` 按进程号停止。没有在运行时以 0 退出。两条脚本都可以重复执行。端口不是 1 到 65535 的数字时，`start.sh` 以 1 退出。
 
 规格是 Java 21。脚本先用 `java` 命令。主版本号大于等于 21 就用它。当前 `java` 是 17 时不用它，再找本机已经安装的 Java 21 或更高：先看 `JAVA_HOME/bin/java`，再看 `/usr/libexec/java_home -v` 的 21、22、23、24、25，然后看 `/opt/homebrew/opt` 和 `/usr/local/opt` 里的 `openjdk@21`、`openjdk@22`、`openjdk@23`、`openjdk@24`、`openjdk@25`、`openjdk`。主版本号不到 21 的都跳过。找到就改用那一个，并在标准错误写明当前 `java` 不能运行、改用了哪一个版本和路径。仍然没有，就以 1 退出，说明需要 Java 21 或更高，不会改用 Java 17 或更低版本。没有 `java` 命令时，先看 `JAVA_HOME/bin/java`，后面的查找相同。

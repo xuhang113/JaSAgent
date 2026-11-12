@@ -4,10 +4,13 @@ import dev.jasagent.api.concurrent.VirtualIo;
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
 import dev.jasagent.api.llm.ToolDefinition;
+import dev.jasagent.api.pass.ExternalEgress;
+import dev.jasagent.api.pass.OneTimeTicketClient;
 import dev.jasagent.api.pass.Pass;
 import dev.jasagent.api.pass.PassDecision;
 import dev.jasagent.api.pass.PassGate;
 import dev.jasagent.api.pass.PassRequest;
+import dev.jasagent.api.pass.TicketRequest;
 import dev.jasagent.api.tool.Tool;
 import dev.jasagent.api.tool.ToolCallContext;
 import dev.jasagent.api.tool.ToolSpec;
@@ -57,7 +60,20 @@ public final class McpToolProvider implements ToolProvider, AutoCloseable {
      * @return 连接结束后的工具提供者；通行证门为空时阶段失败
      */
     public static CompletionStage<McpToolProvider> open(List<McpServerConfig> servers, PassGate passGate) {
-        return VirtualIo.supply(() -> connect(servers, passGate));
+        return open(servers, passGate, null);
+    }
+
+    /**
+     * 在虚拟线程上连接服务器。远程调用前除了进程内通行证，还要向 agentpass 领一次性证。
+     * 证客户端为空时不领证，只保留原来的进程内通行证，便于已有测试。
+     *
+     * @param servers 要连接的服务器
+     * @param passGate 进程内通行证门，不能为空
+     * @param tickets 一次性证端口；为空表示这次打开不领证
+     * @return 连接结束后的工具提供者
+     */
+    public static CompletionStage<McpToolProvider> open(List<McpServerConfig> servers, PassGate passGate, OneTimeTicketClient tickets) {
+        return VirtualIo.supply(() -> connect(servers, passGate, tickets));
     }
 
     /**
@@ -111,7 +127,7 @@ public final class McpToolProvider implements ToolProvider, AutoCloseable {
      * @param passGate 工具调用前使用的通行证门，不能为空
      * @return 工具、定义、不可达服务器和会话都已收好的提供者
      */
-    private static McpToolProvider connect(List<McpServerConfig> servers, PassGate passGate) {
+    private static McpToolProvider connect(List<McpServerConfig> servers, PassGate passGate, OneTimeTicketClient tickets) {
         if (passGate == null) {
             throw new AgentException(ErrorCode.MCP, "通行证端口不能为空");
         }
@@ -120,7 +136,7 @@ public final class McpToolProvider implements ToolProvider, AutoCloseable {
         Map<String, BoundTool> bindings = new LinkedHashMap<>();
         try {
             for (McpServerConfig server : servers) {
-                attach(server, passGate, opened, unreachable, bindings);
+                attach(server, passGate, tickets, opened, unreachable, bindings);
             }
             List<Tool> tools = new ArrayList<>();
             List<ToolDefinition> definitions = new ArrayList<>();
@@ -151,17 +167,17 @@ public final class McpToolProvider implements ToolProvider, AutoCloseable {
      * @param unreachable 收集连不上的服务器标识
      * @param bindings 注册名到本地工具和参数模式的映射
      */
-    private static void attach(McpServerConfig server, PassGate passGate, List<AutoCloseable> opened, List<String> unreachable, Map<String, BoundTool> bindings) {
+    private static void attach(McpServerConfig server, PassGate passGate, OneTimeTicketClient tickets, List<AutoCloseable> opened, List<String> unreachable, Map<String, BoundTool> bindings) {
         AutoCloseable session = null;
         try {
             if (server.transport() instanceof McpTransport.Http http) {
                 HttpMcpSession httpSession = HttpMcpSession.open(http, server.timeout());
                 session = httpSession;
-                register(server.serverId(), httpSession.tools(), (name, arguments, executionId) -> httpSession.callTool(name, arguments, executionId), passGate, bindings);
+                register(server.serverId(), targetOf(server), httpSession.tools(), (name, arguments, executionId) -> httpSession.callTool(name, arguments, executionId), passGate, tickets, bindings);
             } else if (server.transport() instanceof McpTransport.Stdio stdio) {
                 StdioMcpSession stdioSession = StdioMcpSession.open(stdio, server.timeout());
                 session = stdioSession;
-                register(server.serverId(), stdioSession.tools(), (name, arguments, executionId) -> stdioSession.callTool(name, arguments, executionId), passGate, bindings);
+                register(server.serverId(), targetOf(server), stdioSession.tools(), (name, arguments, executionId) -> stdioSession.callTool(name, arguments, executionId), passGate, tickets, bindings);
             } else {
                 throw new AgentException(ErrorCode.MCP, "不支持的传输");
             }
@@ -185,13 +201,13 @@ public final class McpToolProvider implements ToolProvider, AutoCloseable {
      * @param passGate 本地工具调用前使用的通行证门
      * @param bindings 注册名到工具的映射
      */
-    private static void register(String serverId, List<McpProtocol.RemoteTool> tools, RemoteCall remote, PassGate passGate, Map<String, BoundTool> bindings) {
+    private static void register(String serverId, String target, List<McpProtocol.RemoteTool> tools, RemoteCall remote, PassGate passGate, OneTimeTicketClient tickets, Map<String, BoundTool> bindings) {
         for (McpProtocol.RemoteTool tool : tools) {
             String registered = "mcp_" + serverId + "_" + tool.name();
             if (bindings.containsKey(registered)) {
                 throw new DuplicateTool(registered);
             }
-            McpTool mcpTool = new McpTool(registered, tool.description(), remote, tool.name(), passGate);
+            McpTool mcpTool = new McpTool(registered, tool.description(), remote, tool.name(), passGate, tickets, target);
             bindings.put(registered, new BoundTool(mcpTool, tool.parametersJson()));
         }
     }
@@ -202,6 +218,19 @@ public final class McpToolProvider implements ToolProvider, AutoCloseable {
      *
      * @param session 要关闭的会话，可以为空
      */
+    /**
+     * 领证时带上的目标。HTTP 用端点地址，标准输入输出用服务器标识。
+     *
+     * @param server 服务器配置
+     * @return 目标文本
+     */
+    private static String targetOf(McpServerConfig server) {
+        if (server.transport() instanceof McpTransport.Http http && http.endpoint() != null) {
+            return http.endpoint().toString();
+        }
+        return "stdio:" + server.serverId();
+    }
+
     private static void closeQuietly(AutoCloseable session) {
         if (session == null) {
             return;
@@ -263,22 +292,28 @@ public final class McpToolProvider implements ToolProvider, AutoCloseable {
         private final RemoteCall remote;
         private final String remoteName;
         private final PassGate passGate;
+        private final OneTimeTicketClient tickets;
+        private final String target;
 
         /**
-         * 记住注册名、说明、远程调用、服务器上的原名和通行证门。
+         * 记住注册名、说明、远程调用、通行证门和一次性证端口。
          *
          * @param registeredName 本地注册名，含服务器前缀
          * @param description 服务器给的说明
          * @param remote 发往这台服务器的调用
          * @param remoteName 服务器上的原名
          * @param passGate 调用前申请通行证的门
+         * @param tickets 一次性证端口；为空时不领证
+         * @param target 领证时填写的目标
          */
-        private McpTool(String registeredName, String description, RemoteCall remote, String remoteName, PassGate passGate) {
+        private McpTool(String registeredName, String description, RemoteCall remote, String remoteName, PassGate passGate, OneTimeTicketClient tickets, String target) {
             this.registeredName = registeredName;
             this.description = description;
             this.remote = remote;
             this.remoteName = remoteName;
             this.passGate = passGate;
+            this.tickets = tickets;
+            this.target = target;
         }
 
         /**
@@ -316,6 +351,16 @@ public final class McpToolProvider implements ToolProvider, AutoCloseable {
                 if (pass.decision() != PassDecision.ALLOW && pass.decision() != PassDecision.SKIPPED) {
                     String text = pass.reason() == null || pass.reason().isBlank() ? "未执行" : pass.reason();
                     return new ToolResult(text, false);
+                }
+                if (tickets != null) {
+                    ExternalEgress.Outcome outcome = ExternalEgress.permit(
+                            pass.decision(),
+                            ExternalEgress.Kind.EXTERNAL,
+                            tickets,
+                            new TicketRequest(context.tenantId(), context.userId(), context.sessionId(), context.executionId(), target, registeredName));
+                    if (!outcome.invoke()) {
+                        return new ToolResult(outcome.detail(), false);
+                    }
                 }
                 McpProtocol.RemoteResult result = remote.call(remoteName, arguments, context.executionId());
                 return new ToolResult(result.text(), !result.error());
