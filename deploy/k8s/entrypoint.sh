@@ -5,7 +5,7 @@ set -eu
 port="${JASAGENT_PORT:-8080}"
 proxy_host="${JASAGENT_HTTPS_PROXY_HOST:-}"
 proxy_port="${JASAGENT_HTTPS_PROXY_PORT:-}"
-non_proxy='localhost|127.0.0.1|*.cluster.local|*.svc|jasagent-mysql|jasagent-redis|jasagent-agentpass|jasagent-gateway|jasagent-sidecar|jasagent-agent|jasagent-agent-0|jasagent-agent-1'
+non_proxy='localhost|127.0.0.1|*.cluster.local|*.svc|jasagent-mysql|jasagent-redis|jasagent-agentpass|jasagent-gateway|jasagent-web|jasagent-sidecar|jasagent-agent|jasagent-agent-0|jasagent-agent-1'
 if [ -n "$proxy_host" ] && [ -n "$proxy_port" ]; then
   exec /opt/java/bin/java \
     --add-opens java.base/jdk.internal.loader=ALL-UNNAMED \

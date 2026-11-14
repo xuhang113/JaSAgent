@@ -1,5 +1,6 @@
 # 网关对外端口 18721。业务容器使用 gVisor。
-# 粘性库代码只连接 127.0.0.1:3306，并从 user.home 读取口令文件，所以同 Pod 里放一个只监听回环的转发。
+# 登录会话和存活探测都在网关进程内，本轮网关按单副本运行。
+# 控制台请求反代到 jasagent-web。粘性库通过可配置的 JDBC 地址直连集群 MySQL，口令仍只从仓库外的口令文件读取。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,28 +26,6 @@ spec:
       securityContext:
         fsGroup: 10001
       containers:
-        - name: mysql-bridge
-          image: jasagent-mysql-bridge:0.1.0
-          imagePullPolicy: IfNotPresent
-          args:
-            - jasagent-mysql.jasagent.svc.cluster.local
-            - "3306"
-            - "3306"
-          readinessProbe:
-            exec:
-              command: ["bash", "-c", "echo >/dev/tcp/127.0.0.1/3306"]
-            periodSeconds: 5
-            failureThreshold: 20
-          resources:
-            requests:
-              cpu: 20m
-              memory: 64Mi
-            limits:
-              memory: 192Mi
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            allowPrivilegeEscalation: false
         - name: gateway
           image: jasagent-gateway:0.1.0
           imagePullPolicy: IfNotPresent
@@ -58,6 +37,20 @@ spec:
               value: "18721"
             - name: JASAGENT_GATEWAY_AGENTS
               value: jasagent-agent-0.jasagent.svc.cluster.local:18731,jasagent-agent-1.jasagent.svc.cluster.local:18732
+            - name: JASAGENT_GATEWAY_WEB_ORIGIN
+              value: http://jasagent-web.jasagent.svc.cluster.local:18722
+            - name: JASAGENT_GATEWAY_AFFINITY_JDBC_URL
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-mysql
+                  key: jdbc-url
+            - name: JASAGENT_GATEWAY_AFFINITY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-mysql
+                  key: username
+            - name: JASAGENT_GATEWAY_REPLICAS
+              value: "1"
             - name: JASAGENT_INTERNAL_TOKEN
               valueFrom:
                 secretKeyRef:
