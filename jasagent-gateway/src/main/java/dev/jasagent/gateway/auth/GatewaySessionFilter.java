@@ -2,6 +2,7 @@ package dev.jasagent.gateway.auth;
 
 import dev.jasagent.api.auth.AuthService;
 import dev.jasagent.api.auth.Session;
+import dev.jasagent.gateway.route.GatewayPaths;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -17,8 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletionException;
 
 /**
- * 网关自己的会话过滤。控制台页面和登录可以匿名打开，/api 必须带本网关签发的会话。
- * 校验用的是用户目录里的会话文件，不把口令写进日志。通过后把会话放进请求属性。
+ * 网关自己的会话过滤。未登录只放行健康检查、登录、退出、登录页和登录页静态资源。
+ * 控制台业务页和 /api 必须带本网关签发的会话。校验用的是本进程读到的会话文件，不把口令或令牌写进日志。
+ * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
  */
 @Component
 @Order(1)
@@ -44,8 +46,9 @@ public class GatewaySessionFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 放行健康检查、登录、退出和控制台资源。其余 /api 没有会话时返回 401。
-     * 其它页面转到 /admin/login。agent 不再提供这些页面。
+     * 放行健康检查、登录、退出、登录页和登录页静态资源。
+     * 必须有会话的 /api 没有会话时返回 401，errorCode 为 AUTH。
+     * 必须有会话的页面没有会话时转到 /admin/login，不返回控制台业务正文。
      *
      * @param request 当前请求
      * @param response 用来写 401 或重定向
@@ -79,23 +82,14 @@ public class GatewaySessionFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 这些路径不要求已经登录。控制台自身的 HTML 和脚本要能打开登录页。
+     * 这些路径不要求已经登录。规则与 {@link GatewayPaths#anonymous} 相同，避免过滤器和路由各写一份。
      *
      * @param method 请求方法
      * @param path 请求路径
      * @return 可以匿名访问时为真
      */
     private static boolean anonymous(HttpMethod method, String path) {
-        if ("/admin".equals(path) || path.startsWith("/admin/")) {
-            return true;
-        }
-        if (HttpMethod.GET.equals(method) && ("/health".equals(path) || "/".equals(path) || "/login".equals(path))) {
-            return true;
-        }
-        if (HttpMethod.POST.equals(method) && "/login".equals(path)) {
-            return true;
-        }
-        return HttpMethod.POST.equals(method) && "/logout".equals(path);
+        return GatewayPaths.anonymous(method, path);
     }
 
     /**

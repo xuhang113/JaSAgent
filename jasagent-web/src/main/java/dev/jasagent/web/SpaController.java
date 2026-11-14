@@ -1,7 +1,8 @@
 package dev.jasagent.web;
 
 /**
- * agent 不再提供自己的控制台页面。浏览器路径由过滤器直接拒绝，这里不再转发到单页入口。
+ * agent 不再提供自己的控制台页面。页面由 {@code dev.jasagent.web.upstream} 单独进程提供，网关只做反向代理。
+ * 本类不是控制器，agent 也不会扫描这个包。
  */
 public final class SpaController {
     /**

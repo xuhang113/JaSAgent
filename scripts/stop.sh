@@ -18,8 +18,13 @@ jasagent_stop_recorded() {
 }
 
 jasagent_stop_recorded "$(jasagent_running_pid || true)"
+for file in "$JASAGENT_WEB_PID_FILE" "$JASAGENT_AGENT_PRIMARY_PID_FILE" "$JASAGENT_AGENT_SECONDARY_PID_FILE"; do
+  if [[ -f "$file" ]]; then
+    jasagent_stop_recorded "$(tr -d '[:space:]' < "$file" || true)"
+  fi
+done
 while IFS= read -r pid; do
   jasagent_stop_recorded "$pid"
 done < <(jasagent_repo_server_pids)
-rm -f "$JASAGENT_PID_FILE"
+rm -f "$JASAGENT_PID_FILE" "$JASAGENT_WEB_PID_FILE" "$JASAGENT_AGENT_PRIMARY_PID_FILE" "$JASAGENT_AGENT_SECONDARY_PID_FILE"
 exit 0

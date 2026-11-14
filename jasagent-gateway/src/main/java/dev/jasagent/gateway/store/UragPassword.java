@@ -20,13 +20,31 @@ public final class UragPassword {
     }
 
     /**
-     * 读取口令文件的第一行并去掉首尾空白。文件不存在或读失败时返回空串，不把文件内容放进异常。
+     * 默认口令文件。位于用户主目录的 .config 下，不在仓库里。
+     *
+     * @return 口令文件路径
+     */
+    public static Path defaultFile() {
+        return Path.of(System.getProperty("user.home", ""), ".config", FILE_NAME);
+    }
+
+    /**
+     * 读取默认口令文件的第一行。文件不存在时返回空串。
      *
      * @return 口令；没有时是空串
      */
     public static String read() {
-        Path file = Path.of(System.getProperty("user.home", ""), ".config", FILE_NAME);
-        if (!Files.isRegularFile(file)) {
+        return read(defaultFile());
+    }
+
+    /**
+     * 读取口令文件的第一行并去掉首尾空白。文件不存在或读失败时返回空串，不把文件内容放进异常。
+     *
+     * @param file 仓库外的口令文件；为空或不是普通文件时当作没有口令
+     * @return 口令；没有时是空串
+     */
+    public static String read(Path file) {
+        if (file == null || !Files.isRegularFile(file)) {
             return "";
         }
         try {

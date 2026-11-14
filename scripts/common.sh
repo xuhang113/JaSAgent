@@ -15,6 +15,12 @@ JASAGENT_RUNTIME_DIR="${JASAGENT_RUNTIME_DIR:-$HOME/.jasagent/runtime}"
 JASAGENT_PID_FILE="$JASAGENT_RUNTIME_DIR/server.pid"
 JASAGENT_LOG_FILE="$JASAGENT_RUNTIME_DIR/server.log"
 JASAGENT_ADDRESS_FILE="$JASAGENT_RUNTIME_DIR/address"
+JASAGENT_WEB_PID_FILE="$JASAGENT_RUNTIME_DIR/web.pid"
+JASAGENT_WEB_LOG_FILE="$JASAGENT_RUNTIME_DIR/web.log"
+JASAGENT_AGENT_PRIMARY_PID_FILE="$JASAGENT_RUNTIME_DIR/agent-18731.pid"
+JASAGENT_AGENT_PRIMARY_LOG_FILE="$JASAGENT_RUNTIME_DIR/agent-18731.log"
+JASAGENT_AGENT_SECONDARY_PID_FILE="$JASAGENT_RUNTIME_DIR/agent-18732.pid"
+JASAGENT_AGENT_SECONDARY_LOG_FILE="$JASAGENT_RUNTIME_DIR/agent-18732.log"
 
 jasagent_read_pid() {
   local pid
@@ -24,9 +30,17 @@ jasagent_read_pid() {
   printf '%s\n' "$pid"
 }
 
+# 网关进程。日常入口的 server.pid 只认这个，避免把 agent 当成 18721 上的服务。
+jasagent_is_gateway_command() {
+  local cmd="$1"
+  [[ "$cmd" == *jasagent-gateway-*.jar* || "$cmd" == *dev.jasagent.gateway.GatewayApplication* ]]
+}
+
+# 本机入口拉起的网关、控制台上游和 agent。停止时按这些命令行识别。
 jasagent_is_server_command() {
   local cmd="$1"
-  [[ "$cmd" == *jasagent-app-*.jar* || "$cmd" == *dev.jasagent.app.JasagentApplication* ]]
+  jasagent_is_gateway_command "$cmd" \
+    || [[ "$cmd" == *jasagent-app-*.jar* || "$cmd" == *jasagent-web-*-exec.jar* || "$cmd" == *dev.jasagent.app.JasagentApplication* || "$cmd" == *dev.jasagent.web.upstream.WebUpstreamApplication* ]]
 }
 
 jasagent_running_pid() {
@@ -37,7 +51,7 @@ jasagent_running_pid() {
     return 1
   fi
   cmd="$(ps -p "$pid" -o args= 2>/dev/null || true)"
-  if jasagent_is_server_command "$cmd"; then
+  if jasagent_is_gateway_command "$cmd"; then
     printf '%s\n' "$pid"
     return 0
   fi
@@ -201,7 +215,9 @@ jasagent_repo_server_pids() {
     cmd="${line#"$pid"}"
     cmd="${cmd#"${cmd%%[![:space:]]*}"}"
     [[ "$pid" =~ ^[0-9]+$ ]] || continue
-    if [[ "$cmd" == *"$JASAGENT_ROOT"/jasagent-app/target/jasagent-app-*.jar* ]]; then
+    if [[ "$cmd" == *"$JASAGENT_ROOT"/jasagent-app/target/jasagent-app-*.jar* \
+      || "$cmd" == *"$JASAGENT_ROOT"/jasagent-gateway/target/jasagent-gateway-*.jar* \
+      || "$cmd" == *"$JASAGENT_ROOT"/jasagent-web/target/jasagent-web-*-exec.jar* ]]; then
       printf '%s\n' "$pid"
     fi
   done < <(ps -axww -o pid=,command= 2>/dev/null || true)
@@ -323,6 +339,176 @@ jasagent_load_model_env() {
     fi
   fi
   return 0
+}
+
+# 在指定目录里找一个 jar。没有时返回 1，不打印路径以外的内容。
+jasagent_find_named_jar() {
+  local dir="$1"
+  local pattern="$2"
+  [[ -d "$dir" ]] || return 1
+  find "$dir" -maxdepth 1 -type f -name "$pattern" ! -name '*.jar.original' | sort | tail -n 1
+}
+
+# 打包网关、控制台上游和 agent。失败时把 mvn 的退出码交回去，不额外打印口令或令牌。
+jasagent_build_stack() {
+  if ! command -v mvn >/dev/null 2>&1; then
+    echo "需要先打包，但找不到 mvn。" >&2
+    exit 1
+  fi
+  rm -rf "$JASAGENT_ROOT/jasagent-gateway/src/main/resources/gateway-admin" \
+    "$JASAGENT_ROOT/jasagent-gateway/target/classes/gateway-admin"
+  (cd "$JASAGENT_ROOT" && mvn -pl jasagent-gateway,jasagent-web,jasagent-app -am -DskipTests package)
+}
+
+# 准备三个可执行 jar。缺网关、上游或 agent 时以非 0 退出。
+jasagent_ensure_stack_jars() {
+  local gateway="" web="" app=""
+  gateway="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-gateway/target" 'jasagent-gateway-*.jar' || true)"
+  web="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-web/target" 'jasagent-web-*-exec.jar' || true)"
+  app="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-app/target" 'jasagent-app-*.jar' || true)"
+  if [[ -z "$gateway" || -z "$web" || -z "$app" ]] \
+    || jasagent_sources_newer_than "$gateway" \
+    || jasagent_sources_newer_than "$web" \
+    || jasagent_sources_newer_than "$app"; then
+    jasagent_build_stack
+    gateway="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-gateway/target" 'jasagent-gateway-*.jar' || true)"
+    web="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-web/target" 'jasagent-web-*-exec.jar' || true)"
+    app="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-app/target" 'jasagent-app-*.jar' || true)"
+  fi
+  if [[ -z "$gateway" || ! -f "$gateway" ]]; then
+    echo "找不到网关 jar。" >&2
+    exit 1
+  fi
+  if [[ -z "$web" || ! -f "$web" ]]; then
+    echo "找不到控制台上游。" >&2
+    exit 1
+  fi
+  if [[ -z "$app" || ! -f "$app" ]]; then
+    echo "找不到 agent jar。" >&2
+    exit 1
+  fi
+  JASAGENT_GATEWAY_JAR="$gateway"
+  JASAGENT_WEB_JAR="$web"
+  JASAGENT_APP_JAR="$app"
+}
+
+# 后台启动一个 jar。标准输出和错误只进日志。调用方不要把口令或令牌放进参数。
+jasagent_spawn_jar() {
+  local jar="$1"
+  local log="$2"
+  shift 2
+  : > "$log"
+  chmod 600 "$log"
+  local pid
+  pid="$(python3 - "$JASAGENT_JAVA" "$jar" "$log" "$@" <<'PY'
+import os
+import sys
+
+java, jar, log, *args = sys.argv[1:]
+child = os.fork()
+if child > 0:
+    print(child)
+    raise SystemExit(0)
+os.setsid()
+fd = os.open(log, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+os.dup2(fd, 1)
+os.dup2(fd, 2)
+if fd > 2:
+    os.close(fd)
+os.execv(java, [
+    java,
+    "--add-opens", "java.base/jdk.internal.loader=ALL-UNNAMED",
+    "--add-opens", "java.base/java.net=ALL-UNNAMED",
+    "-jar", jar,
+    *args,
+])
+PY
+)"
+  printf '%s' "$pid" | tr -d '[:space:]'
+}
+
+# 记下后台进程号，并把 pid 文件收成仅属主可读。
+jasagent_write_pid() {
+  local file="$1"
+  local pid="$2"
+  printf '%s\n' "$pid" > "$file"
+  chmod 600 "$file"
+}
+
+# TCP 端口已经接受连接时返回 0。不读取、也不打印响应正文。
+jasagent_port_open() {
+  local host="$1"
+  local port="$2"
+  python3 - "$host" "$port" <<'PY'
+import socket
+import sys
+
+sock = socket.socket()
+sock.settimeout(0.4)
+try:
+    sock.connect((sys.argv[1], int(sys.argv[2])))
+except Exception:
+    raise SystemExit(1)
+finally:
+    sock.close()
+raise SystemExit(0)
+PY
+}
+
+# GET 这个地址，状态是 200 且正文里有 status 和 up 时返回 0。不打印正文。
+jasagent_http_status_up() {
+  local url="$1"
+  python3 - "$url" <<'PY'
+import sys
+import urllib.request
+
+url = sys.argv[1]
+try:
+    with urllib.request.urlopen(url, timeout=1) as response:
+        body = response.read(4096).decode("utf-8", "replace")
+        if response.status == 200 and "status" in body and "up" in body:
+            raise SystemExit(0)
+except Exception:
+    pass
+raise SystemExit(1)
+PY
+}
+
+# 等到进程还在，并且健康检查已经是 up。不读取启动完成那一行日志。
+jasagent_wait_http_up() {
+  local url="$1"
+  local pid="$2"
+  local n=0
+  while [[ "$n" -lt 150 ]]; do
+    n=$((n + 1))
+    if ! kill -0 "$pid" 2>/dev/null; then
+      return 1
+    fi
+    if jasagent_http_status_up "$url"; then
+      return 0
+    fi
+    sleep 0.2
+  done
+  return 1
+}
+
+# 等到进程还在，并且端口已经接受连接。
+jasagent_wait_port_open() {
+  local host="$1"
+  local port="$2"
+  local pid="$3"
+  local n=0
+  while [[ "$n" -lt 150 ]]; do
+    n=$((n + 1))
+    if ! kill -0 "$pid" 2>/dev/null; then
+      return 1
+    fi
+    if jasagent_port_open "$host" "$port"; then
+      return 0
+    fi
+    sleep 0.2
+  done
+  return 1
 }
 
 jasagent_stop_pid() {

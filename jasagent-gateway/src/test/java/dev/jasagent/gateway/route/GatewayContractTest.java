@@ -77,7 +77,7 @@ class GatewayContractTest {
     }
 
     /**
-     * 登录页、控制台和集群留在网关。业务接口才转发。自助注册没有本地入口。
+     * 登录页、控制台和集群不转发给 agent。业务接口才转发。自助注册没有本地入口。
      */
     @Test
     void pagesStayOnTheGatewayAndApisProxy() {
@@ -93,6 +93,26 @@ class GatewayContractTest {
         assertTrue(GatewayPaths.models(HttpMethod.GET, "/api/models"));
         assertTrue(GatewayPaths.execution(HttpMethod.GET, "/api/executions/exec-1"));
         assertFalse(GatewayPaths.execution(HttpMethod.GET, "/api/executions/exec-1/events"));
+    }
+
+    /**
+     * 未登录只放行健康检查、登录、退出、登录页和登录页静态资源。控制台业务页和 /api 必须有会话。
+     */
+    @Test
+    void anonymousPathsStayOnLoginAndHealth() {
+        assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/health"));
+        assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/"));
+        assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/login"));
+        assertTrue(GatewayPaths.anonymous(HttpMethod.POST, "/login"));
+        assertTrue(GatewayPaths.anonymous(HttpMethod.POST, "/logout"));
+        assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/admin/login"));
+        assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/admin/assets/login.js"));
+        assertFalse(GatewayPaths.anonymous(HttpMethod.GET, "/admin/"));
+        assertFalse(GatewayPaths.anonymous(HttpMethod.GET, "/admin"));
+        assertFalse(GatewayPaths.anonymous(HttpMethod.GET, "/api/me"));
+        assertFalse(GatewayPaths.anonymous(HttpMethod.GET, "/api/cluster"));
+        assertFalse(GatewayPaths.anonymous(HttpMethod.GET, "/api/sessions"));
+        assertFalse(GatewayPaths.anonymous(HttpMethod.POST, "/admin/login"));
     }
 
     /**

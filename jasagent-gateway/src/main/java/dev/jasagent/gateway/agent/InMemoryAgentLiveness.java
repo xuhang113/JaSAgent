@@ -7,7 +7,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 记录每台 agent 的长连接是否还在，以及最近一次在这条连接上确认它还活着的时间。
- * 连接断开只改这里的标记，不关闭对方进程。
+ * 连接断开只改这里的标记，不关闭对方进程。存活探测只放在这份进程内状态里。
+ * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
  */
 public final class InMemoryAgentLiveness {
     private final Set<String> connected = ConcurrentHashMap.newKeySet();

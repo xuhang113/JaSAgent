@@ -3,6 +3,7 @@ package dev.jasagent.gateway.store;
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
 
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -14,10 +15,23 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 把用户到实例的粘性写进本机 jasagent 库的 {@code jasagent_gateway_affinity}。
- * 连接地址固定是 127.0.0.1:3306/jasagent。口令只从仓库外的口令文件读取，JDBC 地址和异常里都不放口令。
+ * 把用户到实例的粘性写进 {@code jasagent_gateway_affinity}。
+ * 地址和账号来自配置，默认仍是 127.0.0.1:3306/jasagent 和 root。口令只从仓库外的口令文件读取。
+ * JDBC 地址、异常、日志和 {@link #toString()} 都不放口令或令牌。表结构这次不改。
  */
 public final class MysqlAffinityStore implements AffinityStore {
+    /**
+     * JDBC 地址的配置项。值里不能出现 password=。
+     */
+    public static final String URL_PROPERTY = "jasagent.gateway.affinity.jdbc-url";
+    /**
+     * 数据库账号的配置项。口令不写在这个配置项里。
+     */
+    public static final String USER_PROPERTY = "jasagent.gateway.affinity.username";
+    /**
+     * 口令文件路径的配置项。文件在仓库外，默认是用户主目录下的 .config/urag-mysql-root.password。
+     */
+    public static final String PASSWORD_FILE_PROPERTY = "jasagent.gateway.affinity.password-file";
     /**
      * 本机 jasagent 库地址。短连接超时，关闭 SSL。地址里没有口令。
      */
@@ -62,7 +76,7 @@ public final class MysqlAffinityStore implements AffinityStore {
      * @param password 数据库口令，只用于连接，不进入异常文本
      */
     public MysqlAffinityStore(String url, String user, String password) {
-        if (url == null || url.toLowerCase().contains("password=")) {
+        if (url == null || url.isBlank() || url.toLowerCase().contains("password=")) {
             throw new AgentException(ErrorCode.PERSIST, "JDBC 地址不能携带口令");
         }
         this.url = url;
@@ -71,16 +85,49 @@ public final class MysqlAffinityStore implements AffinityStore {
     }
 
     /**
-     * 打开本机 jasagent 库。口令文件为空时失败，失败说明里没有口令。
+     * 用配置里的地址、账号和仓库外口令文件打开粘性库。地址含 password= 或口令文件为空时失败，说明里没有口令。
+     *
+     * @param url JDBC 地址，不能包含口令
+     * @param user 数据库账号
+     * @param passwordFile 仓库外的口令文件
+     * @return 连到该地址的粘性库
+     */
+    public static MysqlAffinityStore open(String url, String user, Path passwordFile) {
+        if (url == null || url.isBlank() || url.toLowerCase().contains("password=")) {
+            throw new AgentException(ErrorCode.PERSIST, "JDBC 地址不能携带口令");
+        }
+        String password = UragPassword.read(passwordFile);
+        if (password.isBlank()) {
+            throw new AgentException(ErrorCode.PERSIST, "没有找到本机 MySQL 口令");
+        }
+        return new MysqlAffinityStore(url, user, password);
+    }
+
+    /**
+     * 打开默认的本机 jasagent 库。口令仍从默认的仓库外文件读取。
      *
      * @return 连到 127.0.0.1:3306/jasagent 的粘性库
      */
     public static MysqlAffinityStore openDefault() {
-        String password = UragPassword.read();
-        if (password.isBlank()) {
-            throw new AgentException(ErrorCode.PERSIST, "没有找到本机 MySQL 口令");
-        }
-        return new MysqlAffinityStore(DEFAULT_URL, DEFAULT_USER, password);
+        return open(DEFAULT_URL, DEFAULT_USER, UragPassword.defaultFile());
+    }
+
+    /**
+     * 实际交给驱动的 JDBC 地址。配置了别的主机或库名时，这里就是那个地址，不会改回 127.0.0.1:3306/jasagent。
+     *
+     * @return 不含口令的 JDBC 地址
+     */
+    public String jdbcUrl() {
+        return url;
+    }
+
+    /**
+     * 实际使用的数据库账号。口令不从这里返回。
+     *
+     * @return 配置的账号
+     */
+    public String username() {
+        return user;
     }
 
     /**
@@ -185,13 +232,39 @@ public final class MysqlAffinityStore implements AffinityStore {
     }
 
     /**
-     * 返回不含口令的说明。
+     * 返回不含口令的说明。主机、端口和库名取自实际使用的地址。
      *
      * @return 只标明库位置
      */
     @Override
     public String toString() {
-        return "MysqlAffinityStore{127.0.0.1:3306/jasagent}";
+        return "MysqlAffinityStore{" + location(url) + "}";
+    }
+
+    /**
+     * 从 JDBC 地址里取出主机、端口和库名。去掉用户信息和查询串，避免口令混进文本。
+     *
+     * @param jdbcUrl 已经拒绝过 password= 的地址
+     * @return host:port/database
+     */
+    static String location(String jdbcUrl) {
+        String rest = jdbcUrl == null ? "" : jdbcUrl;
+        int scheme = rest.indexOf("://");
+        if (scheme >= 0) {
+            rest = rest.substring(scheme + 3);
+        }
+        int slash = rest.indexOf('/');
+        String hostPort = slash >= 0 ? rest.substring(0, slash) : rest;
+        String database = slash >= 0 ? rest.substring(slash + 1) : "";
+        int query = database.indexOf('?');
+        if (query >= 0) {
+            database = database.substring(0, query);
+        }
+        int at = hostPort.lastIndexOf('@');
+        if (at >= 0) {
+            hostPort = hostPort.substring(at + 1);
+        }
+        return hostPort + "/" + database;
     }
 
     /**
@@ -228,7 +301,7 @@ public final class MysqlAffinityStore implements AffinityStore {
     }
 
     /**
-     * 打开一条短连接。口令只传给驱动，不拼进地址。
+     * 打开一条短连接。地址和账号用构造时的配置，口令只传给驱动，不拼进地址。
      *
      * @return 新连接
      * @throws SQLException 驱动拒绝连接时抛出，由调用方改写成不含口令的异常

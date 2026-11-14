@@ -19,12 +19,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 本机进程入口。普通子命令交给命令行，其余情况在 127.0.0.1:18721 启动只扫应用、控制器和网页包的 Spring 服务。
+ * 本机 agent 入口。普通子命令交给命令行，其余情况在 127.0.0.1:18731 启动服务。
+ * 不扫描 dev.jasagent.web，避免把控制台页面再提供出来。登录页和控制台只在 jasagent-web，由网关反代。
  */
-@SpringBootApplication(scanBasePackages = {"dev.jasagent.app", "dev.jasagent.controller", "dev.jasagent.web"})
+@SpringBootApplication(scanBasePackages = {"dev.jasagent.app", "dev.jasagent.controller"})
 public class JasagentApplication {
     /**
-     * 第一个参数是子命令时执行命令行并用退出码结束进程；否则绑定本机 18721 端口启动网页服务。
+     * 第一个参数是子命令时执行命令行并用退出码结束进程；否则绑定本机 18731 端口启动 agent。
      * 副作用：命令行路径调用 System.exit；服务路径启动 Spring，不返回。
      *
      * @param args 原始命令行。server 会被剥掉后再交给 Spring
@@ -36,7 +37,7 @@ public class JasagentApplication {
         }
         GrokEnvironment.installDefault();
         SpringApplication application = new SpringApplication(JasagentApplication.class);
-        application.setDefaultProperties(Map.of("server.address", "127.0.0.1", "server.port", "18721"));
+        application.setDefaultProperties(Map.of("server.address", "127.0.0.1", "server.port", Integer.toString(AgentPorts.PRIMARY)));
         application.run(serverArgs(args));
     }
 

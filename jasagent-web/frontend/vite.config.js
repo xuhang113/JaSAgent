@@ -1,4 +1,4 @@
-/** 网关管理控制台的构建和测试。产物不进 agent 的 static，开发时代理到 18721。 */
+/** 网关管理控制台的构建和测试。产物只进 jasagent-web，由该进程作为上游提供。开发时代理到 18721。 */
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 
@@ -25,7 +25,7 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: '../../jasagent-gateway/src/main/resources/gateway-admin',
+    outDir: '../target/classes/admin',
     emptyOutDir: true
   }
 })

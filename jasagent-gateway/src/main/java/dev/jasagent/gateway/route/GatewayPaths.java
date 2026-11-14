@@ -5,13 +5,30 @@ import org.springframework.http.HttpMethod;
 import java.util.regex.Pattern;
 
 /**
- * 划分哪些请求留在网关，哪些转发给 agent。
- * agent 不再提供登录页和控制台，所以页面、登录和 /admin 都不转发。
+ * 划分哪些请求留在网关，哪些转发给 agent，以及哪些在没有会话时也能访问。
+ * agent 不再提供登录页和控制台。控制台页面不转发给 agent，由网关反代到 jasagent-web。
  * 集群和当前用户由网关自己回答。其余 /api 才进入粘性转发。
  */
 public final class GatewayPaths {
+    /**
+     * 登录页。未登录可以打开，网关再把它反代到控制台上游。
+     */
+    public static final String ADMIN_LOGIN = "/admin/login";
+    /**
+     * 登录页脚本和样式的前缀。未登录可以读取这一段，不能读取其它控制台页面。
+     */
+    public static final String ADMIN_ASSETS = "/admin/assets/";
+    /**
+     * 单次执行详情的路径。事件流不走这里。
+     */
     private static final Pattern EXECUTION_DETAIL = Pattern.compile("^/api/executions/[^/]+$");
+    /**
+     * 中断或恢复一次执行的路径。
+     */
     private static final Pattern EXECUTION_ACTION = Pattern.compile("^/api/executions/[^/]+/(interrupt|resume)$");
+    /**
+     * 对一次执行上的通行证做决定的路径。
+     */
     private static final Pattern EXECUTION_PASS = Pattern.compile("^/api/executions/[^/]+/passes/[^/]+$");
 
     /**
@@ -21,8 +38,33 @@ public final class GatewayPaths {
     }
 
     /**
+     * 未登录也能访问的路径。只有健康检查、首页和登录跳转、登录和退出接口、登录页，以及登录页的静态资源。
+     * 控制台业务页、当前用户、集群和要转发给 agent 的 /api 都不在这里。
+     *
+     * @param method 请求方法
+     * @param path 请求路径，不含查询串
+     * @return 可以匿名访问时为真
+     */
+    public static boolean anonymous(HttpMethod method, String path) {
+        if (method == null || path == null || path.isBlank()) {
+            return false;
+        }
+        if (HttpMethod.GET.equals(method) && ("/health".equals(path) || "/".equals(path) || "/login".equals(path))) {
+            return true;
+        }
+        if (HttpMethod.POST.equals(method) && ("/login".equals(path) || "/logout".equals(path))) {
+            return true;
+        }
+        if (HttpMethod.GET.equals(method) && ADMIN_LOGIN.equals(path)) {
+            return true;
+        }
+        return HttpMethod.GET.equals(method) && (ADMIN_ASSETS.equals(path) || path.startsWith(ADMIN_ASSETS));
+    }
+
+    /**
      * 这个请求是否由网关自己处理，不转发给 agent。
      * 包括健康检查、登录、退出、首页跳转、控制台、当前用户和集群。
+     * 控制台虽然留在这条规则里，页面正文来自 jasagent-web 上游，不来自网关内嵌文件。
      *
      * @param method 请求方法
      * @param path 请求路径，不含查询串

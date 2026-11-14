@@ -8,6 +8,7 @@ import dev.jasagent.gateway.cluster.ClusterInventory;
 import dev.jasagent.gateway.proxy.StickyProxy;
 import dev.jasagent.gateway.route.AgentCallHeaders;
 import dev.jasagent.gateway.route.StickyAgentRouter;
+import dev.jasagent.gateway.proxy.WebConsoleProxy;
 import dev.jasagent.gateway.store.MysqlAffinityStore;
 import dev.jasagent.gateway.token.InternalToken;
 import dev.jasagent.trace.lineage.RequestLineage;
@@ -20,8 +21,9 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * 组装网关运行时需要的登录、令牌、粘性、集群和长连接。
+ * 组装网关运行时需要的登录、令牌、粘性、集群、长连接和控制台上游。
  * 长连接默认开启。测试把它关掉，避免拨到 18731 和 18732。
+ * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
  */
 @Configuration
 public class GatewayConfiguration {
@@ -78,13 +80,31 @@ public class GatewayConfiguration {
     }
 
     /**
-     * 打开本机 jasagent 粘性库。口令只从仓库外的文件读取。
+     * 按配置打开粘性库。地址和账号可以改，口令只从仓库外的文件读取。
+     * 配了别的主机或库名时就连那一处，不再写死 127.0.0.1:3306/jasagent。
      *
+     * @param url JDBC 地址，不能包含 password=
+     * @param username 数据库账号
+     * @param passwordFile 仓库外的口令文件
      * @return 粘性库
      */
     @Bean
-    public MysqlAffinityStore affinityStore() {
-        return MysqlAffinityStore.openDefault();
+    public MysqlAffinityStore affinityStore(
+            @Value("${" + MysqlAffinityStore.URL_PROPERTY + "}") String url,
+            @Value("${" + MysqlAffinityStore.USER_PROPERTY + "}") String username,
+            @Value("${" + MysqlAffinityStore.PASSWORD_FILE_PROPERTY + "}") String passwordFile) {
+        return MysqlAffinityStore.open(url, username, Path.of(passwordFile));
+    }
+
+    /**
+     * 控制台反向代理。上游不可用时由代理返回错误，不读取内嵌页面。
+     *
+     * @param origin jasagent.gateway.web-origin
+     * @return 控制台上游
+     */
+    @Bean
+    public WebConsoleProxy webConsoleProxy(@Value("${" + WebConsoleProxy.ORIGIN_PROPERTY + "}") String origin) {
+        return new WebConsoleProxy(origin);
     }
 
     /**

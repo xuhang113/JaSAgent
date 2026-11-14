@@ -28,6 +28,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -647,6 +648,22 @@ class ConsolePageTest {
         assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/login", String.class).getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/", String.class).getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, http.getForEntity("/index.html", String.class).getStatusCode());
+        assertConsolePathAbsent("/admin");
+        assertConsolePathAbsent("/admin/");
+        assertConsolePathAbsent("/admin/login");
+    }
+
+    /**
+     * 这些路径不能再返回控制台正文。允许 401 或 404，只要不是页面。
+     *
+     * @param path 原来的控制台路径
+     */
+    private void assertConsolePathAbsent(String path) {
+        ResponseEntity<String> response = http.getForEntity(path, String.class);
+        assertNotEquals(HttpStatus.OK, response.getStatusCode(), path);
+        String body = response.getBody() == null ? "" : response.getBody();
+        assertFalse(body.contains("/admin/assets/"), body);
+        assertFalse(body.contains("gateway-admin"), body);
     }
 
     private String page(String path) {

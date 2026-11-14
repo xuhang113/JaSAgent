@@ -1,11 +1,12 @@
 package dev.jasagent.app;
 
 /**
- * 已经在跑的两台 agent 容器占用的端口。本进程的单测和试验不要绑定它们。
+ * 本机 agent 的约定端口。网关占用 18721，本进程默认监听 18731，另一台用 18732。
+ * 单测和试验不要绑定这两个端口。
  */
 public final class AgentPorts {
     /**
-     * 第一台 agent 的默认端口。
+     * 第一台 agent 的默认端口。本进程不带参数启动时就听这里。
      */
     public static final int PRIMARY = 18731;
     /**

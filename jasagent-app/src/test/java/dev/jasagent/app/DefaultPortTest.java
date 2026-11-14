@@ -11,30 +11,34 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 锁住服务、命令行和启动脚本的默认端口，避免再退回 8090 或别的端口。
+ * 锁住 agent、命令行和启动脚本的默认端口。agent 使用 18731，对外入口仍是网关的 18721。
  */
 class DefaultPortTest {
     /**
-     * 读取 application.properties，确认监听 127.0.0.1:18721，并且不再出现 8090。
+     * 读取 application.properties，确认 agent 监听 127.0.0.1:18731，并且不再把 18721 或 8090 写成服务端口。
      * 副作用：只读配置文件。断言失败则测试失败。
      */
     @Test
-    void applicationPropertiesUse18721() throws Exception {
+    void applicationPropertiesUseAgentPort() throws Exception {
         String props = Files.readString(Path.of("src/main/resources/application.properties"));
         assertTrue(props.contains("server.address=127.0.0.1"), props);
-        assertTrue(props.contains("server.port=18721"), props);
+        assertTrue(props.contains("server.port=18731"), props);
+        assertFalse(props.contains("server.port=18721"), props);
         assertFalse(props.contains("server.port=8090"), props);
     }
 
     /**
-     * 读取启动类源码，确认默认属性把地址和端口写成 127.0.0.1 与 18721。
+     * 读取启动类源码，确认默认端口是第一台 agent 的 18731，并且不再把服务端口写成 18721。
      * 副作用：只读 Java 源文件。断言失败则测试失败。
      */
     @Test
-    void applicationMainDefaultsTo18721() throws Exception {
+    void applicationMainDefaultsToAgentPort() throws Exception {
         String source = Files.readString(Path.of("src/main/java/dev/jasagent/app/JasagentApplication.java"));
         assertTrue(source.contains("\"server.address\", \"127.0.0.1\""), source);
-        assertTrue(source.contains("\"server.port\", \"18721\""), source);
+        assertTrue(source.contains("AgentPorts.PRIMARY"), source);
+        assertFalse(source.contains("\"server.port\", \"18721\""), source);
+        assertTrue(source.contains("scanBasePackages = {\"dev.jasagent.app\", \"dev.jasagent.controller\"}"), source);
+        assertFalse(source.contains("\"dev.jasagent.web\""), source);
     }
 
     /**
@@ -63,13 +67,17 @@ class DefaultPortTest {
     }
 
     /**
-     * 读取 start.sh，确认端口缺省值是 18721。
+     * 读取 start.sh，确认对外端口缺省仍是 18721，并且拉起的是网关而不是等待应用启动日志。
      * 副作用：只读脚本。断言失败则测试失败。
      */
     @Test
-    void startScriptDefaultsTo18721() throws Exception {
+    void startScriptDefaultsToGatewayOn18721() throws Exception {
         String script = Files.readString(Path.of("../scripts/start.sh"));
         assertTrue(script.contains("port=\"${JASAGENT_PORT:-18721}\""), script);
+        assertTrue(script.contains("jasagent-gateway"), script);
+        assertTrue(script.contains("18731"), script);
+        assertTrue(script.contains("18732"), script);
+        assertFalse(script.contains("Started JasagentApplication"), script);
     }
 
     /**

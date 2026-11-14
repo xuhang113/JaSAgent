@@ -8,8 +8,8 @@ import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.servlet.function.ServerResponse;
 
 /**
- * 注册 Spring Cloud Gateway MVC 的转发路由。
- * 登录页、控制台和集群不在这些路由里，它们留在网关进程。
+ * 注册 Spring Cloud Gateway MVC 的 agent 转发路由。
+ * 登录、会话、集群留在网关进程。控制台由 {@link WebConsoleRoutes} 反代到 jasagent-web，不在这里转发。
  */
 @Configuration
 public class GatewayProxyRoutes {

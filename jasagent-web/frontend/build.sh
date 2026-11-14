@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# 把网关管理控制台写进 jasagent-gateway 的 gateway-admin。
-# agent 不扫描 dev.jasagent.gateway，也不会提供这份页面。
-# 网关导入 GatewayAdminStaticMount 后，从 classpath:/gateway-admin/ 挂到 /admin/。
+# 构建控制台页面到 jasagent-web 的 classpath:/admin/。
+# 页面源码只留在本模块。不把产物写进 jasagent-gateway。
 set -euo pipefail
 cd "$(dirname "$0")"
 if ! command -v npm >/dev/null 2>&1; then
@@ -16,4 +15,6 @@ if [[ ! -d node_modules ]]; then
 fi
 npm run build
 root="$(cd .. && pwd)"
-rm -rf "$root/target/classes/static" "$root/target/classes/gateway-admin" "$root/src/main/resources/static" "$root/src/main/resources/gateway-admin"
+rm -rf "$root/../jasagent-gateway/src/main/resources/gateway-admin" \
+  "$root/src/main/resources/static" \
+  "$root/src/main/resources/gateway-admin"
