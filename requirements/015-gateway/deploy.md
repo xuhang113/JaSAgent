@@ -1,6 +1,6 @@
 # 部署记录 015-gateway
 
-**时间**：2026-11-14 14:24 Asia/Shanghai
+**时间**：2026-11-14 14:33 Asia/Shanghai（首次部署 14:24，补 gVisor 后重跑官方探测 14:33）
 
 本轮 ATDD（T-001 至 T-030）此前已全部通过。按规格只改 `deploy/k8s`，未改 `scripts/up-stack.sh`。部署后跑了集成测试。没有环境地址或没有测试结果，不算完成。
 
@@ -10,7 +10,7 @@
 - 节点：`colima`，Kubernetes `v1.35.0+k3s1`，containerd `2.1.5-k3s1`，操作系统 Ubuntu 24.04.4 LTS
 - 命名空间：`jasagent`
 - 镜像：`jasagent-gateway:0.1.0`、`jasagent-web:0.1.0`（web 使用 `jasagent-web-0.1.0-exec.jar` 打包）。因为本轮不改 `scripts/up-stack.sh`，web 镜像是手工构建、导入 k3s 后再 apply 的。
-- 滚动结果：`jasagent-gateway` 1/1（只剩 gateway 容器，已去掉 mysql-bridge），`jasagent-web` 1/1。集群里原有的 grafana、otel-collector、prometheus 未删除。
+- 滚动结果：`jasagent-gateway` 1/1（只剩 gateway 容器，已去掉 mysql-bridge），`jasagent-web` 1/1。`jasagent-grafana`、`jasagent-otel-collector`、`jasagent-prometheus` 均为 1/1，且 `runtimeClassName=gvisor`。
 - 后续约定：按 Hang 和领队的要求，之后的 k8s 环境改放到部署角色的云电脑，不再依赖这台 Mac。本轮记录的仍是这次实际跑通的 Mac 集群地址和结果。
 
 ## 环境地址
@@ -28,6 +28,9 @@
 | sidecar | `http://jasagent-sidecar.jasagent.svc.cluster.local:8080` |
 | mysql | `jasagent-mysql.jasagent.svc.cluster.local:3306` |
 | redis | `jasagent-redis.jasagent.svc.cluster.local:6379` |
+| grafana | ClusterIP `10.43.111.161`，端口 3000，NodePort 30300；集群内 `http://jasagent-grafana.jasagent.svc.cluster.local:3000` |
+| otel-collector | ClusterIP `10.43.164.162`，端口 4318、8889 |
+| prometheus | ClusterIP `10.43.216.25`，端口 9090 |
 
 粘性库 JDBC 地址为 `jdbc:mysql://jasagent-mysql.jasagent.svc.cluster.local:3306/jasagent?...`，账号来自 Secret `jasagent-mysql` 的 `username`，口令只从该 Secret 挂载到仓库外口令文件路径的文件读取。JDBC 地址里没有 `password=`。
 
@@ -35,7 +38,8 @@
 
 - `deploy/k8s/gateway.yaml`：去掉 mysql-bridge sidecar；`JASAGENT_GATEWAY_WEB_ORIGIN` 指向 `http://jasagent-web.jasagent.svc.cluster.local:18722`；JDBC 地址和账号从 Secret 注入；`replicas: 1`，并写明登录会话和存活探测都在网关进程内，本轮按单副本验收。
 - `deploy/k8s/web.yaml`：新增 `jasagent-web` Deployment 和 Service，端口 18722，runtimeClass 为 gvisor，就绪探测为 `GET /admin/login`。
-- `deploy/k8s/networkpolicy.yaml`：允许网关访问 web 的 18722；新增 `jasagent-web-egress`，只放行到 kube-dns 的 DNS。
+- `deploy/k8s/networkpolicy.yaml`：允许网关访问 web 的 18722；新增 `jasagent-web-egress`，只放行到 kube-dns 的 DNS；另外允许 agent、sidecar、gateway、agentpass 访问 otel-collector 的 4318。
+- `deploy/k8s/observability.yaml`：把 grafana、otel-collector、prometheus 的清单写入仓库，并为这三份工作负载设置 `runtimeClassName: gvisor`。Grafana 仍是匿名只读，清单里没有口令或令牌。
 - `deploy/k8s/entrypoint.sh`：`non_proxy` 角色加入 `jasagent-web`。
 
 ## 集成测试结果
@@ -67,12 +71,12 @@
 
 ### `scripts/k8s/probe-egress.sh`
 
-整体结果：`PROBE FAILED`。失败项只有 `runtime-class`。
+首次部署（2026-11-14 14:24 Asia/Shanghai）整体结果是 `PROBE FAILED`，失败项只有 `runtime-class`：当时集群里原有的 `jasagent-grafana`、`jasagent-otel-collector`、`jasagent-prometheus` 没有 `runtimeClassName=gvisor`。没有缩小探测范围。
 
-原因：集群里原有的 `jasagent-grafana`、`jasagent-otel-collector`、`jasagent-prometheus` 没有设置 `runtimeClassName=gvisor`。这些工作负载不在本轮 `deploy/k8s` 清单里，本轮也没有删除它们。脚本把非 mysql/redis 且未标明 gvisor 的 Pod 判为失败，因此在 `jasagent-grafana` 处返回失败。mysql 和 redis 按约定不是 gvisor。
+补修后重跑时间：2026-11-14 14:33 Asia/Shanghai。已把这三份工作负载写入 `deploy/k8s/observability.yaml`，设置 `runtimeClassName: gvisor` 并完成滚动。官方脚本整体结果：`PROBE PASSED`。
 
-本轮相关组件的 runtimeClass 均为 gvisor：gateway、web、agent-0、agent-1、agentpass、sidecar。这些 gVisor 探测全部通过。
+`runtime-class` 通过：非 mysql/redis 的业务 Pod（含 gateway、web、agent-0、agent-1、agentpass、sidecar、grafana、otel-collector、prometheus）均为 gvisor；mysql 和 redis 按约定不是 gvisor。
 
 其余探测全部通过：`pods-ready`、`gvisor-agent-0`、`gvisor-agent-1`、`gvisor-gateway`、`gvisor-agentpass`、`gvisor-sidecar`、`gateway-identity`、`agentpass-identity`、`gateway-agent-0`、`gateway-agent-1`、`mysql-agent-0`、`mysql-agent-1`、`redis-agent-0`、`redis-agent-1`、`agent-direct-external-blocked`、`llm-deepseek-no-ticket`、`llm-xai-no-ticket`、`external-no-ticket-denied`、`ticket-issued`、`external-with-ticket`。
 
-015 要求补进清单的反代、可配置 JDBC 和单副本，在本次部署中已落地，并且专项集成测试全部通过。
+015 要求补进清单的反代、可配置 JDBC 和单副本，以及官方 `probe-egress` 整体通过，均已落地。

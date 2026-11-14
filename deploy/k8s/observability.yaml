@@ -1,0 +1,678 @@
+# 给已经在跑的 gateway、agent、agentpass、sidecar、web 增加指标查看。
+# 不替换 MySQL、Redis 和业务 Deployment。grafana、otel-collector、prometheus 同样使用 gVisor。
+# 清单里没有口令、令牌或证书。Grafana 用匿名只读，不在这里写管理员密码。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jasagent-otel-collector
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: otel-collector
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+          grpc:
+            endpoint: 0.0.0.0:4317
+    processors:
+      batch:
+        timeout: 5s
+    exporters:
+      prometheus:
+        endpoint: 0.0.0.0:8889
+        metric_expiration: 5m
+        translation_strategy: UnderscoreEscapingWithSuffixes
+        resource_to_telemetry_conversion:
+          enabled: true
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheus]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jasagent-otel-collector
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jasagent
+        app.kubernetes.io/component: otel-collector
+    spec:
+      runtimeClassName: gvisor
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: collector
+          image: otel/opentelemetry-collector-contrib:0.165.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config=/etc/otelcol/config.yaml
+          ports:
+            - name: otlp-http
+              containerPort: 4318
+            - name: prometheus
+              containerPort: 8889
+            - name: health
+              containerPort: 13133
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: jasagent-otel-collector
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jasagent-otel-collector
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: otel-collector
+spec:
+  selector:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: otel-collector
+  ports:
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: prometheus
+      port: 8889
+      targetPort: prometheus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jasagent-prometheus
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    scrape_configs:
+      - job_name: jasagent-otlp
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - jasagent-otel-collector.jasagent.svc.cluster.local:8889
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jasagent-prometheus
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jasagent
+        app.kubernetes.io/component: prometheus
+    spec:
+      runtimeClassName: gvisor
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.16.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=6h
+            - --web.listen-address=:9090
+          ports:
+            - name: http
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+              readOnly: true
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: jasagent-prometheus
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jasagent-prometheus
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: prometheus
+spec:
+  selector:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jasagent-grafana-datasource
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: grafana
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://jasagent-prometheus.jasagent.svc.cluster.local:9090
+        isDefault: true
+        editable: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jasagent-grafana-provider
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: grafana
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: jasagent
+        orgId: 1
+        folder: JaSAgent
+        type: file
+        disableDeletion: true
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jasagent-grafana-dashboard
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: grafana
+data:
+  jasagent.json: |
+    {
+      "uid": "jasagent-services",
+      "title": "JaSAgent 服务指标",
+      "description": "gateway、agent、agentpass、sidecar 的 OpenTelemetry 指标。Prometheus 名称带单位后缀：请求计数 jasagent_http_server_requests_total，耗时 jasagent_http_server_duration_seconds，堆 jasagent_jvm_memory_heap_used_bytes，线程 jasagent_jvm_threads，CPU jasagent_jvm_cpu_recent。每台 agent 另有地址 jasagent_agent_address_ratio、存活 jasagent_agent_liveness_ratio、健康 jasagent_agent_health_ratio，标签是 agent_instance 和 agent_address。服务标签是 jasagent_service。",
+      "schemaVersion": 39,
+      "version": 3,
+      "refresh": "15s",
+      "timezone": "browser",
+      "tags": ["jasagent"],
+      "time": {"from": "now-1h", "to": "now"},
+      "timepicker": {},
+      "templating": {"list": []},
+      "annotations": {"list": []},
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "id": 1,
+          "type": "timeseries",
+          "title": "请求速率",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (jasagent_service) (rate(jasagent_http_server_requests_total{http_route!=\"/health\"}[1m]))",
+              "legendFormat": "{{jasagent_service}}"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "5xx 速率",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (jasagent_service) (rate(jasagent_http_server_requests_total{http_route!=\"/health\",http_response_status_code=~\"5..\"}[1m]))",
+              "legendFormat": "{{jasagent_service}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "耗时 p95",
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum by (le, jasagent_service) (rate(jasagent_http_server_duration_seconds_bucket{http_route!=\"/health\"}[5m])))",
+              "legendFormat": "{{jasagent_service}}"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "堆内存",
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "jasagent_jvm_memory_heap_used_bytes",
+              "legendFormat": "{{jasagent_service}} {{jasagent_instance}}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "线程",
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "jasagent_jvm_threads",
+              "legendFormat": "{{jasagent_service}} {{jasagent_instance}}"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "进程 CPU",
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "percentunit"}, "overrides": []},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "jasagent_jvm_cpu_recent",
+              "legendFormat": "{{jasagent_service}} {{jasagent_instance}}"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "探针 /health",
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (jasagent_service) (rate(jasagent_http_server_requests_total{http_route=\"/health\"}[1m]))",
+              "legendFormat": "{{jasagent_service}}"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "table",
+          "title": "Agent 地址",
+          "description": "每台 agent 的地址。jasagent_agent_address_ratio 的值为 1，地址在 agent_address 标签。",
+          "gridPos": {"h": 7, "w": 8, "x": 0, "y": 32},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"decimals": 0}, "overrides": []},
+          "options": {"showHeader": true, "cellHeight": "sm"},
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "__name__": true,
+                  "jasagent_service": true,
+                  "jasagent_instance": true,
+                  "job": true,
+                  "instance": true,
+                  "service_name": true,
+                  "service_instance_id": true
+                },
+                "renameByName": {"agent_instance": "实例", "agent_address": "地址"}
+              }
+            }
+          ],
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {"type": "prometheus", "uid": "prometheus"},
+              "expr": "jasagent_agent_address_ratio",
+              "instant": true,
+              "format": "table"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "type": "table",
+          "title": "Agent 存活",
+          "description": "每台 agent 的存活。TCP 能连上端口时 jasagent_agent_liveness_ratio 为 1，否则为 0。",
+          "gridPos": {"h": 7, "w": 8, "x": 8, "y": 32},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0,
+              "mappings": [
+                {"type": "value", "options": {"0": {"text": "不存活", "color": "red", "index": 0}, "1": {"text": "存活", "color": "green", "index": 1}}}
+              ]
+            },
+            "overrides": []
+          },
+          "options": {"showHeader": true, "cellHeight": "sm"},
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "jasagent_service": true,
+                  "jasagent_instance": true,
+                  "job": true,
+                  "instance": true,
+                  "service_name": true,
+                  "service_instance_id": true
+                },
+                "renameByName": {"agent_instance": "实例", "agent_address": "地址", "Value": "存活"}
+              }
+            }
+          ],
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {"type": "prometheus", "uid": "prometheus"},
+              "expr": "jasagent_agent_liveness_ratio",
+              "instant": true,
+              "format": "table"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "type": "table",
+          "title": "Agent 健康",
+          "description": "每台 agent 的健康。GET /health 可用时 jasagent_agent_health_ratio 为 1，否则为 0。",
+          "gridPos": {"h": 7, "w": 8, "x": 16, "y": 32},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0,
+              "mappings": [
+                {"type": "value", "options": {"0": {"text": "不健康", "color": "red", "index": 0}, "1": {"text": "健康", "color": "green", "index": 1}}}
+              ]
+            },
+            "overrides": []
+          },
+          "options": {"showHeader": true, "cellHeight": "sm"},
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "jasagent_service": true,
+                  "jasagent_instance": true,
+                  "job": true,
+                  "instance": true,
+                  "service_name": true,
+                  "service_instance_id": true
+                },
+                "renameByName": {"agent_instance": "实例", "agent_address": "地址", "Value": "健康"}
+              }
+            }
+          ],
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {"type": "prometheus", "uid": "prometheus"},
+              "expr": "jasagent_agent_health_ratio",
+              "instant": true,
+              "format": "table"
+            }
+          ]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jasagent-grafana
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jasagent
+        app.kubernetes.io/component: grafana
+    spec:
+      runtimeClassName: gvisor
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: grafana/grafana:13.3.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GF_SERVER_HTTP_PORT
+              value: "3000"
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Viewer
+            - name: GF_AUTH_ANONYMOUS_ORG_NAME
+              value: Main Org.
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_ANALYTICS_REPORTING_ENABLED
+              value: "false"
+            - name: GF_ANALYTICS_CHECK_FOR_UPDATES
+              value: "false"
+            - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+              value: /var/lib/grafana/dashboards/jasagent.json
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 18
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 20
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          resources:
+            requests:
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 472
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/grafana
+            - name: datasource
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: provider
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: dashboard
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: datasource
+          configMap:
+            name: jasagent-grafana-datasource
+        - name: provider
+          configMap:
+            name: jasagent-grafana-provider
+        - name: dashboard
+          configMap:
+            name: jasagent-grafana-dashboard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jasagent-grafana
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: grafana
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      nodePort: 30300

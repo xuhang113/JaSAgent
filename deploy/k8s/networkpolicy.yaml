@@ -56,6 +56,14 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: jasagent
+              app.kubernetes.io/component: otel-collector
+      ports:
+        - protocol: TCP
+          port: 4318
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -90,6 +98,14 @@ spec:
       ports:
         - protocol: TCP
           port: 18741
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: jasagent
+              app.kubernetes.io/component: otel-collector
+      ports:
+        - protocol: TCP
+          port: 4318
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -152,6 +168,14 @@ spec:
       ports:
         - protocol: TCP
           port: 18722
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: jasagent
+              app.kubernetes.io/component: otel-collector
+      ports:
+        - protocol: TCP
+          port: 4318
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -204,3 +228,11 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: jasagent
+              app.kubernetes.io/component: otel-collector
+      ports:
+        - protocol: TCP
+          port: 4318
