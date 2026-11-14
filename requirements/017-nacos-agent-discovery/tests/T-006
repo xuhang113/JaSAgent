@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-006"
+result_text='绑定的实例从 Nacos 消失或不健康、且还有其它健康实例时，网关改派到其中一台并更新粘性。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  router="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/route/StickyAgentRouter.java"
+  if ! grep -q 'store.save(tenantId, userId, picked.instanceId())' "${router}"; then
+    echo "改派时没有写回粘性。" >&2
+    exit 1
+  fi
+  if ! grep -q '目标消失或不健康时' "${router}"; then
+    echo "路由器没有处理绑定实例消失或不健康的情况。" >&2
+    exit 1
+  fi
+  test_file="${REPO_ROOT}/jasagent-gateway/src/test/java/dev/jasagent/gateway/route/NacosStickyRoutingTest.java"
+  if ! grep -q 'keepsBindingUntilTheInstanceDisappears' "${test_file}"; then
+    echo "缺少改派并更新粘性的模块测试。" >&2
+    exit 1
+  fi
+  atdd_mvn_test "NacosStickyRoutingTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "消失后改派并更新粘性" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

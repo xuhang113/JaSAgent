@@ -1,0 +1,7 @@
+rg: regex parse error:
+    (?:primary\\(|secondary\\(|defaults\\()
+                             ^
+error: unclosed group
+2026-11-15T07:17:16+0800	T-003	网关主代码对约定实例的调用	17	无
+2026-11-15T07:17:23+0800	T-003	模块测试 NacosDiscoveryTest,NacosContractTest,GatewayLayoutTest	6478	退出码 0
+2026-11-15T07:17:23+0800	T-003	只从 Nacos 发现	6492	通过

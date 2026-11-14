@@ -1,0 +1,1 @@
+T-005	通过	粘性仍按 `(tenant_id, user_id)` 读写 `jasagent_gateway_affinity`。绑定实例仍在发现结果里且健康时，请求继续打到该实例。	6257	logs/T-005.log

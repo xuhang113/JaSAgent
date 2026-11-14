@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-002"
+result_text='agent 退出时从 Nacos 注销，发现结果里不再出现该实例。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  registration="${REPO_ROOT}/jasagent-app/src/main/java/dev/jasagent/app/nacos/NacosAgentRegistration.java"
+  if ! grep -q 'void destroy(' "${registration}"; then
+    echo "没有退出注销入口。" >&2
+    exit 1
+  fi
+  if ! grep -A40 'void destroy(' "${registration}" | grep -q 'deregister('; then
+    echo "退出时没有调用注销。" >&2
+    exit 1
+  fi
+  test_file="${REPO_ROOT}/jasagent-app/src/test/java/dev/jasagent/app/nacos/NacosRegistrationTest.java"
+  if ! grep -q 'readyEventRegistersAndDestroyRemovesIt' "${test_file}"; then
+    echo "缺少注销后发现列表为空的模块测试。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "退出调用注销" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "NacosRegistrationTest,NacosRegistrationSpringTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "注销后发现结果不再包含该实例" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

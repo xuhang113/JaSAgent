@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-003"
+result_text='网关只从 Nacos 发现 agent 实例，不再把 `jasagent.gateway.agents` 静态目录或 `primary()` / `secondary()` / `defaults()` 当作发现来源。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  config="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/config/GatewayConfiguration.java"
+  if ! grep -q 'new NacosAgentDiscovery(' "${config}"; then
+    echo "网关配置没有使用 Nacos 发现。" >&2
+    exit 1
+  fi
+  if ! grep -q 'new UnavailableAgentDiscovery(' "${config}"; then
+    echo "未配置 Nacos 时没有改为失败的发现。" >&2
+    exit 1
+  fi
+  if grep -n 'jasagent.gateway.agents' "${REPO_ROOT}/jasagent-gateway/src/main/resources/application.properties" \
+      "${REPO_ROOT}/scripts/start.sh" >/dev/null; then
+    echo "配置或本机启动仍把 jasagent.gateway.agents 当作发现来源。" >&2
+    exit 1
+  fi
+  calls="$(rg -n --glob '!**/AgentInstance.java' 'primary\\(|secondary\\(|defaults\\(' \
+    "${REPO_ROOT}/jasagent-gateway/src/main" || true)"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "网关主代码对约定实例的调用" "${calls:-无}" >> "${ATDD_LOG}"
+  if [[ -n "${calls}" ]]; then
+    echo "网关主代码仍把 primary/secondary/defaults 当作发现来源：" >&2
+    printf '%s\n' "${calls}" >&2
+    exit 1
+  fi
+  if ! grep -A8 'parse(String raw)' "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/agent/AgentInstance.java" \
+      | grep -q 'return List.of()'; then
+    echo "空白静态目录仍可能回退到约定实例。" >&2
+    exit 1
+  fi
+  atdd_mvn_test "NacosDiscoveryTest,NacosContractTest,GatewayLayoutTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "只从 Nacos 发现" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

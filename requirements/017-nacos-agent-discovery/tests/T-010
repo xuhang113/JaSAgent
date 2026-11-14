@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-010"
+result_text='agent 暴露进行中的会话或在途请求作为扩缩容主指标；CPU 只作为补充指标存在，不是唯一依据。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  signals="${REPO_ROOT}/jasagent-app/src/main/java/dev/jasagent/app/scaling/ScalingSignals.java"
+  filt="${REPO_ROOT}/jasagent-app/src/main/java/dev/jasagent/app/scaling/ScalingMetricFilter.java"
+  if ! grep -q 'PRIMARY_METRIC = "jasagent_sessions_active"' "${signals}"; then
+    echo "没有把进行中的会话作为主指标。" >&2
+    exit 1
+  fi
+  if ! grep -q 'CPU_SUPPLEMENT_METRIC = "process_cpu_usage"' "${signals}"; then
+    echo "没有把 CPU 标成补充指标。" >&2
+    exit 1
+  fi
+  if ! grep -q 'CPU 只作补充，不能当作唯一依据' "${signals}"; then
+    echo "指标说明没有写明 CPU 不能当作唯一依据。" >&2
+    exit 1
+  fi
+  if ! grep -q 'ScalingSignals.PATH' "${filt}" || ! grep -q 'runtime::activeSessions' "${filt}"; then
+    echo "指标接口没有暴露进行中的会话。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "主指标为进行中会话，CPU 只作补充" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "ScalingMetricTest,ActiveSessionMetricTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "扩缩容主指标" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

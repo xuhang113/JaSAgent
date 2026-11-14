@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-012"
+result_text='本轮改到的模块有注释，有自动测试，并且有可执行的测试脚本。口令、令牌和 Nacos 认证信息不出现在仓库、说明或日志里。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  for file in scripts/start.sh scripts/stop.sh; do
+    if [[ ! -e "${REPO_ROOT}/${file}" ]]; then
+      echo "缺少 ${file}。" >&2
+      exit 1
+    fi
+    atdd_assert_comments "${REPO_ROOT}/${file}" 0
+    atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "注释 ${file}" "通过" >> "${ATDD_LOG}"
+  done
+  # common.sh 里未改的旧函数不纳入本轮。只检查本轮新增或改动的函数和常量。
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'PY'
+import re
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+diff = subprocess.check_output(["git", "-C", repo, "diff", "-U0", base, "HEAD", "--", "scripts/common.sh"], text=True)
+missing = []
+prev = ""
+for line in diff.splitlines():
+    if not line.startswith("+") or line.startswith("+++"):
+        if line.startswith("+") is False and line.strip():
+            body = line[1:] if line[:1] in " -+" else line
+            if body.strip():
+                prev = body
+        continue
+    body = line[1:]
+    if re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*\(\)\s*\{$", body) or re.match(r"^[A-Z][A-Z0-9_]+=", body):
+        if not prev.lstrip().startswith("#"):
+            missing.append(body.strip())
+    if body.strip():
+        prev = body
+if missing:
+    print("common.sh 本轮新增或改动的符号缺少注释：", file=sys.stderr)
+    print("\n".join(missing), file=sys.stderr)
+    raise SystemExit(1)
+PY
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "common.sh 本轮新增符号注释" "通过" >> "${ATDD_LOG}"
+  for fn in jasagent_is_loopback_host jasagent_advertise_host jasagent_load_nacos_env jasagent_ensure_nacos jasagent_prepare_nacos jasagent_stop_managed_nacos; do
+    if ! grep -B1 -E "^${fn}\(\)" "${REPO_ROOT}/scripts/common.sh" | head -n 1 | grep -q '^#'; then
+      echo "common.sh 的 ${fn} 缺少注释。" >&2
+      exit 1
+    fi
+  done
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'PY'
+import pathlib, subprocess, sys, re
+repo, base = sys.argv[1], sys.argv[2]
+changed = subprocess.check_output(["git", "-C", repo, "diff", "--name-only", "--diff-filter=A", f"{base}", "HEAD"], text=True)
+files = [line for line in changed.splitlines() if line.endswith(".java") and "/src/main/java/" in line and (line.startswith("jasagent-app/") or line.startswith("jasagent-gateway/"))]
+if not files:
+    raise SystemExit("本轮没有新增的 Java 实现文件。")
+def has_javadoc(lines, index):
+    i = index - 1
+    while i >= 0:
+        stripped = lines[i].strip()
+        if stripped == "" or stripped.startswith("@") or stripped.startswith("//"):
+            i -= 1
+            continue
+        return stripped.endswith("*/") or stripped.startswith("/**") or stripped.startswith("*")
+    return False
+
+missing = []
+for rel in files:
+    text = pathlib.Path(repo, rel).read_text(encoding="utf-8")
+    if not re.search(r"/\*\*[\s\S]*?\*/\s*(public |@)", text):
+        missing.append(rel + ": 缺少类型注释")
+        continue
+    lines = text.splitlines()
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if re.match(r"(public|protected) ", stripped) and ("class " in stripped or "interface " in stripped or "enum " in stripped or "(" in stripped or " static final " in stripped):
+            if not has_javadoc(lines, i - 1):
+                missing.append(f"{rel}:{i} 缺少注释：{stripped}")
+if missing:
+    print("新增实现缺少注释：", file=sys.stderr)
+    print("\n".join(missing), file=sys.stderr)
+    raise SystemExit(1)
+PY
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "新增 Java 实现注释" "通过" >> "${ATDD_LOG}"
+  if [[ ! -x "${REPO_ROOT}/scripts/test-017-nacos-agent-discovery.sh" ]]; then
+    echo "实现提交的合同测试脚本不可执行。" >&2
+    exit 1
+  fi
+  if ! head -n 5 "${REPO_ROOT}/scripts/test-017-nacos-agent-discovery.sh" | grep -q '^#'; then
+    echo "合同测试脚本缺少说明注释。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "合同测试脚本可执行且有说明注释" "通过" >> "${ATDD_LOG}"
+  leaked="$(
+    python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'PY'
+import re
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+text = subprocess.check_output(
+    [
+        "git", "-C", repo, "diff", "-U0", base, "HEAD", "--",
+        "*.md", "*.properties", "*.sh", "*.java",
+        ":!**/logs/**", ":!**/results/**",
+    ],
+    text=True,
+)
+def literal_secret(body):
+    for match in re.finditer(
+        r"(?i)(?:^|[^\w.])(?:this\.)?(password|token|secret)\s*=\s*(.+)",
+        body,
+    ):
+        rhs = match.group(2).strip().rstrip(";").strip()
+        lower = body.lower()
+        if "password-file" in lower or "password_file" in lower or "passwordfile" in lower:
+            continue
+        if any(mark in body for mark in ("不能带", "不能包含", "含 password=", "包含 password=", "password= must")):
+            continue
+        if re.search(r"\$\{|\$\(|\$[A-Za-z_]", rhs):
+            continue
+        if " + " in rhs or "++" in rhs or "?" in rhs:
+            continue
+        if re.match(r"^(null|None|readSecret\b|[A-Za-z_][A-Za-z0-9_.]*(\s*\(.*\))?)$", rhs):
+            continue
+        if rhs in ('""', "''"):
+            continue
+        if re.match(r"^['\"][^'\"]+['\"]$", rhs) or re.match(r"^[A-Za-z0-9_./:+-]{8,}$", rhs):
+            return rhs
+    return None
+
+bad = []
+for line in text.splitlines():
+    if not line.startswith("+") or line.startswith("+++"):
+        continue
+    body = line[1:]
+    found = literal_secret(body)
+    if found:
+        bad.append(body.strip())
+print("\n".join(bad))
+PY
+  )"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "仓库新增行密文检查" "${leaked:-无}" >> "${ATDD_LOG}"
+  if [[ -n "${leaked}" ]]; then
+    echo "实现提交里出现了口令或令牌原文：" >&2
+    printf '%s\n' "${leaked}" >&2
+    exit 1
+  fi
+  set +e
+  contract_out="$(bash "${REPO_ROOT}/scripts/test-017-nacos-agent-discovery.sh" 2>&1)"
+  contract_code=$?
+  set -e
+  atdd_assert_clean "${contract_out}" "合同测试输出"
+  if [[ "${contract_out}" == *"${ATDD_NACOS_SECRET}"* ]]; then
+    echo "合同测试输出里出现了测试口令。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "合同测试退出码" "${contract_code}" >> "${ATDD_LOG}"
+  if [[ "${contract_code}" -ne 0 ]]; then
+    echo "可执行的合同测试没有通过。" >&2
+    atdd_redact "${contract_out}" >&2
+    echo >&2
+    exit 1
+  fi
+  if [[ "${contract_out}" != *"017 TEST PASSED"* ]]; then
+    echo "合同测试没有给出通过结论。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "自动测试通过且输出无密文" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

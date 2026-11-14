@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-005"
+result_text='粘性仍按 `(tenant_id, user_id)` 读写 `jasagent_gateway_affinity`。绑定实例仍在发现结果里且健康时，请求继续打到该实例。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  store="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/store/MysqlAffinityStore.java"
+  router="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/route/StickyAgentRouter.java"
+  config="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/config/GatewayConfiguration.java"
+  if ! grep -q 'jasagent_gateway_affinity' "${store}"; then
+    echo "粘性库没有使用 jasagent_gateway_affinity。" >&2
+    exit 1
+  fi
+  if ! grep -q 'PRIMARY KEY (tenant_id, user_id)' "${store}"; then
+    echo "粘性表主键不是 (tenant_id, user_id)。" >&2
+    exit 1
+  fi
+  if ! grep -q 'WHERE tenant_id = ? AND user_id = ?' "${store}"; then
+    echo "读取粘性时没有按租户和用户定位。" >&2
+    exit 1
+  fi
+  if ! grep -q 'store.find(tenantId, userId)' "${router}"; then
+    echo "路由器没有按租户和用户读粘性。" >&2
+    exit 1
+  fi
+  if ! grep -q 'new StickyAgentRouter(agentDiscovery, agentLiveness, affinityStore)' "${config}"; then
+    echo "网关没有把 MySQL 粘性库接到路由器。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "粘性键和表名" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "NacosStickyRoutingTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "绑定仍在且健康时不改派" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

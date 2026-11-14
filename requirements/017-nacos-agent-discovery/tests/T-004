@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-004"
+result_text='Nacos 不可用，或发现结果为空时，网关不回退到 `127.0.0.1:18731`、`127.0.0.1:18732` 或其它静态约定实例；需要转发到 agent 的请求失败。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  unavailable="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/nacos/UnavailableAgentDiscovery.java"
+  router="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/route/StickyAgentRouter.java"
+  if ! grep -q 'throw new AgentException' "${unavailable}"; then
+    echo "Nacos 未配置时发现没有失败。" >&2
+    exit 1
+  fi
+  if grep -q '127.0.0.1' "${unavailable}"; then
+    echo "不可用发现里出现了静态回环地址。" >&2
+    exit 1
+  fi
+  if ! grep -q '发现失败时原样抛出，不换成静态地址' "${router}"; then
+    echo "路由器没有写明发现失败时不换成静态地址。" >&2
+    exit 1
+  fi
+  if grep -n 'AgentInstance.primary\\|AgentInstance.secondary\\|AgentInstance.defaults\\|AgentInstance.parse' \
+      "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/route/StickyAgentRouter.java" \
+      "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/nacos" >/dev/null; then
+    echo "发现或路由失败路径仍引用静态约定实例。" >&2
+    exit 1
+  fi
+  atdd_mvn_test "NacosDiscoveryTest,NacosStickyRoutingTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "空或不可用时转发失败且无静态兜底" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-009"
+result_text='本机启动脚本走 Nacos；本机拉起的 agent 同样注册非回环可达地址，网关从 Nacos 发现它们。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  start="$(cat "${REPO_ROOT}/scripts/start.sh")"
+  if [[ "${start}" != *"jasagent_prepare_nacos"* ]]; then
+    echo "start.sh 没有走 Nacos。" >&2
+    exit 1
+  fi
+  if [[ "${start}" != *"--server.address=0.0.0.0"* ]]; then
+    echo "本机 agent 没有监听所有网卡，注册地址可能只能用回环。" >&2
+    exit 1
+  fi
+  if [[ "${start}" == *"jasagent.gateway.agents"* ]]; then
+    echo "start.sh 仍把静态目录传给网关。" >&2
+    exit 1
+  fi
+  if [[ "${start}" != *"18731"* || "${start}" != *"18732"* || "${start}" != *'port="${JASAGENT_PORT:-18721}"'* ]]; then
+    echo "本机端口约定丢了。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "start.sh 走 Nacos 且不传静态目录" "通过" >> "${ATDD_LOG}"
+  atdd_setup_nacos_scripts
+  unset JASAGENT_NACOS_SERVER_ADDR JASAGENT_NACOS_SERVER_FILE JASAGENT_NACOS_USERNAME \
+    JASAGENT_NACOS_USERNAME_FILE JASAGENT_NACOS_PASSWORD_FILE JASAGENT_NACOS_START \
+    JASAGENT_NACOS_HOME JASAGENT_NACOS_STOP JASAGENT_ADVERTISE_HOST || true
+  cat > "${ATDD_WORK}/missing-addr.sh" <<EOF
+#!/bin/bash
+set -euo pipefail
+export HOME='${ATDD_HOME}'
+unset JASAGENT_NACOS_SERVER_ADDR JASAGENT_NACOS_USERNAME JASAGENT_NACOS_PASSWORD_FILE JASAGENT_ADVERTISE_HOST
+source '${REPO_ROOT}/scripts/common.sh'
+jasagent_load_nacos_env
+EOF
+  chmod +x "${ATDD_WORK}/missing-addr.sh"
+  atdd_run "${ATDD_WORK}/missing-addr.sh"
+  atdd_assert_clean "${ATDD_CAPTURE_TEXT}" "缺少地址"
+  if [[ "${ATDD_CAPTURE_CODE}" -eq 0 ]]; then
+    echo "缺少 Nacos 地址时应该失败。" >&2
+    exit 1
+  fi
+  if [[ "${ATDD_CAPTURE_TEXT}" != *"缺少 Nacos 地址"* ]]; then
+    echo "缺少地址时没有说明原因。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  printf '%s\n' "${ATDD_NACOS_SECRET}" > "${ATDD_WORK}/password"
+  printf '%s\n' "${ATDD_NACOS_ADDR}" > "${ATDD_WORK}/address"
+  cat > "${ATDD_WORK}/loopback.sh" <<EOF
+#!/bin/bash
+set -euo pipefail
+export HOME='${ATDD_HOME}'
+export JASAGENT_ADVERTISE_HOST=127.0.0.1
+export JASAGENT_NACOS_PASSWORD_FILE='${ATDD_WORK}/password'
+source '${REPO_ROOT}/scripts/common.sh'
+jasagent_advertise_host
+EOF
+  chmod +x "${ATDD_WORK}/loopback.sh"
+  atdd_run "${ATDD_WORK}/loopback.sh"
+  atdd_assert_clean "${ATDD_CAPTURE_TEXT}" "回环地址"
+  if [[ "${ATDD_CAPTURE_CODE}" -eq 0 ]]; then
+    echo "回环注册地址应该被拒绝。" >&2
+    exit 1
+  fi
+  if [[ "${ATDD_CAPTURE_TEXT}" != *"注册地址不能是回环地址"* ]]; then
+    echo "回环地址没有被说明拒绝。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  ready="${ATDD_WORK}/ready"
+  starter="${ATDD_WORK}/start-nacos.sh"
+  stopper="${ATDD_WORK}/stop-nacos.sh"
+  cat > "${starter}" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" > "${ATDD_WORK}/starter-args"
+if env | grep -F -q '${ATDD_NACOS_SECRET}'; then
+  echo leaked > "${ATDD_WORK}/leaked"
+fi
+touch "${ready}"
+exit 0
+EOF
+  cat > "${stopper}" <<EOF
+#!/bin/bash
+touch "${ATDD_WORK}/stopped"
+exit 0
+EOF
+  chmod +x "${starter}" "${stopper}"
+  cat > "${ATDD_WORK}/prepare.sh" <<EOF
+#!/bin/bash
+set -euo pipefail
+export HOME='${ATDD_HOME}'
+export JASAGENT_NACOS_SERVER_ADDR='${ATDD_NACOS_ADDR}'
+export JASAGENT_NACOS_START='${starter}'
+export JASAGENT_NACOS_STOP='${stopper}'
+export JASAGENT_RUNTIME_DIR='${ATDD_WORK}/runtime'
+export JASAGENT_ADVERTISE_HOST='10.1.2.3'
+source '${REPO_ROOT}/scripts/common.sh'
+jasagent_port_open() { [[ -f '${ready}' ]]; }
+jasagent_prepare_nacos
+[[ "\${JASAGENT_ADVERTISE_HOST}" == '10.1.2.3' ]]
+EOF
+  chmod +x "${ATDD_WORK}/prepare.sh"
+  atdd_run "${ATDD_WORK}/prepare.sh"
+  atdd_assert_clean "${ATDD_CAPTURE_TEXT}" "拉起 Nacos"
+  if [[ "${ATDD_CAPTURE_CODE}" -ne 0 ]]; then
+    echo "Nacos 未就绪时没有被拉起。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  if [[ "${ATDD_CAPTURE_TEXT}" == *"${ATDD_NACOS_ADDR}"* ]]; then
+    echo "拉起 Nacos 时把地址打出来了。" >&2
+    exit 1
+  fi
+  if [[ -f "${ATDD_WORK}/leaked" ]]; then
+    echo "启动 Nacos 时环境里出现了口令。" >&2
+    exit 1
+  fi
+  if [[ ! -f "${ATDD_WORK}/runtime/nacos.managed" ]]; then
+    echo "没有记下本入口拉起的 Nacos。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本机脚本注册非回环地址并从 Nacos 发现" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

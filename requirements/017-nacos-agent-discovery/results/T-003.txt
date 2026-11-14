@@ -1,0 +1,1 @@
+T-003	通过	网关只从 Nacos 发现 agent 实例，不再把 `jasagent.gateway.agents` 静态目录或 `primary()` / `secondary()` / `defaults()` 当作发现来源。	6503	logs/T-003.log
