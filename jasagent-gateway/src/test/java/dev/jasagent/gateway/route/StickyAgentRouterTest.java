@@ -1,6 +1,7 @@
 package dev.jasagent.gateway.route;
 
 import dev.jasagent.api.exception.AgentException;
+import dev.jasagent.gateway.agent.AgentDiscovery;
 import dev.jasagent.gateway.agent.AgentInstance;
 import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
 import dev.jasagent.gateway.store.MysqlAffinityStore;
@@ -85,7 +86,7 @@ class StickyAgentRouterTest {
         AgentInstance chosen = first.route(tenant, "ada").instance();
         InMemoryAgentLiveness restartedLiveness = bothUp();
         MysqlAffinityStore reopened = MysqlAffinityStore.openDefault();
-        StickyAgentRouter restarted = new StickyAgentRouter(AgentInstance.defaults(), restartedLiveness, reopened);
+        StickyAgentRouter restarted = new StickyAgentRouter(catalog(AgentInstance.defaults()), restartedLiveness, reopened);
         assertEquals(chosen.instanceId(), restarted.route(tenant, "ada").instance().instanceId());
         assertFalse(restarted.route(tenant, "ada").reassigned());
         assertEquals(chosen.instanceId(), reopened.find(tenant, "ada").orElseThrow());
@@ -129,7 +130,17 @@ class StickyAgentRouterTest {
         if (store == null) {
             store = MysqlAffinityStore.openDefault();
         }
-        return new StickyAgentRouter(AgentInstance.defaults(), liveness, store);
+        return new StickyAgentRouter(catalog(AgentInstance.defaults()), liveness, store);
+    }
+
+    /**
+     * 测试夹具里的发现结果。这不是网关在配置空白时的回退。
+     *
+     * @param instances 这次查询要返回的实例
+     * @return 固定发现
+     */
+    private static AgentDiscovery catalog(java.util.List<AgentInstance> instances) {
+        return () -> instances;
     }
 
     /**

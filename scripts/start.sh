@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # 本机日常入口。JASAGENT_PORT 默认 18721 时拉起的是网关。
-# 同时拉起可被反代的 jasagent-web 上游，以及 18731 和 18732 上的 agent。
+# 先连接或拉起可配置的 Nacos，再拉起可被反代的 jasagent-web、网关，以及 18731 和 18732 上的 agent。
+# 这两个端口只是本机监听约定。agent 注册非回环地址，网关从 Nacos 发现，不使用静态目录。
 # 网关就绪看 /health 里的 status=up，不看应用启动完成那一行日志。
+# Nacos 地址和口令只从环境或仓库外文件读取。缺失时以非 0 退出，说明里不打印密文。
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
@@ -19,6 +21,9 @@ if [[ ! "$web_port" =~ ^[0-9]+$ ]] || (( web_port < 1 || web_port > 65535 )); th
   echo "控制台上游端口必须是 1 到 65535 的数字。" >&2
   exit 1
 fi
+
+# 本机入口必须先有 Nacos，并导出网关能访问的注册地址。
+jasagent_prepare_nacos
 
 # 进程还在，且命令行包含给定片段时，认为这个 pid 文件对应的服务已启动。
 jasagent_recorded_alive() {
@@ -110,13 +115,14 @@ if [[ "$gateway_up" -ne 1 ]]; then
   fi
 fi
 
+# 在 18731 或 18732 上拉起一台 agent。监听 0.0.0.0，注册地址来自已导出的非回环主机。
 jasagent_start_agent() {
   local listen_port="$1"
   local pid_file="$2"
   local log_file="$3"
   jasagent_require_free "agent" "$listen_port"
   local agent_pid
-  agent_pid="$(jasagent_spawn_jar "$JASAGENT_APP_JAR" "$log_file" server "--server.address=${host}" "--server.port=${listen_port}")"
+  agent_pid="$(jasagent_spawn_jar "$JASAGENT_APP_JAR" "$log_file" server "--server.address=0.0.0.0" "--server.port=${listen_port}")"
   jasagent_write_pid "$pid_file" "$agent_pid"
   started+=("$agent_pid")
   if ! jasagent_wait_port_open "$host" "$listen_port" "$agent_pid"; then

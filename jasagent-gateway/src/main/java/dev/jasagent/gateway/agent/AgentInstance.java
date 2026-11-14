@@ -10,8 +10,8 @@ import java.util.List;
  * 一台 agent。实例编号给集群和执行详情，地址是网关实际连接的主机和端口。
  *
  * @param instanceId 稳定编号，形如 agent-18731
- * @param host 主机，约定是 127.0.0.1
- * @param port 端口，约定是 18731 或 18732
+ * @param host 网关实际连接的主机，来自 Nacos 登记的地址
+ * @param port 网关实际连接的端口
  */
 public record AgentInstance(String instanceId, String host, int port) {
     /**
@@ -39,25 +39,28 @@ public record AgentInstance(String instanceId, String host, int port) {
     }
 
     /**
-     * 第一台约定实例，编号 agent-18731，地址 127.0.0.1:18731。
+     * 本机监听约定的第一台，编号 agent-18731，地址 127.0.0.1:18731。
+     * 这只是本机端口约定，网关发现不得调用它，也不把它当作 Nacos 的查询结果。
      *
-     * @return 第一台 agent
+     * @return 本机约定的第一台
      */
     public static AgentInstance primary() {
         return new AgentInstance("agent-" + PRIMARY_PORT, "127.0.0.1", PRIMARY_PORT);
     }
 
     /**
-     * 第二台约定实例，编号 agent-18732，地址 127.0.0.1:18732。
+     * 本机监听约定的第二台，编号 agent-18732，地址 127.0.0.1:18732。
+     * 这只是本机端口约定，网关发现不得调用它。
      *
-     * @return 第二台 agent
+     * @return 本机约定的第二台
      */
     public static AgentInstance secondary() {
         return new AgentInstance("agent-" + SECONDARY_PORT, "127.0.0.1", SECONDARY_PORT);
     }
 
     /**
-     * 按端口从小到大返回约定的两台 agent。
+     * 按端口从小到大返回本机监听约定的两台 agent。
+     * 网关发现不得调用它，配置空白时也不能把它当作查询结果。
      *
      * @return 不可变列表，先 18731 再 18732
      */
@@ -75,15 +78,15 @@ public record AgentInstance(String instanceId, String host, int port) {
     }
 
     /**
-     * 把逗号分隔的 host:port 收成实例列表。空白时用约定的两台。
-     * 编号取 agent-端口。重复端口或格式不对时拒绝。
+     * 把逗号分隔的 host:port 收成实例列表。空白时返回空列表，不再回退到本机约定的两台。
+     * 网关发现不调用这个方法。编号取 agent-端口。重复端口或格式不对时拒绝。
      *
-     * @param raw 配置原文，例如 127.0.0.1:18731,127.0.0.1:18732
-     * @return 按端口升序的实例
+     * @param raw 文本，空白时不是发现结果
+     * @return 按端口升序的实例；空白时为空列表
      */
     public static List<AgentInstance> parse(String raw) {
         if (raw == null || raw.isBlank()) {
-            return defaults();
+            return List.of();
         }
         List<AgentInstance> parsed = new ArrayList<>();
         for (String item : raw.split(",")) {

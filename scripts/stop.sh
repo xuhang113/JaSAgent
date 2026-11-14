@@ -4,6 +4,7 @@ set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
 stopped=""
+# 按 pid 停掉一个已经记录的进程。同一个 pid 只停一次。
 jasagent_stop_recorded() {
   local pid="$1"
   [[ -n "$pid" ]] || return 0
@@ -27,4 +28,6 @@ while IFS= read -r pid; do
   jasagent_stop_recorded "$pid"
 done < <(jasagent_repo_server_pids)
 rm -f "$JASAGENT_PID_FILE" "$JASAGENT_WEB_PID_FILE" "$JASAGENT_AGENT_PRIMARY_PID_FILE" "$JASAGENT_AGENT_SECONDARY_PID_FILE"
+# 只停本入口拉起的 Nacos。外部注册中心没有管理标记，这里不动。
+jasagent_stop_managed_nacos
 exit 0

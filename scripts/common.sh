@@ -21,6 +21,10 @@ JASAGENT_AGENT_PRIMARY_PID_FILE="$JASAGENT_RUNTIME_DIR/agent-18731.pid"
 JASAGENT_AGENT_PRIMARY_LOG_FILE="$JASAGENT_RUNTIME_DIR/agent-18731.log"
 JASAGENT_AGENT_SECONDARY_PID_FILE="$JASAGENT_RUNTIME_DIR/agent-18732.pid"
 JASAGENT_AGENT_SECONDARY_LOG_FILE="$JASAGENT_RUNTIME_DIR/agent-18732.log"
+# 本进程拉起的 Nacos 才记在这里。连上已有的 Nacos 时不写，停止时也不会把它关掉。
+JASAGENT_NACOS_MANAGED_FILE="$JASAGENT_RUNTIME_DIR/nacos.managed"
+# Nacos 启动日志只放在运行时目录。脚本不把日志内容打到终端。
+JASAGENT_NACOS_LOG_FILE="$JASAGENT_RUNTIME_DIR/nacos.log"
 
 jasagent_read_pid() {
   local pid
@@ -529,4 +533,190 @@ jasagent_stop_pid() {
     sleep 0.2
   done
   return 1
+}
+
+# 判断主机是不是回环或未指定地址。是则返回 0。不打印主机。
+jasagent_is_loopback_host() {
+  python3 - "$1" <<'PY'
+import ipaddress
+import socket
+import sys
+
+host = sys.argv[1].strip().strip("[]").lower()
+if host in {"localhost", "localhost.localdomain", "::1", "0.0.0.0", "::"}:
+    raise SystemExit(0)
+try:
+    addr = ipaddress.ip_address(host)
+except ValueError:
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        raise SystemExit(0)
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_loopback or ip.is_unspecified or ip.is_link_local:
+            raise SystemExit(0)
+    raise SystemExit(1)
+if addr.is_loopback or addr.is_unspecified or addr.is_link_local:
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+# 选出网关能访问的非回环 IPv4。配置成回环地址时以非 0 退出，说明里不带口令。
+jasagent_advertise_host() {
+  if [[ -n "${JASAGENT_ADVERTISE_HOST:-}" ]]; then
+    if jasagent_is_loopback_host "$JASAGENT_ADVERTISE_HOST"; then
+      echo "注册地址不能是回环地址。" >&2
+      exit 1
+    fi
+    printf '%s\n' "$JASAGENT_ADVERTISE_HOST"
+    return 0
+  fi
+  local detected
+  detected="$(python3 - <<'PY'
+import ipaddress
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+try:
+    sock.connect(("10.255.255.255", 1))
+    ip = sock.getsockname()[0]
+finally:
+    sock.close()
+addr = ipaddress.ip_address(ip)
+if addr.is_loopback or addr.is_unspecified or addr.is_link_local:
+    raise SystemExit(1)
+print(ip)
+PY
+)" || {
+    echo "没有网关能访问的非回环地址。" >&2
+    exit 1
+  }
+  if jasagent_is_loopback_host "$detected"; then
+    echo "没有网关能访问的非回环地址。" >&2
+    exit 1
+  fi
+  printf '%s\n' "$detected"
+}
+
+# 从环境或仓库外文件读取 Nacos 地址。缺失或为空时以非 0 退出，不打印地址和口令。
+jasagent_load_nacos_env() {
+  local file addr user_file user pass_file
+  if [[ -z "${JASAGENT_NACOS_SERVER_ADDR:-}" ]]; then
+    file="${JASAGENT_NACOS_SERVER_FILE:-${HOME}/.config/jasagent-nacos-server}"
+    if [[ ! -f "$file" ]]; then
+      echo "缺少 Nacos 地址。请设置 JASAGENT_NACOS_SERVER_ADDR，或提供仓库外的地址文件。" >&2
+      exit 1
+    fi
+    IFS= read -r addr < "$file" || true
+    addr="${addr%$'\r'}"
+    addr="${addr#"${addr%%[![:space:]]*}"}"
+    addr="${addr%"${addr##*[![:space:]]}"}"
+    if [[ -z "$addr" || "$addr" != *:* || "$addr" == *" "* ]]; then
+      echo "Nacos 地址无效。" >&2
+      exit 1
+    fi
+    export JASAGENT_NACOS_SERVER_ADDR="$addr"
+  fi
+  if [[ -z "${JASAGENT_NACOS_USERNAME:-}" && -n "${JASAGENT_NACOS_USERNAME_FILE:-}" ]]; then
+    user_file="$JASAGENT_NACOS_USERNAME_FILE"
+    if [[ ! -f "$user_file" ]]; then
+      echo "缺少 Nacos 用户名文件。" >&2
+      exit 1
+    fi
+    IFS= read -r user < "$user_file" || true
+    user="${user%$'\r'}"
+    user="${user#"${user%%[![:space:]]*}"}"
+    user="${user%"${user##*[![:space:]]}"}"
+    if [[ -z "$user" ]]; then
+      echo "Nacos 用户名文件是空的。" >&2
+      exit 1
+    fi
+    export JASAGENT_NACOS_USERNAME="$user"
+  fi
+  if [[ -n "${JASAGENT_NACOS_USERNAME:-}" ]]; then
+    pass_file="${JASAGENT_NACOS_PASSWORD_FILE:-${HOME}/.config/jasagent-nacos.password}"
+    if [[ ! -f "$pass_file" ]]; then
+      echo "缺少 Nacos 口令文件。" >&2
+      exit 1
+    fi
+    export JASAGENT_NACOS_PASSWORD_FILE="$pass_file"
+  elif [[ -n "${JASAGENT_NACOS_PASSWORD_FILE:-}" && ! -f "$JASAGENT_NACOS_PASSWORD_FILE" ]]; then
+    echo "缺少 Nacos 口令文件。" >&2
+    exit 1
+  fi
+}
+
+# 地址已经能连上就直接用。连不上时用仓库外的安装拉起，输出只进日志，不打印口令。
+jasagent_ensure_nacos() {
+  local addr host port starter nacos_home n
+  addr="${JASAGENT_NACOS_SERVER_ADDR:-}"
+  port="${addr##*:}"
+  host="${addr%:*}"
+  if [[ -z "$host" || -z "$port" || "$host" == "$port" || ! "$port" =~ ^[0-9]+$ ]]; then
+    echo "Nacos 地址无效。" >&2
+    exit 1
+  fi
+  if jasagent_port_open "$host" "$port"; then
+    return 0
+  fi
+  if [[ -n "${JASAGENT_NACOS_START:-}" ]]; then
+    starter="$JASAGENT_NACOS_START"
+  elif [[ -n "${JASAGENT_NACOS_HOME:-}" && -x "${JASAGENT_NACOS_HOME}/bin/startup.sh" ]]; then
+    starter="${JASAGENT_NACOS_HOME}/bin/startup.sh"
+  else
+    echo "Nacos 未就绪，且没有可启动的安装。" >&2
+    exit 1
+  fi
+  mkdir -p "$JASAGENT_RUNTIME_DIR"
+  : > "$JASAGENT_NACOS_LOG_FILE"
+  chmod 600 "$JASAGENT_NACOS_LOG_FILE"
+  if [[ "$starter" == */bin/startup.sh ]]; then
+    nacos_home="$(cd "$(dirname "$starter")/.." && pwd)"
+    if ! (cd "$nacos_home" && MODE=standalone bash "$starter" -m standalone) >>"$JASAGENT_NACOS_LOG_FILE" 2>&1; then
+      echo "Nacos 没有启动。" >&2
+      exit 1
+    fi
+  elif ! bash "$starter" >>"$JASAGENT_NACOS_LOG_FILE" 2>&1; then
+    echo "Nacos 没有启动。" >&2
+    exit 1
+  fi
+  n=0
+  while [[ "$n" -lt 150 ]]; do
+    if jasagent_port_open "$host" "$port"; then
+      printf '%s\n' "$starter" > "$JASAGENT_NACOS_MANAGED_FILE"
+      chmod 600 "$JASAGENT_NACOS_MANAGED_FILE"
+      return 0
+    fi
+    n=$((n + 1))
+    sleep 0.2
+  done
+  echo "Nacos 没有在预期时间内就绪。" >&2
+  exit 1
+}
+
+# 读取 Nacos 配置，必要时拉起，再导出非回环注册地址。不打印地址和口令。
+jasagent_prepare_nacos() {
+  local host
+  jasagent_load_nacos_env
+  jasagent_ensure_nacos
+  host="$(jasagent_advertise_host)"
+  export JASAGENT_ADVERTISE_HOST="$host"
+}
+
+# 停掉本入口拉起的 Nacos。没有管理标记时不动外部注册中心。
+jasagent_stop_managed_nacos() {
+  local starter shutdown
+  [[ -f "$JASAGENT_NACOS_MANAGED_FILE" ]] || return 0
+  starter="$(head -n 1 "$JASAGENT_NACOS_MANAGED_FILE" | tr -d '\r')"
+  if [[ "$starter" == */bin/startup.sh ]]; then
+    shutdown="$(cd "$(dirname "$starter")/.." && pwd)/bin/shutdown.sh"
+    if [[ -x "$shutdown" ]]; then
+      bash "$shutdown" >/dev/null 2>&1 || true
+    fi
+  elif [[ -n "${JASAGENT_NACOS_STOP:-}" ]]; then
+    bash "$JASAGENT_NACOS_STOP" >/dev/null 2>&1 || true
+  fi
+  rm -f "$JASAGENT_NACOS_MANAGED_FILE"
 }

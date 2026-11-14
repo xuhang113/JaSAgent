@@ -40,7 +40,7 @@ class ClusterInventoryTest {
                 return List.of(new AffinityRow("ada", "agent-18731"), new AffinityRow("bao", "agent-18732"));
             }
         };
-        List<java.util.Map<String, Object>> agents = cast(new ClusterInventory(AgentInstance.defaults(), liveness, store).snapshot("local").get("agents"));
+        List<java.util.Map<String, Object>> agents = cast(new ClusterInventory(() -> AgentInstance.defaults(), liveness, store).snapshot("local").get("agents"));
         java.util.Map<String, Object> primary = agents.get(0);
         java.util.Map<String, Object> secondary = agents.get(1);
         assertEquals("agent-18731", primary.get("instanceId"));

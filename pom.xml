@@ -41,6 +41,8 @@
     <maven.compiler.release>21</maven.compiler.release>
     <junit.version>5.11.4</junit.version>
     <spring-boot.version>3.4.5</spring-boot.version>
+    <!-- 与 Spring Boot 3.4.5 一起用过的 Nacos 客户端。不引入整套 Spring Cloud Alibaba，避免和现有 Spring Cloud 2024.0.3 抢版本。 -->
+    <nacos.version>2.4.3</nacos.version>
     <langgraph4j.version>1.9.9</langgraph4j.version>
     <langchain4j.version>1.23.0</langchain4j.version>
   </properties>
@@ -95,6 +97,11 @@
         <groupId>dev.langchain4j</groupId>
         <artifactId>langchain4j-open-ai</artifactId>
         <version>${langchain4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.alibaba.nacos</groupId>
+        <artifactId>nacos-client</artifactId>
+        <version>${nacos.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

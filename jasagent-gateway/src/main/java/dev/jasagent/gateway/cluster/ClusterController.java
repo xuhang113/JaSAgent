@@ -7,7 +7,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 控制台的集群接口。数据来自长连接和粘性库，不向浏览器编造一台不在目录里的 agent。
+ * 控制台的集群接口。数据来自当时的 Nacos 发现和本进程长连接，不向浏览器编造一台静态约定实例。
+ * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
  */
 @RestController
 public class ClusterController {

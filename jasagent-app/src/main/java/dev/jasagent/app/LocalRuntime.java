@@ -2630,6 +2630,46 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     /**
+     * 进行中的会话数，供扩缩容主指标读取。只统计状态为 ACCEPTED 或 RUNNING 的执行，并按会话去重。
+     * CPU 不是这个数，只作补充。
+     *
+     * @return 进行中的会话数
+     */
+    public int activeSessions() {
+        java.util.Set<String> sessions = new LinkedHashSet<>();
+        for (Exec exec : executions.values()) {
+            String status;
+            String sessionId;
+            synchronized (exec) {
+                status = exec.status;
+                sessionId = exec.sessionId;
+            }
+            if (!"ACCEPTED".equals(status) && !"RUNNING".equals(status)) {
+                continue;
+            }
+            if (sessionId == null || sessionId.isBlank()) {
+                sessionId = exec.executionId;
+            }
+            sessions.add(sessionId);
+        }
+        return sessions.size();
+    }
+
+    /**
+     * 测试放入一条内存执行，用来核对进行中的会话计数。不写数据库，也不调用模型。
+     *
+     * @param executionId 执行编号
+     * @param sessionId 会话编号，空白时用执行编号
+     * @param status 状态，ACCEPTED 和 RUNNING 计入主指标
+     */
+    void stageExecution(String executionId, String sessionId, String status) {
+        Exec exec = new Exec(executionId, "metric-user", "/tmp", "");
+        exec.sessionId = sessionId == null ? "" : sessionId;
+        exec.status = status == null ? "" : status;
+        executions.put(executionId, exec);
+    }
+
+    /**
      * 一次执行在内存中的全部状态，包括日志、时间线、通行证、所选模型和检查点运行次数。
      */
     private static final class Exec {

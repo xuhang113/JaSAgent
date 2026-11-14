@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer;
 import dev.jasagent.api.auth.AddUser;
 import dev.jasagent.api.auth.Session;
 import dev.jasagent.auth.LocalAuthService;
+import dev.jasagent.gateway.agent.AgentDiscovery;
 import dev.jasagent.gateway.agent.AgentInstance;
 import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
 import dev.jasagent.gateway.store.MysqlAffinityStore;
@@ -47,8 +48,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest(properties = "jasagent.gateway.forward-test=true")
 @AutoConfigureMockMvc
-@Import(FixedTokenConfiguration.class)
-class GatewayForwardTest {
+@Import({FixedTokenConfiguration.class, dev.jasagent.it.DiscoveredAgentsConfiguration.class})
+public class GatewayForwardTest {
+    /**
+     * 测试用的发现。实例由桩端口填入，不读静态目录。
+     */
+    public static final MutableAgentDiscovery discovered = new MutableAgentDiscovery();
     private static final String TOKEN = FixedTokenConfiguration.TOKEN;
     private static final String USER = "forward-user";
     private static final String PASSWORD = "test-password-1";
@@ -60,8 +65,6 @@ class GatewayForwardTest {
 
     @Autowired
     private MockMvc mvc;
-    @Autowired
-    private List<AgentInstance> agents;
     @Autowired
     private InMemoryAgentLiveness liveness;
     @Autowired
@@ -80,8 +83,12 @@ class GatewayForwardTest {
         registry.add("jasagent.home", () -> home.toString());
         registry.add("jasagent.gateway.links.enabled", () -> "false");
         registry.add("jasagent.gateway.tenant-id", () -> TENANT);
-        registry.add("jasagent.gateway.agents", () -> "127.0.0.1:" + first.getAddress().getPort() + ",127.0.0.1:" + second.getAddress().getPort());
         registry.add("jasagent.gateway.web-origin", () -> "http://127.0.0.1:9");
+        int firstPort = first.getAddress().getPort();
+        int secondPort = second.getAddress().getPort();
+        discovered.set(List.of(
+                new AgentInstance("agent-" + firstPort, "127.0.0.1", firstPort),
+                new AgentInstance("agent-" + secondPort, "127.0.0.1", secondPort)));
     }
 
     /**
@@ -91,7 +98,7 @@ class GatewayForwardTest {
     void bothAlive() {
         hits.clear();
         store.deleteTenant(TENANT);
-        for (AgentInstance agent : agents) {
+        for (AgentInstance agent : discovered.healthyNow()) {
             liveness.markUp(agent);
         }
     }
@@ -150,12 +157,36 @@ class GatewayForwardTest {
         assertNotEquals(current.port(), hits.get(0).port);
         assertEquals("agent-" + hits.get(0).port, store.find(TENANT, USER).orElseThrow());
         String kept = store.find(TENANT, USER).orElseThrow();
-        for (AgentInstance agent : agents) {
+        for (AgentInstance agent : discovered.healthyNow()) {
             liveness.markDown(agent);
         }
         mvc.perform(get("/api/sessions").cookie(new Cookie("JASAGENT_SESSION", cookie)))
                 .andExpect(status().isServiceUnavailable());
         assertEquals(kept, store.find(TENANT, USER).orElseThrow());
+    }
+
+    /**
+     * 发现结果被清空后，请求失败，不改打到 18731 或 18732 的静态地址，粘性行还在。
+     */
+    @Test
+    void emptyDiscoveryFailsWithoutStaticFallback() throws Exception {
+        String cookie = login();
+        mvc.perform(get("/api/sessions").cookie(new Cookie("JASAGENT_SESSION", cookie))).andExpect(status().isOk());
+        String kept = store.find(TENANT, USER).orElseThrow();
+        List<AgentInstance> previous = List.copyOf(discovered.healthyNow());
+        discovered.set(List.of());
+        try {
+            MvcResult failed = mvc.perform(get("/api/sessions").cookie(new Cookie("JASAGENT_SESSION", cookie)))
+                    .andExpect(status().isServiceUnavailable())
+                    .andReturn();
+            String body = failed.getResponse().getContentAsString();
+            assertFalse(body.contains("127.0.0.1:18731"));
+            assertFalse(body.contains("127.0.0.1:18732"));
+            assertFalse(body.contains(TOKEN));
+            assertEquals(kept, store.find(TENANT, USER).orElseThrow());
+        } finally {
+            discovered.set(previous);
+        }
     }
 
     /**
@@ -183,7 +214,7 @@ class GatewayForwardTest {
      * @return 对应实例
      */
     private AgentInstance agent(int port) {
-        for (AgentInstance agent : agents) {
+        for (AgentInstance agent : discovered.healthyNow()) {
             if (agent.port() == port) {
                 return agent;
             }
@@ -257,6 +288,32 @@ class GatewayForwardTest {
         });
         server.start();
         return server;
+    }
+
+    /**
+     * 测试里可替换的发现结果。
+     */
+    public static final class MutableAgentDiscovery implements AgentDiscovery {
+        private volatile List<AgentInstance> instances = List.of();
+
+        /**
+         * 换成这一次的健康实例。
+         *
+         * @param instances 健康实例
+         */
+        private void set(List<AgentInstance> instances) {
+            this.instances = List.copyOf(instances);
+        }
+
+        /**
+         * 返回最近一次放进来的实例。
+         *
+         * @return 健康实例
+         */
+        @Override
+        public List<AgentInstance> healthyNow() {
+            return instances;
+        }
     }
 
     /**

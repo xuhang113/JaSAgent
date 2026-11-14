@@ -1,10 +1,14 @@
 package dev.jasagent.gateway.config;
 
 import dev.jasagent.auth.LocalAuthService;
-import dev.jasagent.gateway.agent.AgentInstance;
+import dev.jasagent.gateway.agent.AgentDiscovery;
 import dev.jasagent.gateway.agent.AgentLinkSupervisor;
 import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
 import dev.jasagent.gateway.cluster.ClusterInventory;
+import dev.jasagent.gateway.nacos.NacosAgentDiscovery;
+import dev.jasagent.gateway.nacos.NacosHealthyLookup;
+import dev.jasagent.gateway.nacos.NacosSettings;
+import dev.jasagent.gateway.nacos.UnavailableAgentDiscovery;
 import dev.jasagent.gateway.proxy.StickyProxy;
 import dev.jasagent.gateway.route.AgentCallHeaders;
 import dev.jasagent.gateway.route.StickyAgentRouter;
@@ -18,11 +22,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.nio.file.Path;
-import java.util.List;
 
 /**
  * 组装网关运行时需要的登录、令牌、粘性、集群、长连接和控制台上游。
- * 长连接默认开启。测试把它关掉，避免拨到 18731 和 18732。
+ * 长连接默认开启，只连当时从 Nacos 查到的实例。测试把它关掉。
  * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
  */
 @Configuration
@@ -59,14 +62,41 @@ public class GatewayConfiguration {
     }
 
     /**
-     * 解析允许转发的 agent。空白配置使用 127.0.0.1:18731 和 127.0.0.1:18732。
+     * 读取 Nacos 连接参数。口令只来自仓库外文件，没有地址时后续发现直接失败。
      *
-     * @param raw 逗号分隔的 host:port
-     * @return 按端口升序的实例
+     * @param serverAddr 服务端地址
+     * @param username 账号
+     * @param passwordFile 口令文件
+     * @param namespace 命名空间
+     * @param group 分组
+     * @param service 服务名
+     * @return 连接参数
      */
     @Bean
-    public List<AgentInstance> agentCatalog(@Value("${jasagent.gateway.agents:}") String raw) {
-        return AgentInstance.parse(raw);
+    public NacosSettings nacosSettings(
+            @Value("${jasagent.nacos.server-addr:}") String serverAddr,
+            @Value("${jasagent.nacos.username:}") String username,
+            @Value("${jasagent.nacos.password-file:}") String passwordFile,
+            @Value("${jasagent.nacos.namespace:}") String namespace,
+            @Value("${jasagent.nacos.group:DEFAULT_GROUP}") String group,
+            @Value("${jasagent.nacos.service-name:jasagent-agent}") String service) {
+        return NacosSettings.load(serverAddr, username, passwordFile, namespace, group, service);
+    }
+
+    /**
+     * 发现只来自 Nacos。没配地址时返回总是失败的发现，不调用本机约定实例。
+     * {@code jasagent.nacos.client=recording} 时不在这里建真实客户端，留给测试替换。
+     *
+     * @param settings 连接参数
+     * @return 当前健康实例的发现
+     */
+    @Bean
+    @ConditionalOnProperty(name = "jasagent.nacos.client", havingValue = "nacos", matchIfMissing = true)
+    public AgentDiscovery agentDiscovery(NacosSettings settings) {
+        if (!settings.configured()) {
+            return new UnavailableAgentDiscovery();
+        }
+        return new NacosAgentDiscovery(NacosHealthyLookup.connect(settings));
     }
 
     /**
@@ -108,29 +138,29 @@ public class GatewayConfiguration {
     }
 
     /**
-     * 用目录、长连接和粘性库做路由器。
+     * 用 Nacos 发现、本进程长连接和粘性库做路由器。
      *
-     * @param agentCatalog 允许的 agent
+     * @param agentDiscovery 当时的健康实例
      * @param agentLiveness 长连接状态
      * @param affinityStore 粘性库
      * @return 粘性路由器
      */
     @Bean
-    public StickyAgentRouter stickyAgentRouter(List<AgentInstance> agentCatalog, InMemoryAgentLiveness agentLiveness, MysqlAffinityStore affinityStore) {
-        return new StickyAgentRouter(agentCatalog, agentLiveness, affinityStore);
+    public StickyAgentRouter stickyAgentRouter(AgentDiscovery agentDiscovery, InMemoryAgentLiveness agentLiveness, MysqlAffinityStore affinityStore) {
+        return new StickyAgentRouter(agentDiscovery, agentLiveness, affinityStore);
     }
 
     /**
-     * 集群页读的汇总。
+     * 集群页读的汇总。实例来自 Nacos，不来自静态目录。
      *
-     * @param agentCatalog 要列出的 agent
+     * @param agentDiscovery 当时的健康实例
      * @param agentLiveness 长连接状态
      * @param affinityStore 粘性库
      * @return 集群汇总
      */
     @Bean
-    public ClusterInventory clusterInventory(List<AgentInstance> agentCatalog, InMemoryAgentLiveness agentLiveness, MysqlAffinityStore affinityStore) {
-        return new ClusterInventory(agentCatalog, agentLiveness, affinityStore);
+    public ClusterInventory clusterInventory(AgentDiscovery agentDiscovery, InMemoryAgentLiveness agentLiveness, MysqlAffinityStore affinityStore) {
+        return new ClusterInventory(agentDiscovery, agentLiveness, affinityStore);
     }
 
     /**
@@ -149,15 +179,16 @@ public class GatewayConfiguration {
     }
 
     /**
-     * 在配置允许时为每台 agent 拨一条长连接。关掉这个开关时不会拨号，因此不会碰正在运行的 agent 进程。
+     * 在配置允许时为 Nacos 上的健康实例拨长连接。关掉这个开关时不会拨号。
+     * 发现为空或失败时不拨到本机约定端口。
      *
-     * @param agentCatalog 要连接的 agent
+     * @param agentDiscovery 要连接的 agent
      * @param agentLiveness 连接结果写到这里
      * @return 长连接管理器
      */
     @Bean
     @ConditionalOnProperty(name = "jasagent.gateway.links.enabled", havingValue = "true", matchIfMissing = true)
-    public AgentLinkSupervisor agentLinkSupervisor(List<AgentInstance> agentCatalog, InMemoryAgentLiveness agentLiveness) {
-        return new AgentLinkSupervisor(agentCatalog, agentLiveness);
+    public AgentLinkSupervisor agentLinkSupervisor(AgentDiscovery agentDiscovery, InMemoryAgentLiveness agentLiveness) {
+        return new AgentLinkSupervisor(agentDiscovery, agentLiveness);
     }
 }

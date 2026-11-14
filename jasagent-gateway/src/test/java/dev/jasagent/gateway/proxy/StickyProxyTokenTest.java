@@ -46,7 +46,7 @@ class StickyProxyTokenTest {
             }
         };
         StickyProxy proxy = new StickyProxy(
-                new StickyAgentRouter(List.of(), new InMemoryAgentLiveness(), store),
+                new StickyAgentRouter(() -> List.of(), new InMemoryAgentLiveness(), store),
                 InternalToken.of(""),
                 "local",
                 null);
