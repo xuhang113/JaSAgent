@@ -236,3 +236,38 @@ spec:
       ports:
         - protocol: TCP
           port: 4318
+---
+# rag 出站：DNS 和集群内 MySQL。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jasagent-rag-egress
+  namespace: jasagent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: rag
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: jasagent
+              app.kubernetes.io/component: mysql
+      ports:
+        - protocol: TCP
+          port: 3306

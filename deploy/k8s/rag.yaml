@@ -1,4 +1,4 @@
-# 示例 RAG 对外和容器端口都是 18751。不使用 gVisor。
+# 示例 RAG 对外和容器端口都是 18751。使用 gVisor。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,6 +19,7 @@ spec:
         app.kubernetes.io/name: jasagent
         app.kubernetes.io/component: rag
     spec:
+      runtimeClassName: gvisor
       automountServiceAccountToken: false
       containers:
         - name: rag
