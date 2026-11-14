@@ -1,0 +1,3 @@
+2026-11-14T16:44:02+0800	T-003	后期清单	50	networkpolicy.yaml agentpass.yaml sidecar.yaml agent.yaml gateway.yaml web.yaml observability.yaml rag.yaml 
+2026-11-14T16:44:02+0800	T-003	main 退出码	394	0
+2026-11-14T16:44:02+0800	T-003	apply 并等待 web、观测组件和 rag	411	通过

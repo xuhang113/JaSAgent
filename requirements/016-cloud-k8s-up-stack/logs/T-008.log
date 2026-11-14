@@ -1,0 +1,5 @@
+2026-11-14T16:44:04+0800	T-008	默认写出 JDBC 退出码	81	0
+2026-11-14T16:44:04+0800	T-008	默认 JDBC	94	jdbc:mysql://jasagent-mysql.jasagent.svc.cluster.local:3306/jasagent?connectTimeout=10000&socketTimeout=15000&allowPublicKeyRetrieval=true&useSSL=false&sslMode=DISABLED
+2026-11-14T16:44:04+0800	T-008	自定义主机 JDBC	135	jdbc:mysql://mysql.internal.example:3306/jasagent?connectTimeout=10000&socketTimeout=15000&allowPublicKeyRetrieval=true&useSSL=false&sslMode=DISABLED
+2026-11-14T16:44:04+0800	T-008	拒绝带 password= 的地址退出码	147	1
+2026-11-14T16:44:04+0800	T-008	JDBC 不含口令	158	通过

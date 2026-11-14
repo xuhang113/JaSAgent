@@ -1,0 +1,1 @@
+T-005	通过	一键脚本仍会部署网关、agent、agentpass、sidecar、MySQL 和 Redis，而不是只部署本轮新增的组件。	430	logs/T-005.log

@@ -1,0 +1,3 @@
+2026-11-14T16:44:04+0800	T-009	固定步骤	20	1. 确认当前机器是 Linux，并且可以用 root 或 sudo。 2. 若本机没有正在运行的 k3s，用官方安装脚本安装 k3s，并等待节点就绪。 3. 在当前机器上下载 gVisor 发布包，校验 sha512，把 runsc、containerd-shim-runsc-v1 和 gvisor-bin 装到 /usr/local/bin。 4. 把 runsc 写进 k3s 的 containerd 配置（config-v3.toml.tmpl，并保留旧版 config.toml.tmpl），平台使用 systrap。 5. 重启 k3s，等待节点重新就绪。 6. apply deploy/k8s/runtimeclass-gvisor.yaml，确认 RuntimeClass gvisor 的 handler 是 runsc。
+2026-11-14T16:44:04+0800	T-009	集群不可用时调用准备脚本退出码	91	1
+2026-11-14T16:44:04+0800	T-009	准备脚本可独立走固定步骤	103	通过

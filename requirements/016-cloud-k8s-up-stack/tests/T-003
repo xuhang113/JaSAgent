@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-003"
+result_text='一键脚本的 apply 列表包含 `deploy/k8s/web.yaml`、`deploy/k8s/observability.yaml` 和 `deploy/k8s/rag.yaml`，并等待这些工作负载滚动完成。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  atdd_setup_contract
+  late="$(printf '%s\n' "${JASAGENT_LATE_MANIFESTS[@]}")"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "后期清单" "$(echo "${late}" | tr '\n' ' ')" >> "${ATDD_LOG}"
+  for manifest in web.yaml observability.yaml rag.yaml; do
+    if [[ "${late}" != *"${manifest}"* ]]; then
+      echo "apply 列表常量没有 ${manifest}。" >&2
+      exit 1
+    fi
+  done
+  export JASAGENT_SKIP_PACKAGE=1
+  : > "${ATDD_CMD_LOG}"
+  atdd_run main
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "main 退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -ne 0 ]]; then
+    echo "一键路径在合同夹具里失败。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  for manifest in web.yaml observability.yaml rag.yaml; do
+    if [[ "${ATDD_CAPTURE_TEXT}" != *"apply ${manifest}"* ]]; then
+      echo "apply 列表没有 ${manifest}。" >&2
+      exit 1
+    fi
+  done
+  for target in deployment/jasagent-web deployment/jasagent-otel-collector deployment/jasagent-prometheus deployment/jasagent-grafana deployment/jasagent-rag; do
+    if [[ "${ATDD_CAPTURE_TEXT}" != *"等待 ${target} 滚动完成。"* ]]; then
+      echo "没有等待 ${target} 滚动完成。" >&2
+      exit 1
+    fi
+    if ! grep -q "rollout status ${target}" "${ATDD_CMD_LOG}"; then
+      echo "kubectl 没有等待 ${target}。" >&2
+      exit 1
+    fi
+  done
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "apply 并等待 web、观测组件和 rag" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

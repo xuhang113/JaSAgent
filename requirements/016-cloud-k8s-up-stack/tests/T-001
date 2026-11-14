@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-001"
+result_text='`scripts/up-stack.sh` 或其调用的打包步骤把 `jasagent-web` 列入打包模块。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  atdd_setup_contract
+  default_line="$(grep -E '^JASAGENT_PACKAGE_MODULES=' "${REPO_ROOT}/scripts/up-stack.sh" | head -n 1)"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "默认打包模块" "${default_line}" >> "${ATDD_LOG}"
+  if [[ "${default_line}" != *jasagent-web* ]]; then
+    echo "默认打包模块没有 jasagent-web。" >&2
+    exit 1
+  fi
+  if [[ "${JASAGENT_PACKAGE_MODULES}" != *jasagent-web* ]]; then
+    echo "加载后的打包模块没有 jasagent-web。" >&2
+    exit 1
+  fi
+  : > "${ATDD_CMD_LOG}"
+  unset JASAGENT_SKIP_PACKAGE
+  atdd_run package_jars
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "package_jars 退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "package_jars 命令" "$(tr '\n' ' ' < "${ATDD_CMD_LOG}")" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -ne 0 ]]; then
+    echo "打包步骤失败。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  if ! grep -q -- '-pl .*jasagent-web' "${ATDD_CMD_LOG}"; then
+    echo "mvn -pl 没有列入 jasagent-web。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "列入 jasagent-web" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

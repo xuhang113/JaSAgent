@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-012"
+result_text='本轮改到的脚本有注释，有自动测试，并且有可执行的测试脚本。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  for file in scripts/up-stack.sh scripts/k8s/prepare-cluster.sh; do
+    if [[ ! -x "${REPO_ROOT}/${file}" ]]; then
+      echo "${file} 不可执行。" >&2
+      exit 1
+    fi
+    atdd_assert_comments "${REPO_ROOT}/${file}" 1
+    atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "注释 ${file}" "通过" >> "${ATDD_LOG}"
+  done
+  if [[ ! -x "${REPO_ROOT}/scripts/test-016-cloud-k8s-up-stack.sh" ]]; then
+    echo "实现提交的合同测试脚本不可执行。" >&2
+    exit 1
+  fi
+  atdd_assert_comments "${REPO_ROOT}/scripts/test-016-cloud-k8s-up-stack.sh" 0
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "合同测试脚本可执行且有注释" "通过" >> "${ATDD_LOG}"
+  set +e
+  contract_out="$(bash "${REPO_ROOT}/scripts/test-016-cloud-k8s-up-stack.sh" 2>&1)"
+  contract_code=$?
+  set -e
+  atdd_assert_clean "${contract_out}" "合同测试输出"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "合同测试退出码" "${contract_code}" >> "${ATDD_LOG}"
+  if [[ "${contract_code}" -ne 0 ]]; then
+    echo "可执行的合同测试没有通过。" >&2
+    printf '%s\n' "${contract_out}" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "自动测试通过" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

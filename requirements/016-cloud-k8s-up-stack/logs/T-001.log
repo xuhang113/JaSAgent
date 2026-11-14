@@ -1,0 +1,4 @@
+2026-11-14T16:44:01+0800	T-001	默认打包模块	48	JASAGENT_PACKAGE_MODULES="${JASAGENT_PACKAGE_MODULES:-jasagent-app,jasagent-gateway,jasagent-agentpass-server,jasagent-web,jasagent-agentpass-rag,jasagent-sidecar}"
+2026-11-14T16:44:01+0800	T-001	package_jars 退出码	62	0
+2026-11-14T16:44:01+0800	T-001	package_jars 命令	75	mvn -pl jasagent-app,jasagent-gateway,jasagent-agentpass-server,jasagent-web,jasagent-agentpass-rag,jasagent-sidecar -am -DskipTests package 
+2026-11-14T16:44:01+0800	T-001	列入 jasagent-web	87	通过

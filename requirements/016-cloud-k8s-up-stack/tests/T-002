@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-002"
+result_text='一键脚本会构建并导入镜像 `jasagent-web:0.1.0`。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  atdd_setup_contract
+  export JASAGENT_SKIP_PACKAGE=1
+  : > "${ATDD_CMD_LOG}"
+  atdd_run main
+  atdd_assert_clean "${ATDD_CAPTURE_TEXT}" "一键输出"
+  atdd_assert_clean "$(cat "${ATDD_CMD_LOG}")" "一键命令"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "main 退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -ne 0 ]]; then
+    echo "一键路径在合同夹具里失败。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  if [[ "${ATDD_CAPTURE_TEXT}" != *"构建 jasagent-web:0.1.0"* ]]; then
+    echo "一键脚本没有构建 jasagent-web:0.1.0。" >&2
+    exit 1
+  fi
+  if [[ "${ATDD_CAPTURE_TEXT}" != *"导入 jasagent-web:0.1.0 到本机 k3s。"* ]]; then
+    echo "一键脚本没有导入 jasagent-web:0.1.0。" >&2
+    exit 1
+  fi
+  if ! grep -F ' -t jasagent-web:0.1.0' "${ATDD_CMD_LOG}" | grep -q 'docker build'; then
+    echo "docker build 没有构建 jasagent-web:0.1.0。" >&2
+    cat "${ATDD_CMD_LOG}" >&2
+    exit 1
+  fi
+  if ! grep -q 'k3s ctr images import' "${ATDD_CMD_LOG}"; then
+    echo "没有把镜像导入本机 k3s。" >&2
+    exit 1
+  fi
+  build_at="$(printf '%s' "${ATDD_CAPTURE_TEXT}" | awk 'index($0,"构建 jasagent-web:0.1.0"){print NR; exit}')"
+  import_at="$(printf '%s' "${ATDD_CAPTURE_TEXT}" | awk 'index($0,"导入 jasagent-web:0.1.0"){print NR; exit}')"
+  if [[ -z "${build_at}" || -z "${import_at}" || "${build_at}" -gt "${import_at}" ]]; then
+    echo "构建没有发生在导入之前。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "构建并导入 jasagent-web:0.1.0" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

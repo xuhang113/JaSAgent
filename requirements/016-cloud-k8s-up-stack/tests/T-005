@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-005"
+result_text='一键脚本仍会部署网关、agent、agentpass、sidecar、MySQL 和 Redis，而不是只部署本轮新增的组件。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  atdd_setup_contract
+  all="$(printf '%s\n' "${JASAGENT_EARLY_MANIFESTS[@]}" "${JASAGENT_LATE_MANIFESTS[@]}")"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "清单列表" "$(echo "${all}" | tr '\n' ' ')" >> "${ATDD_LOG}"
+  for manifest in mysql.yaml redis.yaml networkpolicy.yaml agentpass.yaml sidecar.yaml agent.yaml gateway.yaml; do
+    if [[ "${all}" != *"${manifest}"* ]]; then
+      echo "清单常量没有 ${manifest}。" >&2
+      exit 1
+    fi
+  done
+  export JASAGENT_SKIP_PACKAGE=1
+  : > "${ATDD_CMD_LOG}"
+  atdd_run main
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "main 退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -ne 0 ]]; then
+    echo "一键路径在合同夹具里失败。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  for manifest in mysql.yaml redis.yaml networkpolicy.yaml agentpass.yaml sidecar.yaml agent.yaml gateway.yaml; do
+    if [[ "${ATDD_CAPTURE_TEXT}" != *"apply ${manifest}"* ]]; then
+      echo "apply 列表没有 ${manifest}。" >&2
+      exit 1
+    fi
+  done
+  for target in deployment/jasagent-mysql deployment/jasagent-redis deployment/jasagent-agentpass deployment/jasagent-sidecar statefulset/jasagent-agent deployment/jasagent-gateway; do
+    if [[ "${ATDD_CAPTURE_TEXT}" != *"等待 ${target} 滚动完成。"* ]]; then
+      echo "没有等待 ${target} 滚动完成。" >&2
+      exit 1
+    fi
+    if ! grep -q "rollout status ${target}" "${ATDD_CMD_LOG}"; then
+      echo "kubectl 没有等待 ${target}。" >&2
+      exit 1
+    fi
+  done
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "原有组件仍被部署并等待" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

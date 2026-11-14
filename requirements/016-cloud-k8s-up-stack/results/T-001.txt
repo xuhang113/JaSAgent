@@ -1,0 +1,1 @@
+T-001	通过	`scripts/up-stack.sh` 或其调用的打包步骤把 `jasagent-web` 列入打包模块。	100	logs/T-001.log

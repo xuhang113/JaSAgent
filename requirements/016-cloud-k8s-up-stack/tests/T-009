@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-009"
+result_text='k3s 与 gVisor 的准备有脚本，可与 `up-stack.sh` 分开；按固定步骤能在云电脑上走通，不把手工搭集群当成唯一路径。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  if [[ ! -x "${REPO_ROOT}/scripts/k8s/prepare-cluster.sh" ]]; then
+    echo "集群准备脚本不存在或不可执行。" >&2
+    exit 1
+  fi
+  steps="$(bash "${REPO_ROOT}/scripts/k8s/prepare-cluster.sh" --steps)"
+  help_text="$(bash "${REPO_ROOT}/scripts/k8s/prepare-cluster.sh" --help)"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "固定步骤" "$(printf '%s' "${steps}" | tr '\n' ' ')" >> "${ATDD_LOG}"
+  if [[ "${steps}" != *"1. "* || "${steps}" != *"k3s"* ]]; then
+    echo "集群准备没有列出 k3s 的固定步骤。" >&2
+    exit 1
+  fi
+  for word in runsc gVisor; do
+    if [[ "${steps}" != *"${word}"* ]]; then
+      echo "固定步骤缺少 ${word}。" >&2
+      exit 1
+    fi
+  done
+  if [[ "${help_text}" != *"prepare-cluster.sh"* ]]; then
+    echo "集群准备没有用法说明。" >&2
+    exit 1
+  fi
+  set +e
+  bad_text="$(bash "${REPO_ROOT}/scripts/k8s/prepare-cluster.sh" --nope 2>&1)"
+  bad_code=$?
+  set -e
+  if [[ "${bad_code}" -eq 0 ]]; then
+    echo "不认识的参数仍然成功。" >&2
+    exit 1
+  fi
+  atdd_assert_clean "${bad_text}" "错误参数"
+  for needle in 'https://get.k3s.io' 'runtimeclass-gvisor.yaml'; do
+    if ! grep -F -q -- "${needle}" "${REPO_ROOT}/scripts/k8s/prepare-cluster.sh"; then
+      echo "集群准备脚本没有实现：${needle}" >&2
+      exit 1
+    fi
+  done
+  main_body="$(awk '/^main\(\)/ { inmain=1 } inmain { print } inmain && /^}$/ { exit }' "${REPO_ROOT}/scripts/k8s/prepare-cluster.sh")"
+  prev=0
+  for call in install_k3s_if_needed install_runsc configure_containerd apply_runtimeclass; do
+    at="$(printf '%s\n' "${main_body}" | awk -v needle="${call}" '$0 ~ needle { print NR; exit }')"
+    if [[ -z "${at}" || "${at}" -le "${prev}" ]]; then
+      echo "集群准备 main 没有按固定顺序调用 ${call}。" >&2
+      exit 1
+    fi
+    prev="${at}"
+  done
+  if ! grep -F -q 'scripts/k8s/prepare-cluster.sh' "${REPO_ROOT}/scripts/up-stack.sh"; then
+    echo "一键脚本没有接上集群准备。" >&2
+    exit 1
+  fi
+  atdd_setup_contract
+  saved_prepare="${JASAGENT_PREPARE_SCRIPT}"
+  saved_path="${PATH}"
+  JASAGENT_PREPARE_SCRIPT="${ATDD_PREPARE}"
+  PATH="${ATDD_FAIL_STUBS}:/usr/bin:/bin"
+  : > "${ATDD_CMD_LOG}"
+  atdd_run ensure_cluster
+  PATH="${saved_path}"
+  JASAGENT_PREPARE_SCRIPT="${saved_prepare}"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "集群不可用时调用准备脚本退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -eq 0 ]]; then
+    echo "集群仍不可用时 ensure_cluster 却成功了。" >&2
+    exit 1
+  fi
+  if ! grep -q '^prepared$' "${ATDD_CMD_LOG}"; then
+    echo "集群不可用时没有调用准备脚本。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "准备脚本可独立走固定步骤" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

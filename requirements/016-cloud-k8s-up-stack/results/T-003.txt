@@ -1,0 +1,1 @@
+T-003	通过	一键脚本的 apply 列表包含 `deploy/k8s/web.yaml`、`deploy/k8s/observability.yaml` 和 `deploy/k8s/rag.yaml`，并等待这些工作负载滚动完成。	424	logs/T-003.log

@@ -1,0 +1,1 @@
+T-008	通过	脚本若写出 JDBC 地址，地址里不含 `password=`。	172	logs/T-008.log

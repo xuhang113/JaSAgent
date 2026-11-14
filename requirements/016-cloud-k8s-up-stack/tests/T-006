@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-006"
+result_text='脚本的默认路径不指向 Hang 的 Mac 绝对路径，包括不把 `/Users/xuhang/...`、`/opt/homebrew`、`colima` 或 lima 专用地址当成云电脑上的默认必经路径。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  for file in scripts/up-stack.sh scripts/k8s/prepare-cluster.sh; do
+    for banned in '/Users/xuhang' '/opt/homebrew' 'colima' 'scutil' 'lima'; do
+      if grep -F -q -- "${banned}" "${REPO_ROOT}/${file}"; then
+        echo "${file} 含有不能作为云电脑默认路径的片段：${banned}" >&2
+        grep -n -F -- "${banned}" "${REPO_ROOT}/${file}" >&2
+        exit 1
+      fi
+    done
+    atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "检查 ${file} 默认路径" "未出现禁用片段" >> "${ATDD_LOG}"
+  done
+  if ! grep -F -q '${HOME}/.config/urag-mysql-root.password' "${REPO_ROOT}/scripts/up-stack.sh"; then
+    echo "MySQL 口令默认路径不是运行用户的配置目录。" >&2
+    exit 1
+  fi
+  if ! grep -F -q '${HOME}/.config/jasagent/llm.env' "${REPO_ROOT}/scripts/up-stack.sh"; then
+    echo "模型密钥默认路径不是运行用户的配置目录。" >&2
+    exit 1
+  fi
+  if ! grep -F -q '${HOME}/.jasagent/sandbox/k8s-internal.token' "${REPO_ROOT}/scripts/up-stack.sh"; then
+    echo "内部令牌默认路径不在运行用户的目录。" >&2
+    exit 1
+  fi
+  if ! grep -F -q '${JASAGENT_JAVA_SEARCH_ROOTS:-/usr/lib/jvm}' "${REPO_ROOT}/scripts/up-stack.sh"; then
+    echo "Java 补充查找路径不是本机发行版常见目录。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "默认密钥和 Java 路径" "使用运行用户目录或 /usr/lib/jvm" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-010"
+result_text='镜像在运行脚本的那台机器上构建，不把从 Hang 的 Mac 拷贝镜像当成必经步骤。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  if grep -Eq 'scp |rsync |docker load' "${REPO_ROOT}/scripts/up-stack.sh" "${REPO_ROOT}/scripts/k8s/prepare-cluster.sh"; then
+    echo "镜像步骤把从别的电脑拷贝或加载当成了脚本路径。" >&2
+    exit 1
+  fi
+  atdd_setup_contract
+  export JASAGENT_SKIP_PACKAGE=1
+  : > "${ATDD_CMD_LOG}"
+  atdd_run main
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "main 退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -ne 0 ]]; then
+    echo "一键路径在合同夹具里失败。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  atdd_assert_clean "${ATDD_CAPTURE_TEXT}" "一键输出"
+  atdd_assert_clean "$(cat "${ATDD_CMD_LOG}")" "一键命令"
+  for image in jasagent-web:0.1.0 jasagent-rag:0.1.0 jasagent-gateway:0.1.0 jasagent-agent:0.1.0 jasagent-agentpass:0.1.0 jasagent-sidecar:0.1.0; do
+    if [[ "${ATDD_CAPTURE_TEXT}" != *"构建 ${image}"* || "${ATDD_CAPTURE_TEXT}" != *"导入 ${image} 到本机 k3s。"* ]]; then
+      echo "没有在当前机器上构建并导入 ${image}。" >&2
+      exit 1
+    fi
+  done
+  if grep -Eq 'scp |rsync |docker load' "${ATDD_CMD_LOG}"; then
+    echo "一键命令把从别的电脑拷贝镜像当成了必经步骤。" >&2
+    exit 1
+  fi
+  export DOCKER_INSPECT_FAIL=1
+  : > "${ATDD_CMD_LOG}"
+  atdd_run ensure_remote_image mysql:8.4
+  unset DOCKER_INSPECT_FAIL
+  if [[ "${ATDD_CAPTURE_CODE}" -ne 0 ]]; then
+    echo "当前机器拉取公共镜像失败。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  if ! grep -q 'docker pull mysql:8.4' "${ATDD_CMD_LOG}" || ! grep -q 'k3s ctr images import' "${ATDD_CMD_LOG}"; then
+    echo "公共镜像没有在当前机器上拉取并导入。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本机构建或拉取后导入" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

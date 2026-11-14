@@ -1,0 +1,1 @@
+T-006	通过	脚本的默认路径不指向 Hang 的 Mac 绝对路径，包括不把 `/Users/xuhang/...`、`/opt/homebrew`、`colima` 或 lima 专用地址当成云电脑上的默认必经路径。	59	logs/T-006.log

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-004"
+result_text='若脚本 apply `rag.yaml`，它还会构建并导入该清单所依赖的镜像。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  atdd_setup_contract
+  rag_images="$(awk '/^[[:space:]]*image:/ { print $2 }' "${REPO_ROOT}/deploy/k8s/rag.yaml")"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "rag.yaml 镜像" "$(echo "${rag_images}" | tr '\n' ' ')" >> "${ATDD_LOG}"
+  if [[ -z "${rag_images}" ]]; then
+    echo "rag.yaml 里没有 image。" >&2
+    exit 1
+  fi
+  export JASAGENT_SKIP_PACKAGE=1
+  : > "${ATDD_CMD_LOG}"
+  atdd_run main
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "main 退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -ne 0 ]]; then
+    echo "一键路径在合同夹具里失败。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  if [[ "${ATDD_CAPTURE_TEXT}" != *"apply rag.yaml"* ]]; then
+    echo "脚本没有 apply rag.yaml，本条不适用的前提不成立。" >&2
+    exit 1
+  fi
+  while IFS= read -r image; do
+    [[ -n "${image}" ]] || continue
+    if [[ "${ATDD_CAPTURE_TEXT}" != *"构建 ${image}"* ]]; then
+      echo "apply rag.yaml 时没有构建 ${image}。" >&2
+      exit 1
+    fi
+    if [[ "${ATDD_CAPTURE_TEXT}" != *"导入 ${image} 到本机 k3s。"* ]]; then
+      echo "apply rag.yaml 时没有导入 ${image}。" >&2
+      exit 1
+    fi
+    if ! grep -F " -t ${image}" "${ATDD_CMD_LOG}" | grep -q 'docker build'; then
+      echo "docker build 没有构建 ${image}。" >&2
+      exit 1
+    fi
+  done <<< "${rag_images}"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "构建并导入 rag 依赖镜像" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

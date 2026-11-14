@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-008"
+result_text='脚本若写出 JDBC 地址，地址里不含 `password=`。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  atdd_setup_contract
+  rm -rf "${ATDD_SECRET_DIR}"
+  mkdir -p "${ATDD_SECRET_DIR}"
+  JASAGENT_SECRET_DIR="${ATDD_SECRET_DIR}"
+  unset JASAGENT_JDBC_URL
+  JASAGENT_MYSQL_HOST="jasagent-mysql.jasagent.svc.cluster.local"
+  atdd_run materialize_secrets
+  atdd_assert_clean "${ATDD_CAPTURE_TEXT}" "写入 JDBC"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "默认写出 JDBC 退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -ne 0 ]]; then
+    echo "密钥文件齐全时仍然失败。" >&2
+    atdd_redact "${ATDD_CAPTURE_TEXT}" >&2
+    echo >&2
+    exit 1
+  fi
+  jdbc="$(cat "${ATDD_SECRET_DIR}/jdbc-url")"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "默认 JDBC" "${jdbc}" >> "${ATDD_LOG}"
+  if [[ "${jdbc}" != jdbc:mysql://jasagent-mysql.jasagent.svc.cluster.local:3306/jasagent?* ]]; then
+    echo "JDBC 地址不是可配置的集群地址。" >&2
+    exit 1
+  fi
+  if [[ "${jdbc}" == *password=* || "${jdbc}" == *"${ATDD_DB_SECRET}"* ]]; then
+    echo "JDBC 地址里出现了口令。" >&2
+    exit 1
+  fi
+  JASAGENT_MYSQL_HOST="mysql.internal.example"
+  rm -rf "${ATDD_SECRET_DIR}"
+  mkdir -p "${ATDD_SECRET_DIR}"
+  atdd_run materialize_secrets
+  custom="$(cat "${ATDD_SECRET_DIR}/jdbc-url")"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "自定义主机 JDBC" "${custom}" >> "${ATDD_LOG}"
+  if [[ "${custom}" != jdbc:mysql://mysql.internal.example:3306/jasagent?* || "${custom}" == *password=* ]]; then
+    echo "自定义集群主机没有写进 JDBC 地址，或地址里出现了 password=。" >&2
+    exit 1
+  fi
+  JASAGENT_MYSQL_HOST="jasagent-mysql.jasagent.svc.cluster.local"
+  JASAGENT_JDBC_URL="jdbc:mysql://jasagent-mysql.jasagent.svc.cluster.local:3306/jasagent?password=${ATDD_DB_SECRET}"
+  atdd_run materialize_secrets
+  atdd_assert_clean "${ATDD_CAPTURE_TEXT}" "拒绝 JDBC"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "拒绝带 password= 的地址退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -eq 0 ]]; then
+    echo "带 password= 的 JDBC 地址没有被拒绝。" >&2
+    exit 1
+  fi
+  if [[ "${ATDD_CAPTURE_TEXT}" != *"password="* ]]; then
+    echo "拒绝 JDBC 时没有说明原因。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "JDBC 不含口令" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

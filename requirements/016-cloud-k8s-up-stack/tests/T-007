@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-007"
+result_text='口令、令牌和模型密钥只从仓库外可配置路径或 Secret 读取；必要文件缺失时脚本以非 0 退出，说明和日志里不出现这些密文。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+  atdd_setup_contract
+  if grep -E -q '/Users/xuhang|imagine-harness/\.env' "${REPO_ROOT}/scripts/up-stack.sh"; then
+    echo "密钥默认路径仍指向仓库外不应写死的个人电脑位置。" >&2
+    exit 1
+  fi
+  saved_password_file="${JASAGENT_MYSQL_PASSWORD_FILE}"
+  saved_llm_file="${JASAGENT_LLM_ENV_FILE}"
+  unset JASAGENT_MYSQL_PASSWORD XAI_API_KEY
+  JASAGENT_LLM_ENV_FILE="${ATDD_HOME}/no-such-llm.env"
+  atdd_run materialize_secrets
+  atdd_assert_clean "${ATDD_CAPTURE_TEXT}" "缺少模型密钥"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "缺少模型密钥文件退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -eq 0 ]]; then
+    echo "缺少模型密钥文件时仍然成功。" >&2
+    exit 1
+  fi
+  if [[ "${ATDD_CAPTURE_TEXT}" != *"没有读到模型密钥"* ]]; then
+    echo "缺少模型密钥时没有说明原因。" >&2
+    exit 1
+  fi
+  JASAGENT_LLM_ENV_FILE="${saved_llm_file}"
+  JASAGENT_MYSQL_PASSWORD_FILE="${ATDD_HOME}/no-such-password"
+  atdd_run materialize_secrets
+  atdd_assert_clean "${ATDD_CAPTURE_TEXT}" "缺少 MySQL 口令"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "缺少口令文件退出码" "${ATDD_CAPTURE_CODE}" >> "${ATDD_LOG}"
+  if [[ "${ATDD_CAPTURE_CODE}" -eq 0 ]]; then
+    echo "缺少 MySQL 口令文件时仍然成功。" >&2
+    exit 1
+  fi
+  if [[ "${ATDD_CAPTURE_TEXT}" != *"MySQL 口令文件不存在"* ]]; then
+    echo "缺少 MySQL 口令文件时没有说明原因。" >&2
+    exit 1
+  fi
+  JASAGENT_MYSQL_PASSWORD_FILE="${saved_password_file}"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "缺失时非 0 且无密文" "通过" >> "${ATDD_LOG}"
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"
