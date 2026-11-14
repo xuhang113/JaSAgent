@@ -1,0 +1,1 @@
+T-012	通过	未配置 `JASAGENT_INTERNAL_TOKEN` 时，已登录的可转发请求不会发到 agent，响应正文不含令牌原文。	4209	logs/T-012.log

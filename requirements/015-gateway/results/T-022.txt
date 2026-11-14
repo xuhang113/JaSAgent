@@ -1,0 +1,1 @@
+T-022	通过	通过配置把粘性库 JDBC 地址改到非默认地址后，网关能在这个地址上读写 `jasagent_gateway_affinity`。	4131	logs/T-022.log

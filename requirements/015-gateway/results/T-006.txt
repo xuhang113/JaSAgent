@@ -1,0 +1,1 @@
+T-006	通过	已登录且已配置内部令牌时，转发到 agent 的请求带有 `X-Jasagent-Token`、`X-Jasagent-Tenant`、`X-Jasagent-User`、`X-Jasagent-Session`。	4466	logs/T-006.log

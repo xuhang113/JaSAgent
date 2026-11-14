@@ -1,0 +1,1 @@
+T-021	通过	未登录访问 `GET /api/cluster` 返回 401，`errorCode` 为 `AUTH`。	4223	logs/T-021.log

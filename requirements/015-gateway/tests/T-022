@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../../.." && pwd)"
+mkdir -p "$HERE/../results" "$HERE/../logs"
+name="T-022"
+result_text='通过配置把粘性库 JDBC 地址改到非默认地址后，网关能在这个地址上读写 `jasagent_gateway_affinity`。'
+cd "$ROOT"
+start=$(python3 -c 'import time; print(int(time.time()*1000))')
+set +e
+mvn -pl jasagent-gateway -am test -Dsurefire.failIfNoSpecifiedTests=false -Dtest=GatewayAffinityWiringTest#gatewayStoreUsesConfiguredAddress > "$HERE/../logs/${name}.log" 2>&1
+code=$?
+set -e
+end=$(python3 -c 'import time; print(int(time.time()*1000))')
+elapsed=$((end - start))
+if [[ $code -eq 0 ]]; then
+  status="通过"
+else
+  status="失败"
+fi
+printf '%s\t%s\t%s\t%s\tlogs/%s.log\n' "$name" "$status" "$result_text" "$elapsed" "$name" > "$HERE/../results/${name}.txt"
+exit "$code"

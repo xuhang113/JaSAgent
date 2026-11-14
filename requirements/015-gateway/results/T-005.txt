@@ -1,0 +1,1 @@
+T-005	通过	未登录访问 `GET /api/sessions` 返回 401，正文 `errorCode` 为 `AUTH`。	4151	logs/T-005.log

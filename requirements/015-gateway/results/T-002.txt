@@ -1,0 +1,1 @@
+T-002	通过	未登录访问 `GET /health` 返回 200，正文含 `status` 为 `up`。	4204	logs/T-002.log

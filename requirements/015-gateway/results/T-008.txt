@@ -1,0 +1,1 @@
+T-008	通过	`X-Jasagent-Session` 的值是路径里的会话编号或登录会话编号，不是 Cookie 里的登录令牌原文。	4478	logs/T-008.log

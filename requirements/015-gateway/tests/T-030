@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../../.." && pwd)"
+mkdir -p "$HERE/../results" "$HERE/../logs"
+name="T-030"
+result_text='实现和测试提交不修改 `deploy/k8s` 下的清单文件。开发规范里的 K8s 文件，等本轮 ATDD 全部通过后由部署补进清单并写 `deploy.md`。'
+cd "$ROOT"
+start=$(python3 -c 'import time; print(int(time.time()*1000))')
+set +e
+(
+  impl="0fa83c8e693d3e7e5685b4c9f7fe9e295e35c1de"
+  if ! git merge-base --is-ancestor "$impl" HEAD; then
+    echo "当前 HEAD 不包含实现提交 $impl。" >&2
+    exit 1
+  fi
+  parent="$(git rev-parse ${impl}^)"
+  changed="$(git diff --name-only "$parent" HEAD -- deploy/k8s)"
+  if [[ -n "$changed" ]]; then
+    echo "从实现提交起已改动 deploy/k8s：" >&2
+    printf '%s\n' "$changed" >&2
+    exit 1
+  fi
+  dirty="$(git status --porcelain -- deploy/k8s)"
+  if [[ -n "$dirty" ]]; then
+    echo "工作区改动了 deploy/k8s：" >&2
+    printf '%s\n' "$dirty" >&2
+    exit 1
+  fi
+  echo "deploy/k8s 在实现提交和工作区中均未改动。"
+  exit 0
+) > "$HERE/../logs/${name}.log" 2>&1
+code=$?
+set -e
+end=$(python3 -c 'import time; print(int(time.time()*1000))')
+elapsed=$((end - start))
+if [[ $code -eq 0 ]]; then
+  status="通过"
+else
+  status="失败"
+fi
+printf '%s\t%s\t%s\t%s\tlogs/%s.log\n' "$name" "$status" "$result_text" "$elapsed" "$name" > "$HERE/../results/${name}.txt"
+exit "$code"

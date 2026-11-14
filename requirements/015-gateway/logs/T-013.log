@@ -1,0 +1,285 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] jasagent                                                           [pom]
+[INFO] jasagent-api                                                       [jar]
+[INFO] jasagent-auth                                                      [jar]
+[INFO] jasagent-trace                                                     [jar]
+[INFO] jasagent-gateway                                                   [jar]
+[INFO] 
+[INFO] -----------------------< dev.jasagent:jasagent >------------------------
+[INFO] Building jasagent 0.1.0                                            [1/5]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-api >----------------------
+[INFO] Building jasagent-api 0.1.0                                        [2/5]
+[INFO]   from jasagent-api/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-api ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-api ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-api ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-api/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-api ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-api ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-auth >---------------------
+[INFO] Building jasagent-auth 0.1.0                                       [3/5]
+[INFO]   from jasagent-auth/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-auth ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-auth ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-auth ---
+[INFO] 
+[INFO] --------------------< dev.jasagent:jasagent-trace >---------------------
+[INFO] Building jasagent-trace 0.1.0                                      [4/5]
+[INFO]   from jasagent-trace/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-trace ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-trace ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-trace ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-trace/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-trace ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-trace ---
+[INFO] 
+[INFO] -------------------< dev.jasagent:jasagent-gateway >--------------------
+[INFO] Building jasagent-gateway 0.1.0                                    [5/5]
+[INFO]   from jasagent-gateway/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-gateway ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-gateway ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-gateway ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-gateway ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-gateway ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running dev.jasagent.gateway.GatewayLayoutTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.029 s -- in dev.jasagent.gateway.GatewayLayoutTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for jasagent 0.1.0:
+[INFO] 
+[INFO] jasagent ........................................... SUCCESS [  0.002 s]
+[INFO] jasagent-api ....................................... SUCCESS [  0.326 s]
+[INFO] jasagent-auth ...................................... SUCCESS [  0.032 s]
+[INFO] jasagent-trace ..................................... SUCCESS [  0.026 s]
+[INFO] jasagent-gateway ................................... SUCCESS [  0.601 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  1.186 s
+[INFO] Finished at: 2026-11-14T13:10:23+08:00
+[INFO] ------------------------------------------------------------------------
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] jasagent                                                           [pom]
+[INFO] jasagent-api                                                       [jar]
+[INFO] jasagent-auth                                                      [jar]
+[INFO] jasagent-trace                                                     [jar]
+[INFO] jasagent-web                                                       [jar]
+[INFO] jasagent-gateway                                                   [jar]
+[INFO] 
+[INFO] -----------------------< dev.jasagent:jasagent >------------------------
+[INFO] Building jasagent 0.1.0                                            [1/6]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-api >----------------------
+[INFO] Building jasagent-api 0.1.0                                        [2/6]
+[INFO]   from jasagent-api/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-api ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-api ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-api ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-api/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-api ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-api ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-api ---
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-auth >---------------------
+[INFO] Building jasagent-auth 0.1.0                                       [3/6]
+[INFO]   from jasagent-auth/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-auth ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-auth ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-auth ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-auth ---
+[INFO] 
+[INFO] --------------------< dev.jasagent:jasagent-trace >---------------------
+[INFO] Building jasagent-trace 0.1.0                                      [4/6]
+[INFO]   from jasagent-trace/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-trace ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-trace ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-trace ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-trace/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-trace ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-trace ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-trace ---
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-web >----------------------
+[INFO] Building jasagent-web 0.1.0                                        [5/6]
+[INFO]   from jasagent-web/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.5.0:exec (build-console-frontend) @ jasagent-web ---
+
+> jasagent-console@0.1.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 1614 modules transformed.
+rendering chunks...
+computing gzip size...
+../target/classes/admin/index.html                     0.67 kB │ gzip:   0.41 kB
+../target/classes/admin/assets/index-DIdf20W1.css    388.03 kB │ gzip:  52.99 kB
+../target/classes/admin/assets/index-BA871a2a.js   1,096.76 kB │ gzip: 360.40 kB
+✓ built in 3.53s
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-web ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-web ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-web ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-web/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-web ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-web ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-web ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-web/target/jasagent-web-0.1.0.jar
+[INFO] 
+[INFO] --- spring-boot:3.4.5:repackage (default) @ jasagent-web ---
+[INFO] Attaching repackaged archive /workspace/JaSAgent/jasagent-web/target/jasagent-web-0.1.0-exec.jar with classifier exec
+[INFO] 
+[INFO] -------------------< dev.jasagent:jasagent-gateway >--------------------
+[INFO] Building jasagent-gateway 0.1.0                                    [6/6]
+[INFO]   from jasagent-gateway/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-gateway ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-gateway ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-gateway ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-gateway ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-gateway ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-gateway ---
+[INFO] 
+[INFO] --- spring-boot:3.4.5:repackage (default) @ jasagent-gateway ---
+[INFO] Replacing main artifact /workspace/JaSAgent/jasagent-gateway/target/jasagent-gateway-0.1.0.jar with repackaged archive, adding nested dependencies in BOOT-INF/.
+[INFO] The original artifact has been renamed to /workspace/JaSAgent/jasagent-gateway/target/jasagent-gateway-0.1.0.jar.original
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for jasagent 0.1.0:
+[INFO] 
+[INFO] jasagent ........................................... SUCCESS [  0.002 s]
+[INFO] jasagent-api ....................................... SUCCESS [  0.424 s]
+[INFO] jasagent-auth ...................................... SUCCESS [  0.025 s]
+[INFO] jasagent-trace ..................................... SUCCESS [  0.018 s]
+[INFO] jasagent-web ....................................... SUCCESS [  4.404 s]
+[INFO] jasagent-gateway ................................... SUCCESS [  0.108 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  5.166 s
+[INFO] Finished at: 2026-11-14T13:10:29+08:00
+[INFO] ------------------------------------------------------------------------

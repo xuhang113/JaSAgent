@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../../.." && pwd)"
+mkdir -p "$HERE/../results" "$HERE/../logs"
+name="T-013"
+result_text='jasagent-gateway 的源码和打包产物里不再包含作为控制台来源的 `gateway-admin` 构建产物。'
+cd "$ROOT"
+start=$(python3 -c 'import time; print(int(time.time()*1000))')
+set +e
+(
+  mvn -pl jasagent-gateway -am test -Dsurefire.failIfNoSpecifiedTests=false -Dtest=GatewayLayoutTest#consoleSourceIsNotEmbedded
+  test_code=$?
+  if [[ $test_code -ne 0 ]]; then
+    exit $test_code
+  fi
+  mvn -pl jasagent-gateway,jasagent-web -am package -DskipTests
+  pkg_code=$?
+  if [[ $pkg_code -ne 0 ]]; then
+    exit $pkg_code
+  fi
+  gateway_jar="$(find jasagent-gateway/target -maxdepth 1 -type f -name 'jasagent-gateway-*.jar' ! -name '*.jar.original' | sort | tail -n 1)"
+  if [[ -z "$gateway_jar" ]]; then
+    echo "打包后找不到网关 jar。" >&2
+    exit 1
+  fi
+  listing="$(jar tf "$gateway_jar")" || exit 1
+  if printf '%s\n' "$listing" | grep -q 'gateway-admin'; then
+    echo "网关包里仍有 gateway-admin。" >&2
+    exit 1
+  fi
+  exit 0
+) > "$HERE/../logs/${name}.log" 2>&1
+code=$?
+set -e
+end=$(python3 -c 'import time; print(int(time.time()*1000))')
+elapsed=$((end - start))
+if [[ $code -eq 0 ]]; then
+  status="通过"
+else
+  status="失败"
+fi
+printf '%s\t%s\t%s\t%s\tlogs/%s.log\n' "$name" "$status" "$result_text" "$elapsed" "$name" > "$HERE/../results/${name}.txt"
+exit "$code"

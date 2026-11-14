@@ -1,0 +1,1 @@
+T-025	通过	`scripts/start.sh` 在默认端口 18721 拉起的是网关进程，就绪判断不再依赖日志里的 `Started JasagentApplication`。	1873	logs/T-025.log
