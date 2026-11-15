@@ -1,5 +1,6 @@
 # 网关对外端口 18721。业务容器使用 gVisor。
 # 登录会话和存活探测都在网关进程内，本轮网关按单副本运行。
+# 只从 Nacos 发现 agent 实例，不再使用静态目录或 jasagent-agent-0 / jasagent-agent-1。
 # 控制台请求反代到 jasagent-web。粘性库通过可配置的 JDBC 地址直连集群 MySQL，口令仍只从仓库外的口令文件读取。
 apiVersion: apps/v1
 kind: Deployment
@@ -35,8 +36,8 @@ spec:
           env:
             - name: JASAGENT_PORT
               value: "18721"
-            - name: JASAGENT_GATEWAY_AGENTS
-              value: jasagent-agent-0.jasagent.svc.cluster.local:18731,jasagent-agent-1.jasagent.svc.cluster.local:18732
+            - name: JASAGENT_NACOS_SERVER_ADDR
+              value: jasagent-nacos.jasagent.svc.cluster.local:8848
             - name: JASAGENT_GATEWAY_WEB_ORIGIN
               value: http://jasagent-web.jasagent.svc.cluster.local:18722
             - name: JASAGENT_GATEWAY_AFFINITY_JDBC_URL

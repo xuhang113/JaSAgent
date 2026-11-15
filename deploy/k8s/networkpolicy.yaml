@@ -64,6 +64,16 @@ spec:
       ports:
         - protocol: TCP
           port: 4318
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: jasagent
+              app.kubernetes.io/component: nacos
+      ports:
+        - protocol: TCP
+          port: 8848
+        - protocol: TCP
+          port: 9848
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -176,6 +186,16 @@ spec:
       ports:
         - protocol: TCP
           port: 4318
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: jasagent
+              app.kubernetes.io/component: nacos
+      ports:
+        - protocol: TCP
+          port: 8848
+        - protocol: TCP
+          port: 9848
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -271,3 +291,30 @@ spec:
       ports:
         - protocol: TCP
           port: 3306
+---
+# Nacos 只访问集群 DNS。agent 和网关连进来，不需要再出网。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jasagent-nacos-egress
+  namespace: jasagent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: nacos
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

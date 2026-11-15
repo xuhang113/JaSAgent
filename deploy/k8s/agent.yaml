@@ -1,6 +1,7 @@
-# 两台 agent。容器端口 8080。网关按端口区分实例，所以两个 Service 分别是 18731 和 18732。
-# 直接出网被网络策略拦住。外部请求走 jasagent-sidecar 的 /v1/forward，地址用集群 DNS。
-# RuntimeClass 是 gvisor。
+# agent 运行时。容器端口 8080，向 Nacos 注册 Pod IP，由 HPA 按进行中的会话扩缩容。
+# 副本不再钉死为不可扩缩的两台：HPA 最小 2、最大 10。主指标是 jasagent_sessions_active，CPU 只作补充。
+# 不再提供把 jasagent-agent-0 / jasagent-agent-1 钉在 18731 / 18732 的 Service，网关只从 Nacos 发现实例。
+# 直接出网被网络策略拦住。外部请求走 jasagent-sidecar 的 /v1/forward。RuntimeClass 是 gvisor。
 apiVersion: v1
 kind: Service
 metadata:
@@ -17,38 +18,6 @@ spec:
   ports:
     - name: http
       port: 8080
-      targetPort: http
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: jasagent-agent-0
-  namespace: jasagent
-  labels:
-    app.kubernetes.io/name: jasagent
-    app.kubernetes.io/component: agent
-spec:
-  selector:
-    statefulset.kubernetes.io/pod-name: jasagent-agent-0
-  ports:
-    - name: http
-      port: 18731
-      targetPort: http
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: jasagent-agent-1
-  namespace: jasagent
-  labels:
-    app.kubernetes.io/name: jasagent
-    app.kubernetes.io/component: agent
-spec:
-  selector:
-    statefulset.kubernetes.io/pod-name: jasagent-agent-1
-  ports:
-    - name: http
-      port: 18732
       targetPort: http
 ---
 apiVersion: apps/v1
@@ -91,6 +60,12 @@ spec:
           env:
             - name: JASAGENT_PORT
               value: "8080"
+            - name: JASAGENT_NACOS_SERVER_ADDR
+              value: jasagent-nacos.jasagent.svc.cluster.local:8848
+            - name: JASAGENT_ADVERTISE_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: JASAGENT_CHECKPOINT
               value: mysql
             - name: JASAGENT_CHECKPOINT_JDBC_URL
@@ -186,3 +161,34 @@ spec:
             items:
               - key: password
                 path: urag-mysql-root.password
+---
+# HPA 管理副本。主指标是进行中的会话，CPU 只作补充，不能当作唯一依据。
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: jasagent-agent
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: agent
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: jasagent-agent
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Pods
+      pods:
+        metric:
+          name: jasagent_sessions_active
+        target:
+          type: AverageValue
+          averageValue: "8"
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80

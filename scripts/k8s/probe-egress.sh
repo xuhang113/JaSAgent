@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # 对已经部署的 jasagent 命名空间做真实探测。失败就退出非零，不把失败写成通过。
 # 不打印口令、内部令牌、模型密钥或通行证正文。
+# agent 相关项按当时从 Nacos 发现到的实例验收，不再写死 jasagent-agent-0 / jasagent-agent-1。
+# 现有的 egress 与 gVisor 检查范围不缩小。
 set -euo pipefail
 
 NS=jasagent
@@ -8,6 +10,8 @@ FAIL=0
 TICKET_TOOL="${JASAGENT_TICKET_TOOL:-net.egress}"
 TICKET_TARGET="${JASAGENT_TICKET_TARGET:-https://example.com/}"
 SIDECAR_URL="${JASAGENT_SIDECAR_URL:-http://jasagent-sidecar.jasagent.svc.cluster.local:8080}"
+# 发现结果缓存：每行 "ip port pod"
+DISCOVERED_FILE=""
 
 pass() {
   printf 'PASS %s\n' "$1"
@@ -44,17 +48,105 @@ pods_ready() {
   [[ "${bad}" -eq 0 ]]
 }
 
+nacos_addr() {
+  local ip
+  ip="$(kubectl -n "${NS}" get svc jasagent-nacos -o jsonpath='{.spec.clusterIP}')"
+  if [[ -z "${ip}" || "${ip}" == "None" ]]; then
+    return 1
+  fi
+  printf '%s\n' "${ip}"
+}
+
+# 从 Nacos 查出健康实例，并对应到当前 agent Pod。结果写入 DISCOVERED_FILE。
+# 注册地址若是回环，或健康实例少于 2 台，都算失败。
+load_discovered() {
+  local nacos url tmp map pod ip port found
+  nacos="$(nacos_addr)" || {
+    printf 'nacos-service-missing\n'
+    return 1
+  }
+  url="http://${nacos}:8848/nacos/v1/ns/instance/list?serviceName=jasagent-agent&healthyOnly=true"
+  tmp="$(mktemp)"
+  if ! python3 - "${url}" "${tmp}" <<'PY'
+import json, sys, urllib.request
+
+url, dest = sys.argv[1], sys.argv[2]
+try:
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        data = json.load(resp)
+except Exception as exc:
+    sys.stderr.write("nacos-query-failed\n")
+    sys.exit(1)
+hosts = data.get("hosts") or []
+rows = []
+for host in hosts:
+    if not host.get("healthy", False) or not host.get("enabled", True):
+        continue
+    ip = str(host.get("ip") or "").strip()
+    port = host.get("port")
+    if not ip or port is None:
+        continue
+    if ip in {"127.0.0.1", "localhost", "::1", "localhost.localdomain"} or ip.startswith("127."):
+        sys.stderr.write("loopback-registered\n")
+        sys.exit(2)
+    rows.append(f"{ip} {port}")
+if len(rows) < 2:
+    sys.stderr.write("too-few-instances\n")
+    sys.exit(3)
+with open(dest, "w", encoding="utf-8") as fh:
+    fh.write("\n".join(rows) + "\n")
+PY
+  then
+    rm -f "${tmp}"
+    return 1
+  fi
+  map="$(mktemp)"
+  kubectl -n "${NS}" get pod -l app.kubernetes.io/component=agent -o jsonpath='{range .items[*]}{.status.podIP}{" "}{.metadata.name}{"\n"}{end}' > "${map}"
+  : > "${DISCOVERED_FILE}"
+  while read -r ip port; do
+    [[ -n "${ip}" ]] || continue
+    found=""
+    while read -r pip pod; do
+      if [[ "${pip}" == "${ip}" ]]; then
+        found="${pod}"
+        break
+      fi
+    done < "${map}"
+    if [[ -z "${found}" ]]; then
+      printf 'unmapped-instance %s:%s\n' "${ip}" "${port}"
+      rm -f "${tmp}" "${map}"
+      return 1
+    fi
+    printf '%s %s %s\n' "${ip}" "${port}" "${found}" >> "${DISCOVERED_FILE}"
+  done < "${tmp}"
+  rm -f "${tmp}" "${map}"
+  if [[ "$(wc -l < "${DISCOVERED_FILE}" | tr -d ' ')" -lt 2 ]]; then
+    printf 'too-few-mapped-instances\n'
+    return 1
+  fi
+  printf 'DISCOVERED\n'
+  cat "${DISCOVERED_FILE}"
+}
+
+first_agent_pod() {
+  awk 'NR==1 { print $3; exit }' "${DISCOVERED_FILE}"
+}
+
 show_addresses() {
   printf 'ADDRESSES\n'
   kubectl -n "${NS}" get svc -o custom-columns='NAME:.metadata.name,CLUSTER-IP:.spec.clusterIP,PORT:.spec.ports[*].port,TYPE:.spec.type'
   printf '%s\n' \
     "gateway=http://jasagent-gateway.jasagent.svc.cluster.local:18721" \
-    "agent-0=http://jasagent-agent-0.jasagent.svc.cluster.local:18731" \
-    "agent-1=http://jasagent-agent-1.jasagent.svc.cluster.local:18732" \
+    "nacos=http://jasagent-nacos.jasagent.svc.cluster.local:8848" \
     "agentpass=http://jasagent-agentpass.jasagent.svc.cluster.local:18741" \
     "sidecar=http://jasagent-sidecar.jasagent.svc.cluster.local:8080" \
     "mysql=jasagent-mysql.jasagent.svc.cluster.local:3306" \
     "redis=jasagent-redis.jasagent.svc.cluster.local:6379"
+  if [[ -f "${DISCOVERED_FILE}" ]]; then
+    while read -r ip port pod; do
+      printf 'discovered-agent=%s %s:%s\n' "${pod}" "${ip}" "${port}"
+    done < "${DISCOVERED_FILE}"
+  fi
 }
 
 gvisor_proc() {
@@ -148,7 +240,9 @@ redis_from_agent() {
 }
 
 direct_external_blocked() {
-  kubectl -n "${NS}" exec -i jasagent-agent-0 -c agent -- bash -s <<'EOF'
+  local pod
+  pod="$(first_agent_pod)"
+  kubectl -n "${NS}" exec -i "${pod}" -c agent -- bash -s <<'EOF'
 set -eu
 ip="$(getent ahostsv4 example.com | awk '{print $1; exit}')"
 if [ -z "${ip}" ]; then
@@ -168,7 +262,9 @@ EOF
 forward_via_sidecar() {
   local url="$1"
   local expect="$2"
-  kubectl -n "${NS}" exec -i jasagent-agent-0 -c agent -- \
+  local pod
+  pod="$(first_agent_pod)"
+  kubectl -n "${NS}" exec -i "${pod}" -c agent -- \
     env URL="${url}" EXPECT="${expect}" TOOL="${TICKET_TOOL}" SIDECAR="${SIDECAR_URL}" bash -s <<'EOF'
 set -eu
 hostport="${SIDECAR#http://}"
@@ -229,6 +325,10 @@ sidecar_pod() {
   kubectl -n "${NS}" get pod -l app.kubernetes.io/component=sidecar -o jsonpath='{.items[0].metadata.name}'
 }
 
+nacos_pod() {
+  kubectl -n "${NS}" get pod -l app.kubernetes.io/component=nacos -o jsonpath='{.items[0].metadata.name}'
+}
+
 prepare_pass_user() {
   local pod
   pod="$(agentpass_pod)"
@@ -246,7 +346,9 @@ EOF
 }
 
 issue_ticket() {
-  kubectl -n "${NS}" exec -i jasagent-agent-0 -c agent -- env TARGET="${TICKET_TARGET}" TOOL="${TICKET_TOOL}" bash -s <<'EOF'
+  local pod
+  pod="$(first_agent_pod)"
+  kubectl -n "${NS}" exec -i "${pod}" -c agent -- env TARGET="${TICKET_TARGET}" TOOL="${TICKET_TOOL}" bash -s <<'EOF'
 set -eu
 body="$(printf '{"tenantId":"local","userId":"stack","sessionId":"s1","executionId":"e1","target":"%s","toolName":"%s"}' "${TARGET}" "${TOOL}")"
 exec 3<>/dev/tcp/jasagent-agentpass.jasagent.svc.cluster.local/18741
@@ -264,25 +366,73 @@ chmod 600 /tmp/jasagent-ticket
 EOF
 }
 
+gvisor_discovered_agents() {
+  local ip port pod bad=0
+  while read -r ip port pod; do
+    if ! gvisor_proc "${pod}" agent; then
+      bad=1
+    fi
+  done < "${DISCOVERED_FILE}"
+  [[ "${bad}" -eq 0 ]]
+}
+
+gateway_reaches_discovered() {
+  local ip port pod bad=0
+  while read -r ip port pod; do
+    printf 'instance %s %s:%s\n' "${pod}" "${ip}" "${port}"
+    if ! gateway_reaches_agent "${ip}" "${port}"; then
+      bad=1
+    fi
+  done < "${DISCOVERED_FILE}"
+  [[ "${bad}" -eq 0 ]]
+}
+
+mysql_discovered() {
+  local ip port pod bad=0
+  while read -r ip port pod; do
+    printf 'instance %s\n' "${pod}"
+    if ! agent_mysql "${pod}"; then
+      bad=1
+    fi
+  done < "${DISCOVERED_FILE}"
+  [[ "${bad}" -eq 0 ]]
+}
+
+redis_discovered() {
+  local ip port pod bad=0
+  while read -r ip port pod; do
+    printf 'instance %s\n' "${pod}"
+    if ! redis_from_agent "${pod}"; then
+      bad=1
+    fi
+  done < "${DISCOVERED_FILE}"
+  [[ "${bad}" -eq 0 ]]
+}
+
 main() {
+  DISCOVERED_FILE="$(mktemp)"
+  trap 'rm -f "${DISCOVERED_FILE}"' EXIT
   printf 'CLUSTER\n'
   kubectl get nodes -o custom-columns='NAME:.metadata.name,VERSION:.status.nodeInfo.kubeletVersion,RUNTIME:.status.nodeInfo.containerRuntimeVersion,OS:.status.nodeInfo.osImage'
+  if ! load_discovered; then
+    printf 'FAIL discovered-instances\n'
+    FAIL=1
+  else
+    printf 'PASS discovered-instances\n'
+  fi
   show_addresses
   run_test pods-ready pods_ready
   run_test runtime-class runtime_classes
-  run_test gvisor-agent-0 gvisor_proc jasagent-agent-0 agent
-  run_test gvisor-agent-1 gvisor_proc jasagent-agent-1 agent
+  run_test gvisor-discovered-agents gvisor_discovered_agents
   run_test gvisor-gateway gvisor_proc "$(gateway_pod)" gateway
   run_test gvisor-agentpass gvisor_proc "$(agentpass_pod)" agentpass
   run_test gvisor-sidecar gvisor_proc "$(sidecar_pod)" sidecar
+  run_test gvisor-nacos gvisor_proc "$(nacos_pod)" nacos
   run_test gateway-identity gateway_identity
   run_test agentpass-identity agentpass_identity
-  run_test gateway-agent-0 gateway_reaches_agent jasagent-agent-0.jasagent.svc.cluster.local 18731
-  run_test gateway-agent-1 gateway_reaches_agent jasagent-agent-1.jasagent.svc.cluster.local 18732
-  run_test mysql-agent-0 agent_mysql jasagent-agent-0
-  run_test mysql-agent-1 agent_mysql jasagent-agent-1
-  run_test redis-agent-0 redis_from_agent jasagent-agent-0
-  run_test redis-agent-1 redis_from_agent jasagent-agent-1
+  run_test gateway-discovered-agents gateway_reaches_discovered
+  run_test mysql-discovered-agents mysql_discovered
+  run_test redis-discovered-agents redis_discovered
   run_test agent-direct-external-blocked direct_external_blocked
   run_test llm-deepseek-no-ticket forward_via_sidecar https://api.deepseek.com/ forwarded
   run_test llm-xai-no-ticket forward_via_sidecar https://api.x.ai/ forwarded
@@ -293,7 +443,7 @@ main() {
     fail ticket-issued
   fi
   run_test external-with-ticket forward_via_sidecar "${TICKET_TARGET}" forwarded-ticket
-  kubectl -n "${NS}" exec jasagent-agent-0 -c agent -- rm -f /tmp/jasagent-ticket >/dev/null 2>&1 || true
+  kubectl -n "${NS}" exec "$(first_agent_pod)" -c agent -- rm -f /tmp/jasagent-ticket >/dev/null 2>&1 || true
   if [[ "${FAIL}" -ne 0 ]]; then
     printf 'PROBE FAILED\n'
     exit 1

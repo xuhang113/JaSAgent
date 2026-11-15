@@ -47,12 +47,14 @@ JASAGENT_EARLY_MANIFESTS=(
   runtimeclass-gvisor.yaml
   mysql.yaml
   redis.yaml
+  nacos.yaml
 )
 
 # 中间件的滚动等待。MySQL 和 Redis 就绪后才建库。
 JASAGENT_EARLY_WAITS=(
   "deployment/jasagent-mysql|300s"
   "deployment/jasagent-redis|180s"
+  "deployment/jasagent-nacos|300s"
 )
 
 # 业务、网络策略、控制台、观测组件和 rag。网关清单原样 apply，不改副本数和反代地址。
@@ -65,6 +67,7 @@ JASAGENT_LATE_MANIFESTS=(
   web.yaml
   observability.yaml
   rag.yaml
+  metrics-adapter.yaml
 )
 
 # 业务工作负载的滚动等待。web、grafana、otel-collector、prometheus 和 rag 都在里面。
@@ -78,6 +81,7 @@ JASAGENT_LATE_WAITS=(
   "deployment/jasagent-prometheus|420s"
   "deployment/jasagent-grafana|420s"
   "deployment/jasagent-rag|420s"
+  "deployment/jasagent-metrics-adapter|300s"
 )
 
 # 镜像标签不变时，这些已经存在的工作负载需要滚动重启才会用上新导入的镜像。
@@ -91,6 +95,8 @@ JASAGENT_RESTART_TARGETS=(
   deployment/jasagent-prometheus
   deployment/jasagent-grafana
   deployment/jasagent-rag
+  deployment/jasagent-nacos
+  deployment/jasagent-metrics-adapter
 )
 
 # 源码签名连续不变这么多次，才认为 sidecar 可以构建。

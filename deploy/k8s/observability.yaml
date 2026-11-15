@@ -134,6 +134,45 @@ spec:
       targetPort: prometheus
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jasagent-prometheus
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: prometheus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jasagent-prometheus
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints", "endpointslices"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jasagent-prometheus
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: jasagent-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: jasagent-prometheus
+    namespace: jasagent
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: jasagent-prometheus
@@ -152,6 +191,24 @@ data:
         static_configs:
           - targets:
               - jasagent-otel-collector.jasagent.svc.cluster.local:8889
+      - job_name: jasagent-agent-load
+        metrics_path: /health/load
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - jasagent
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            action: keep
+            regex: agent
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            action: keep
+            regex: http
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -174,7 +231,8 @@ spec:
         app.kubernetes.io/component: prometheus
     spec:
       runtimeClassName: gvisor
-      automountServiceAccountToken: false
+      serviceAccountName: jasagent-prometheus
+      automountServiceAccountToken: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534

@@ -1,0 +1,108 @@
+# 集群内的 Nacos 注册中心，供 agent 注册、网关发现。独立模式，认证关闭，地址只在集群内使用。
+# 业务容器使用 gVisor。客户端还要连 gRPC 端口 9848，所以 Service 一并暴露。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jasagent-nacos
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: nacos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jasagent
+      app.kubernetes.io/component: nacos
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jasagent
+        app.kubernetes.io/component: nacos
+    spec:
+      runtimeClassName: gvisor
+      automountServiceAccountToken: false
+      containers:
+        - name: nacos
+          image: nacos/nacos-server:v2.4.3
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8848
+            - name: client-rpc
+              containerPort: 9848
+          env:
+            - name: MODE
+              value: standalone
+            - name: PREFER_HOST_MODE
+              value: ip
+            - name: NACOS_AUTH_ENABLED
+              value: "false"
+            - name: NACOS_APPLICATION_PORT
+              value: "8848"
+            - name: JVM_XMS
+              value: 512m
+            - name: JVM_XMX
+              value: 512m
+            - name: TZ
+              value: Asia/Shanghai
+            - name: NACOS_SERVER_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          startupProbe:
+            httpGet:
+              path: /nacos/v1/console/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /nacos/v1/console/health/readiness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /nacos/v1/console/health/liveness
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: data
+              mountPath: /home/nacos/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jasagent-nacos
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: nacos
+spec:
+  selector:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: nacos
+  ports:
+    - name: http
+      port: 8848
+      targetPort: http
+    - name: client-rpc
+      port: 9848
+      targetPort: client-rpc
