@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-001"
+result_text='离开集群的 HTTP（大模型、外部工具、MCP 等）由 agent 进程经 sidecar 的 `/v1/forward` 发出，而不是由 agent 进程直接向外网拨号。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  transport="${REPO_ROOT}/jasagent-llm/src/main/java/dev/jasagent/llm/egress/SidecarLlmTransport.java"
+  models="${REPO_ROOT}/jasagent-llm/src/main/java/dev/jasagent/llm/LangChain4jModels.java"
+  grok="${REPO_ROOT}/jasagent-llm/src/main/java/dev/jasagent/llm/GrokLlmClient.java"
+  mcp="${REPO_ROOT}/jasagent-mcp/src/main/java/dev/jasagent/mcp/HttpMcpSession.java"
+  plugin="${REPO_ROOT}/jasagent-plugin/src/main/java/dev/jasagent/plugin/HttpLinkFetcher.java"
+  directory="${REPO_ROOT}/jasagent-app/src/main/java/dev/jasagent/app/DeepSeekModelDirectory.java"
+  forward="${REPO_ROOT}/jasagent-llm/src/main/java/dev/jasagent/llm/egress/SidecarForward.java"
+  for file in "${transport}" "${models}" "${grok}" "${mcp}" "${plugin}" "${directory}" "${forward}"; do
+    if [[ ! -f "${file}" ]]; then
+      echo "缺少出站实现：${file}" >&2
+      exit 1
+    fi
+  done
+  if ! grep -q 'SidecarLlmTransportBuilder' "${models}" || ! grep -q 'SidecarLlmTransportBuilder' "${grok}"; then
+    echo "大模型客户端没有改用 sidecar 传输。" >&2
+    exit 1
+  fi
+  if ! grep -q '/v1/forward' "${transport}" || ! grep -q 'SidecarAddress.forwardUrl()' "${transport}"; then
+    echo "大模型传输没有把离开集群的请求改写到 /v1/forward。" >&2
+    exit 1
+  fi
+  if ! grep -q 'SidecarForward' "${mcp}" || ! grep -q '/v1/forward' "${mcp}"; then
+    echo "HttpMcpSession 没有复用 sidecar 转发客户端。" >&2
+    exit 1
+  fi
+  if ! grep -q 'SidecarForward' "${plugin}" || ! grep -q '/v1/forward' "${plugin}"; then
+    echo "HttpLinkFetcher 没有复用 sidecar 转发客户端。" >&2
+    exit 1
+  fi
+  if ! grep -q 'SidecarForward' "${directory}" || ! grep -q 'client.exchange(' "${directory}"; then
+    echo "模型目录没有经 SidecarForward 出站。" >&2
+    exit 1
+  fi
+  if ! grep -q 'SidecarAddress.forwardUrl()' "${forward}" || ! grep -q '/v1/forward' "${forward}"; then
+    echo "SidecarForward 没有把离开集群的请求发到 /v1/forward。" >&2
+    exit 1
+  fi
+  if ! grep -q 'boolean viaSidecar = uri != null && !EgressRoute.direct(uri.toString())' "${forward}"; then
+    echo "SidecarForward 没有按 EgressRoute 决定是否走 sidecar。" >&2
+    exit 1
+  fi
+  route_defs="$(grep -R -l --include='*.java' 'final class EgressRoute' "${REPO_ROOT}" | wc -l | tr -d ' ')"
+  if [[ "${route_defs}" != "1" ]]; then
+    echo "出站判断被复制了一份。" >&2
+    exit 1
+  fi
+  # agent 进程里不应再另起 HttpClient 直接拨公网；出站应集中在 SidecarForward / SidecarLlmTransport。
+  leftover="$(rg -l --glob '*.java' 'java\.net\.http\.HttpClient' \
+    "${REPO_ROOT}/jasagent-app/src/main" \
+    "${REPO_ROOT}/jasagent-mcp/src/main" \
+    "${REPO_ROOT}/jasagent-plugin/src/main" \
+    "${REPO_ROOT}/jasagent-llm/src/main" || true)"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "JDK HttpClient 出现位置" "${leftover:-无}" >> "${ATDD_LOG}"
+  while IFS= read -r file; do
+    [[ -z "${file}" ]] && continue
+    case "${file}" in
+      */egress/SidecarForward.java) continue ;;
+      *)
+        echo "离开集群的 HTTP 仍直接使用 JDK HttpClient：${file}" >&2
+        exit 1
+        ;;
+    esac
+  done <<< "${leftover}"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "大模型、MCP、外部工具和模型目录走 /v1/forward" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-app,jasagent-llm,jasagent-mcp,jasagent-plugin" \
+    "LeavingClusterHttpTest,SidecarLlmTransportTest,HttpMcpSessionEgressTest,HttpLinkFetcherEgressTest,LlmRouterTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "离开集群的 HTTP 经 /v1/forward 发出" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

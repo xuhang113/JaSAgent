@@ -1,0 +1,1 @@
+T-002	通过	Nacos 注册与发现（包括 gRPC 9848）、MySQL、Redis、网关以及本集群内的其它服务，不经 sidecar。	13332	logs/T-002.log

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-002"
+result_text='Nacos 注册与发现（包括 gRPC 9848）、MySQL、Redis、网关以及本集群内的其它服务，不经 sidecar。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  route="${REPO_ROOT}/jasagent-llm/src/main/java/dev/jasagent/llm/egress/EgressRoute.java"
+  if [[ ! -f "${route}" ]]; then
+    echo "缺少出站判断。" >&2
+    exit 1
+  fi
+  for name in jasagent-nacos jasagent-mysql jasagent-redis jasagent-gateway nacos; do
+    if ! grep -q "\"${name}\"" "${route}"; then
+      echo "出站判断没有把 ${name} 列为直连。" >&2
+      exit 1
+    fi
+  done
+  if ! grep -q 'JASAGENT_NACOS_SERVER_ADDR' "${route}" || ! grep -q 'jasagent.nacos.server-addr' "${route}"; then
+    echo "出站判断没有读取 Nacos 配置主机。" >&2
+    exit 1
+  fi
+  if ! grep -q 'JASAGENT_JDBC_URL' "${route}" || ! grep -q 'JASAGENT_REDIS_HOST' "${route}" || ! grep -q 'JASAGENT_GATEWAY_ORIGIN' "${route}"; then
+    echo "出站判断没有读取 MySQL、Redis 或网关主机。" >&2
+    exit 1
+  fi
+  if ! grep -q 'cluster.local' "${route}"; then
+    echo "出站判断没有覆盖本集群域名。" >&2
+    exit 1
+  fi
+  if grep -R -n '/v1/forward' "${REPO_ROOT}/jasagent-app/src/main/java/dev/jasagent/app/nacos" >/dev/null; then
+    echo "Nacos 注册或发现被送进了 sidecar。" >&2
+    exit 1
+  fi
+  if grep -R -n 'SidecarForward' "${REPO_ROOT}/jasagent-app/src/main/java/dev/jasagent/app/nacos" >/dev/null; then
+    echo "Nacos 客户端复用了 sidecar 转发。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "Nacos、MySQL、Redis、网关和集群域名直连" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-llm,jasagent-app,jasagent-mcp,jasagent-plugin" \
+    "EgressRouteTest,LeavingClusterHttpTest,HttpMcpSessionEgressTest,HttpLinkFetcherEgressTest,NacosClientNamingTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "集群内服务不经 sidecar" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

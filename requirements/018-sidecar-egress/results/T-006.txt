@@ -1,0 +1,1 @@
+T-006	通过	本机启动脚本拉起 sidecar；本机两台 agent 可以共用一个回环 sidecar，出站路径与集群约定一致。	28	logs/T-006.log

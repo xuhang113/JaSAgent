@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-005"
+result_text='现有的大模型白名单和票据核销规则仍然有效。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  allowlist="${REPO_ROOT}/jasagent-sidecar/src/main/java/dev/jasagent/sidecar/LlmAllowlist.java"
+  service="${REPO_ROOT}/jasagent-sidecar/src/main/java/dev/jasagent/sidecar/EgressService.java"
+  if [[ ! -f "${allowlist}" || ! -f "${service}" ]]; then
+    echo "缺少白名单或出站服务。" >&2
+    exit 1
+  fi
+  if ! grep -q 'DEEPSEEK_HOST = "api.deepseek.com"' "${allowlist}"; then
+    echo "白名单不再包含 api.deepseek.com。" >&2
+    exit 1
+  fi
+  if ! grep -q 'XAI_HOST = "api.x.ai"' "${allowlist}"; then
+    echo "白名单不再包含 api.x.ai。" >&2
+    exit 1
+  fi
+  if ! grep -q 'ALLOWLIST_ENV = "JASAGENT_LLM_ALLOWLIST"' "${allowlist}"; then
+    echo "白名单不再读取 JASAGENT_LLM_ALLOWLIST。" >&2
+    exit 1
+  fi
+  if ! grep -q 'hosts.add(DEEPSEEK_HOST)' "${allowlist}" || ! grep -q 'hosts.add(XAI_HOST)' "${allowlist}"; then
+    echo "内置大模型主机没有始终加入名单。" >&2
+    exit 1
+  fi
+  if ! grep -q 'allowlist.permits(destination.host())' "${service}"; then
+    echo "出站服务没有先按白名单免证放行。" >&2
+    exit 1
+  fi
+  if ! grep -q 'TicketVerdict verdict = verify(call, request.ticket())' "${service}"; then
+    echo "非白名单主机不再先校验票据。" >&2
+    exit 1
+  fi
+  if ! grep -q 'TicketRedeem redeemed = redeem(call, request.ticket())' "${service}"; then
+    echo "非白名单主机不再先核销再转发。" >&2
+    exit 1
+  fi
+  if ! grep -q 'MISSING_TICKET' "${service}"; then
+    echo "缺票时没有拒绝转发。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "白名单主机免证，其它主机先核销" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-sidecar" "LlmAllowlistTest,TicketWireTest,SidecarEgressTest,SidecarContractTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "白名单和票据核销仍然有效" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

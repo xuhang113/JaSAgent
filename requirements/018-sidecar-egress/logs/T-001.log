@@ -1,0 +1,4 @@
+2026-11-15T22:15:25+0800	T-001	JDK HttpClient 出现位置	85	/workspace/JaSAgent/jasagent-llm/src/main/java/dev/jasagent/llm/egress/SidecarForward.java
+2026-11-15T22:15:25+0800	T-001	大模型、MCP、外部工具和模型目录走 /v1/forward	95	通过
+2026-11-15T22:15:39+0800	T-001	模块测试 LeavingClusterHttpTest,SidecarLlmTransportTest,HttpMcpSessionEgressTest,HttpLinkFetcherEgressTest,LlmRouterTest	14197	退出码 0
+2026-11-15T22:15:39+0800	T-001	离开集群的 HTTP 经 /v1/forward 发出	14215	通过

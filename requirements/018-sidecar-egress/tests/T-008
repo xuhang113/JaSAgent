@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-008"
+result_text='实现和测试提交不修改 `deploy/k8s` 下的清单文件。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  base="${ATDD_SPEC_BASE}"
+  if ! git -C "${REPO_ROOT}" merge-base --is-ancestor "${base}" HEAD; then
+    echo "当前 HEAD 不包含已确认的规格提交 ${base}。" >&2
+    exit 1
+  fi
+  changed="$(git -C "${REPO_ROOT}" diff --name-only "${base}" HEAD -- deploy/k8s)"
+  untracked="$(git -C "${REPO_ROOT}" ls-files --others --exclude-standard -- deploy/k8s)"
+  dirty="$(git -C "${REPO_ROOT}" status --porcelain -- deploy/k8s)"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "自规格提交起的清单改动" "${changed:-无}" >> "${ATDD_LOG}"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "未跟踪的清单文件" "${untracked:-无}" >> "${ATDD_LOG}"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "工作区清单" "${dirty:-干净}" >> "${ATDD_LOG}"
+  if [[ -n "${changed}${untracked}${dirty}" ]]; then
+    echo "从规格提交起已改动 deploy/k8s 下的清单文件：" >&2
+    printf '%s\n' "${changed}" "${untracked}" "${dirty}" >&2
+    exit 1
+  fi
+  # 本轮实现和测试同样不应改官方探测、网关和界面。这些不在第 8 条正文里，只作额外确认。
+  extra="$(git -C "${REPO_ROOT}" diff --name-only "${base}" HEAD -- scripts/k8s/probe-egress.sh jasagent-gateway jasagent-web)"
+  extra_untracked="$(git -C "${REPO_ROOT}" ls-files --others --exclude-standard -- scripts/k8s/probe-egress.sh jasagent-gateway jasagent-web)"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "官方探测、网关和界面改动" "${extra:-无}" >> "${ATDD_LOG}"
+  if [[ -n "${extra}${extra_untracked}" ]]; then
+    echo "实现或测试碰到了官方探测、网关或 jasagent-web：" >&2
+    printf '%s\n' "${extra}" "${extra_untracked}" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "未改 deploy/k8s 清单" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

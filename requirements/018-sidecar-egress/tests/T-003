@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-003"
+result_text='agent 向 Nacos 注册的地址仍是网关能访问的非回环地址，不是 `127.0.0.1`、`localhost` 或其它回环地址。回环只用于同一进程组或同一 Pod 内访问 sidecar。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  reachable="${REPO_ROOT}/jasagent-app/src/main/java/dev/jasagent/app/nacos/ReachableAddress.java"
+  registration="${REPO_ROOT}/jasagent-app/src/main/java/dev/jasagent/app/nacos/NacosAgentRegistration.java"
+  start="$(cat "${REPO_ROOT}/scripts/start.sh")"
+  common="$(cat "${REPO_ROOT}/scripts/common.sh")"
+  if [[ ! -f "${reachable}" || ! -f "${registration}" ]]; then
+    echo "缺少注册或可达地址实现。" >&2
+    exit 1
+  fi
+  if ! grep -q '注册地址不能是回环地址' "${reachable}"; then
+    echo "向 Nacos 注册的地址不再拒绝回环。" >&2
+    exit 1
+  fi
+  if ! grep -q 'localhost' "${reachable}" || ! grep -qi 'loopback' "${reachable}"; then
+    echo "可达地址检查没有覆盖回环或 localhost。" >&2
+    exit 1
+  fi
+  if ! grep -q 'ReachableAddress.require(settings.advertiseHost())' "${registration}"; then
+    echo "注册没有使用广告地址，也没有校验可达性。" >&2
+    exit 1
+  fi
+  if [[ "${start}" != *"--server.address=0.0.0.0"* ]]; then
+    echo "本机 agent 没有监听所有网卡，注册地址可能只能用回环。" >&2
+    exit 1
+  fi
+  if [[ "${start}" != *"--server.address=127.0.0.1"* ]]; then
+    echo "本机 sidecar 不是回环监听。" >&2
+    exit 1
+  fi
+  if [[ "${common}" != *'http://127.0.0.1:${JASAGENT_SIDECAR_PORT}'* ]]; then
+    echo "sidecar 访问地址不是回环。" >&2
+    exit 1
+  fi
+  if ! grep -q '不拿去向 Nacos 注册' "${REPO_ROOT}/scripts/common.sh"; then
+    echo "脚本没有写明 sidecar 回环地址不向 Nacos 注册。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "注册拒绝回环，回环只给 sidecar" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-app" "ReachableAddressTest,NacosRegistrationTest,LeavingClusterHttpTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "向 Nacos 注册非回环地址" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

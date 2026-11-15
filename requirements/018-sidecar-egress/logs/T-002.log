@@ -1,0 +1,3 @@
+2026-11-15T22:15:39+0800	T-002	Nacos、MySQL、Redis、网关和集群域名直连	23	通过
+2026-11-15T22:15:53+0800	T-002	模块测试 EgressRouteTest,LeavingClusterHttpTest,HttpMcpSessionEgressTest,HttpLinkFetcherEgressTest,NacosClientNamingTest	13303	退出码 0
+2026-11-15T22:15:53+0800	T-002	集群内服务不经 sidecar	13320	通过

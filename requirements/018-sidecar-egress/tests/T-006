@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-006"
+result_text='本机启动脚本拉起 sidecar；本机两台 agent 可以共用一个回环 sidecar，出站路径与集群约定一致。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  start="${REPO_ROOT}/scripts/start.sh"
+  stop="${REPO_ROOT}/scripts/stop.sh"
+  common="${REPO_ROOT}/scripts/common.sh"
+  start_text="$(cat "${start}")"
+  stop_text="$(cat "${stop}")"
+  common_text="$(cat "${common}")"
+  if [[ "${start_text}" != *"jasagent_start_sidecar"* || "${start_text}" != *"JASAGENT_SIDECAR_URL"* ]]; then
+    echo "start.sh 没有拉起 sidecar，或没有把同一地址交给 agent。" >&2
+    exit 1
+  fi
+  if [[ "${start_text}" != *"18731"* || "${start_text}" != *"18732"* || "${start_text}" != *"--server.address=127.0.0.1"* ]]; then
+    echo "本机 sidecar 不是回环监听，或两台 agent 的端口约定丢了。" >&2
+    exit 1
+  fi
+  if [[ "${start_text}" != *"/v1/forward"* ]]; then
+    echo "启动说明没有写明 /v1/forward。" >&2
+    exit 1
+  fi
+  if ! grep -B1 -E '^jasagent_start_sidecar\(\)' "${start}" | head -n 1 | grep -q '^#'; then
+    echo "jasagent_start_sidecar 缺少注释。" >&2
+    exit 1
+  fi
+  if [[ "${start_text}" != *'export JASAGENT_SIDECAR_URL'* || "${start_text}" != *'export JASAGENT_SIDECAR_PORT'* ]]; then
+    echo "两台 agent 没有共用导出的 sidecar 地址。" >&2
+    exit 1
+  fi
+  if [[ "${common_text}" != *'JASAGENT_SIDECAR_PORT="${JASAGENT_SIDECAR_PORT:-18761}"'* \
+    || "${common_text}" != *'http://127.0.0.1:${JASAGENT_SIDECAR_PORT}'* ]]; then
+    echo "两台 agent 没有共用默认的回环 sidecar。" >&2
+    exit 1
+  fi
+  if [[ "${stop_text}" != *"JASAGENT_SIDECAR_PID_FILE"* ]]; then
+    echo "stop.sh 没有停下 sidecar。" >&2
+    exit 1
+  fi
+  if ! grep -q 'jasagent_ensure_stack_jars' "${start}" || ! grep -q 'JASAGENT_SIDECAR_JAR' "${common}"; then
+    echo "本机启动没有准备 sidecar jar。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本机 18731 与 18732 共用 127.0.0.1:18761 的 /v1/forward" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

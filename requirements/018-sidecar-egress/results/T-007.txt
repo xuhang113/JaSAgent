@@ -1,0 +1,1 @@
+T-007	通过	实现改动覆盖 `jasagent-sidecar`，以及把出站挂到 sidecar 所必需的 `jasagent-app`、`jasagent-llm` 和脚本。	42	logs/T-007.log

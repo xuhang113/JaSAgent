@@ -1,0 +1,1 @@
+T-001	通过	离开集群的 HTTP（大模型、外部工具、MCP 等）由 agent 进程经 sidecar 的 `/v1/forward` 发出，而不是由 agent 进程直接向外网拨号。	14226	logs/T-001.log
