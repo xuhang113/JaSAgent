@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # 本机日常入口。JASAGENT_PORT 默认 18721 时拉起的是网关。
-# 先连接或拉起可配置的 Nacos，再拉起可被反代的 jasagent-web、网关，以及 18731 和 18732 上的 agent。
-# 这两个端口只是本机监听约定。agent 注册非回环地址，网关从 Nacos 发现，不使用静态目录。
-# 网关就绪看 /health 里的 status=up，不看应用启动完成那一行日志。
+# 先连接或拉起可配置的 Nacos，再拉起可被反代的 jasagent-web、网关、回环上的 sidecar，以及 18731 和 18732 上的 agent。
+# 这两个 agent 端口只是本机监听约定。agent 注册非回环地址，网关从 Nacos 发现，不使用静态目录。
+# 两台 agent 共用一个回环 sidecar，离开集群的 HTTP 走它的 /v1/forward。
+# 网关和 sidecar 就绪看 /health 里的 status=up，不看应用启动完成那一行日志。
 # Nacos 地址和口令只从环境或仓库外文件读取。缺失时以非 0 退出，说明里不打印密文。
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
@@ -40,6 +41,7 @@ jasagent_recorded_alive() {
 
 gateway_up=0
 web_up=0
+sidecar_up=0
 primary_up=0
 secondary_up=0
 if jasagent_recorded_alive "$JASAGENT_PID_FILE" "jasagent-gateway"; then
@@ -48,13 +50,16 @@ fi
 if jasagent_recorded_alive "$JASAGENT_WEB_PID_FILE" "jasagent-web"; then
   web_up=1
 fi
+if jasagent_recorded_alive "$JASAGENT_SIDECAR_PID_FILE" "jasagent-sidecar"; then
+  sidecar_up=1
+fi
 if jasagent_recorded_alive "$JASAGENT_AGENT_PRIMARY_PID_FILE" "jasagent-app"; then
   primary_up=1
 fi
 if jasagent_recorded_alive "$JASAGENT_AGENT_SECONDARY_PID_FILE" "jasagent-app"; then
   secondary_up=1
 fi
-if [[ "$gateway_up" -eq 1 && "$web_up" -eq 1 && "$primary_up" -eq 1 && "$secondary_up" -eq 1 ]]; then
+if [[ "$gateway_up" -eq 1 && "$web_up" -eq 1 && "$sidecar_up" -eq 1 && "$primary_up" -eq 1 && "$secondary_up" -eq 1 ]]; then
   jasagent_print_address
   exit 0
 fi
@@ -70,6 +75,9 @@ chmod 600 "$JASAGENT_ADDRESS_FILE"
 
 jasagent_load_model_env
 jasagent_load_checkpoint_env
+# 两台 agent 共用这一条回环地址。子进程只能看见导出的变量。
+export JASAGENT_SIDECAR_PORT
+export JASAGENT_SIDECAR_URL
 
 started=()
 # 本次新拉起的进程没有就绪时停掉，已经在跑的进程不动。
@@ -115,6 +123,22 @@ if [[ "$gateway_up" -ne 1 ]]; then
   fi
 fi
 
+# 在回环地址上拉起 sidecar。两台 agent 都通过 JASAGENT_SIDECAR_URL 访问它的 /v1/forward。
+jasagent_start_sidecar() {
+  local sidecar_port="$JASAGENT_SIDECAR_PORT"
+  jasagent_require_free "sidecar" "$sidecar_port"
+  local sidecar_pid
+  sidecar_pid="$(jasagent_spawn_jar "$JASAGENT_SIDECAR_JAR" "$JASAGENT_SIDECAR_LOG_FILE" \
+    "--server.address=127.0.0.1" \
+    "--server.port=${sidecar_port}" \
+    "--jasagent.sidecar.agentpass-base-url=http://127.0.0.1:18741")"
+  jasagent_write_pid "$JASAGENT_SIDECAR_PID_FILE" "$sidecar_pid"
+  started+=("$sidecar_pid")
+  if ! jasagent_wait_http_up "http://127.0.0.1:${sidecar_port}/health" "$sidecar_pid"; then
+    jasagent_fail "sidecar 没有留在后台。日志：$JASAGENT_SIDECAR_LOG_FILE"
+  fi
+}
+
 # 在 18731 或 18732 上拉起一台 agent。监听 0.0.0.0，注册地址来自已导出的非回环主机。
 jasagent_start_agent() {
   local listen_port="$1"
@@ -130,6 +154,9 @@ jasagent_start_agent() {
   fi
 }
 
+if [[ "$sidecar_up" -ne 1 ]]; then
+  jasagent_start_sidecar
+fi
 if [[ "$primary_up" -ne 1 ]]; then
   jasagent_start_agent "$agent_primary" "$JASAGENT_AGENT_PRIMARY_PID_FILE" "$JASAGENT_AGENT_PRIMARY_LOG_FILE"
 fi

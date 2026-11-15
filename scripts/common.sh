@@ -21,6 +21,14 @@ JASAGENT_AGENT_PRIMARY_PID_FILE="$JASAGENT_RUNTIME_DIR/agent-18731.pid"
 JASAGENT_AGENT_PRIMARY_LOG_FILE="$JASAGENT_RUNTIME_DIR/agent-18731.log"
 JASAGENT_AGENT_SECONDARY_PID_FILE="$JASAGENT_RUNTIME_DIR/agent-18732.pid"
 JASAGENT_AGENT_SECONDARY_LOG_FILE="$JASAGENT_RUNTIME_DIR/agent-18732.log"
+# 本机两台 agent 共用的回环 sidecar 端口。不拿去向 Nacos 注册。
+JASAGENT_SIDECAR_PORT="${JASAGENT_SIDECAR_PORT:-18761}"
+# sidecar 根地址。离开集群的 HTTP 发到这个地址的 /v1/forward。
+JASAGENT_SIDECAR_URL="${JASAGENT_SIDECAR_URL:-http://127.0.0.1:${JASAGENT_SIDECAR_PORT}}"
+# 本机 sidecar 的进程号。停止时按它结束进程。
+JASAGENT_SIDECAR_PID_FILE="$JASAGENT_RUNTIME_DIR/sidecar.pid"
+# 本机 sidecar 的日志。不在脚本里打印日志内容。
+JASAGENT_SIDECAR_LOG_FILE="$JASAGENT_RUNTIME_DIR/sidecar.log"
 # 本进程拉起的 Nacos 才记在这里。连上已有的 Nacos 时不写，停止时也不会把它关掉。
 JASAGENT_NACOS_MANAGED_FILE="$JASAGENT_RUNTIME_DIR/nacos.managed"
 # Nacos 启动日志只放在运行时目录。脚本不把日志内容打到终端。
@@ -44,7 +52,7 @@ jasagent_is_gateway_command() {
 jasagent_is_server_command() {
   local cmd="$1"
   jasagent_is_gateway_command "$cmd" \
-    || [[ "$cmd" == *jasagent-app-*.jar* || "$cmd" == *jasagent-web-*-exec.jar* || "$cmd" == *dev.jasagent.app.JasagentApplication* || "$cmd" == *dev.jasagent.web.upstream.WebUpstreamApplication* ]]
+    || [[ "$cmd" == *jasagent-app-*.jar* || "$cmd" == *jasagent-web-*-exec.jar* || "$cmd" == *jasagent-sidecar-*.jar* || "$cmd" == *dev.jasagent.app.JasagentApplication* || "$cmd" == *dev.jasagent.web.upstream.WebUpstreamApplication* || "$cmd" == *dev.jasagent.sidecar.SidecarApplication* ]]
 }
 
 jasagent_running_pid() {
@@ -221,7 +229,8 @@ jasagent_repo_server_pids() {
     [[ "$pid" =~ ^[0-9]+$ ]] || continue
     if [[ "$cmd" == *"$JASAGENT_ROOT"/jasagent-app/target/jasagent-app-*.jar* \
       || "$cmd" == *"$JASAGENT_ROOT"/jasagent-gateway/target/jasagent-gateway-*.jar* \
-      || "$cmd" == *"$JASAGENT_ROOT"/jasagent-web/target/jasagent-web-*-exec.jar* ]]; then
+      || "$cmd" == *"$JASAGENT_ROOT"/jasagent-web/target/jasagent-web-*-exec.jar* \
+      || "$cmd" == *"$JASAGENT_ROOT"/jasagent-sidecar/target/jasagent-sidecar-*.jar* ]]; then
       printf '%s\n' "$pid"
     fi
   done < <(ps -axww -o pid=,command= 2>/dev/null || true)
@@ -353,7 +362,7 @@ jasagent_find_named_jar() {
   find "$dir" -maxdepth 1 -type f -name "$pattern" ! -name '*.jar.original' | sort | tail -n 1
 }
 
-# 打包网关、控制台上游和 agent。失败时把 mvn 的退出码交回去，不额外打印口令或令牌。
+# 打包网关、控制台上游、agent 和 sidecar。失败时把 mvn 的退出码交回去，不额外打印口令或令牌。
 jasagent_build_stack() {
   if ! command -v mvn >/dev/null 2>&1; then
     echo "需要先打包，但找不到 mvn。" >&2
@@ -361,23 +370,26 @@ jasagent_build_stack() {
   fi
   rm -rf "$JASAGENT_ROOT/jasagent-gateway/src/main/resources/gateway-admin" \
     "$JASAGENT_ROOT/jasagent-gateway/target/classes/gateway-admin"
-  (cd "$JASAGENT_ROOT" && mvn -pl jasagent-gateway,jasagent-web,jasagent-app -am -DskipTests package)
+  (cd "$JASAGENT_ROOT" && mvn -pl jasagent-gateway,jasagent-web,jasagent-app,jasagent-sidecar -am -DskipTests package)
 }
 
-# 准备三个可执行 jar。缺网关、上游或 agent 时以非 0 退出。
+# 准备网关、上游、agent 和 sidecar 的可执行 jar。缺任何一个时以非 0 退出。
 jasagent_ensure_stack_jars() {
-  local gateway="" web="" app=""
+  local gateway="" web="" app="" sidecar=""
   gateway="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-gateway/target" 'jasagent-gateway-*.jar' || true)"
   web="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-web/target" 'jasagent-web-*-exec.jar' || true)"
   app="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-app/target" 'jasagent-app-*.jar' || true)"
-  if [[ -z "$gateway" || -z "$web" || -z "$app" ]] \
+  sidecar="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-sidecar/target" 'jasagent-sidecar-*.jar' || true)"
+  if [[ -z "$gateway" || -z "$web" || -z "$app" || -z "$sidecar" ]] \
     || jasagent_sources_newer_than "$gateway" \
     || jasagent_sources_newer_than "$web" \
-    || jasagent_sources_newer_than "$app"; then
+    || jasagent_sources_newer_than "$app" \
+    || jasagent_sources_newer_than "$sidecar"; then
     jasagent_build_stack
     gateway="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-gateway/target" 'jasagent-gateway-*.jar' || true)"
     web="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-web/target" 'jasagent-web-*-exec.jar' || true)"
     app="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-app/target" 'jasagent-app-*.jar' || true)"
+    sidecar="$(jasagent_find_named_jar "$JASAGENT_ROOT/jasagent-sidecar/target" 'jasagent-sidecar-*.jar' || true)"
   fi
   if [[ -z "$gateway" || ! -f "$gateway" ]]; then
     echo "找不到网关 jar。" >&2
@@ -391,9 +403,14 @@ jasagent_ensure_stack_jars() {
     echo "找不到 agent jar。" >&2
     exit 1
   fi
+  if [[ -z "$sidecar" || ! -f "$sidecar" ]]; then
+    echo "找不到 sidecar jar。" >&2
+    exit 1
+  fi
   JASAGENT_GATEWAY_JAR="$gateway"
   JASAGENT_WEB_JAR="$web"
   JASAGENT_APP_JAR="$app"
+  JASAGENT_SIDECAR_JAR="$sidecar"
 }
 
 # 后台启动一个 jar。标准输出和错误只进日志。调用方不要把口令或令牌放进参数。

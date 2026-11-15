@@ -3,6 +3,7 @@ package dev.jasagent.app;
 import dev.jasagent.agentpass.PassSettings;
 import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.llm.GrokEnvironment;
+import dev.jasagent.llm.egress.SidecarAddress;
 import dev.jasagent.cli.CliCommands;
 import dev.jasagent.controller.StorageStatus;
 import dev.jasagent.controller.WorkspaceList;
@@ -36,6 +37,7 @@ public class JasagentApplication {
             System.exit(code);
         }
         GrokEnvironment.installDefault();
+        SidecarAddress.configure(System.getenv(SidecarAddress.ENV));
         SpringApplication application = new SpringApplication(JasagentApplication.class);
         application.setDefaultProperties(Map.of("server.address", "127.0.0.1", "server.port", Integer.toString(AgentPorts.PRIMARY)));
         application.run(serverArgs(args));
@@ -82,6 +84,7 @@ public class JasagentApplication {
      * @param agentpassEnabled 是否启用通行证，对应 jasagent.agentpass.enabled
      * @param compressAt 上下文开始压缩的占用比例，对应 jasagent.context.compress-at
      * @param deepseekThinking 是否打开 DeepSeek 思考，对应 jasagent.deepseek.thinking
+     * @param sidecarUrl 回环上的 sidecar 根地址，离开集群的 HTTP 发到它的 /v1/forward
      * @return 可供执行和会话接口使用的运行时
      */
     @Bean
@@ -91,7 +94,9 @@ public class JasagentApplication {
                               @Value("${jasagent.deepseek.thinking:false}") String deepseekThinking,
                               @Value("${jasagent.egress.enabled:false}") String egressEnabled,
                               @Value("${jasagent.rag.base-url:http://127.0.0.1:18751}") String ragBaseUrl,
-                              @Value("${jasagent.egress.ticket-url:http://127.0.0.1:18741/v1/tickets}") String ticketUrl) {
+                              @Value("${jasagent.egress.ticket-url:http://127.0.0.1:18741/v1/tickets}") String ticketUrl,
+                              @Value("${jasagent.sidecar.url:http://127.0.0.1:18761}") String sidecarUrl) {
+        SidecarAddress.configure(sidecarUrl);
         Map<String, String> configuration = new LinkedHashMap<>();
         configuration.put(PassSettings.ENABLED, agentpassEnabled);
         configuration.put(ContextWindow.COMPRESS_AT, compressAt);

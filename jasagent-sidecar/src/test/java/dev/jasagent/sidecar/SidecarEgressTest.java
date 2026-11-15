@@ -10,6 +10,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -96,10 +99,12 @@ class SidecarEgressTest {
     @Test
     void extraAllowlistHostWithoutTicketIsForwarded() throws Exception {
         EgressService service = new EgressService(LlmAllowlist.parse("hooks.example.com"), new ScriptedOffice(), upstream);
-        EgressOutcome outcome = service.forward(new ForwardRequest("POST", "https://hooks.example.com/hook",
-                Map.of(), "ping".getBytes(StandardCharsets.UTF_8), "", "", "", "", "", ""));
-        assertTrue(outcome.forwarded());
-        assertEquals(200, outcome.status());
+        byte[] payload = "ping".getBytes(StandardCharsets.UTF_8);
+        try (EgressExchange outcome = service.forward(new ForwardRequest("POST", "https://hooks.example.com/hook",
+                Map.of(), "", "", "", "", "", ""), new ByteArrayInputStream(payload), payload.length)) {
+            assertTrue(outcome.forwarded());
+            assertEquals(200, outcome.status());
+        }
         assertEquals(1, upstream.calls);
         assertEquals("hooks.example.com", upstream.lastUri.getHost());
     }
@@ -346,16 +351,35 @@ class SidecarEgressTest {
          * @param method 方法
          * @param uri 规范地址
          * @param headers 过滤后的头
-         * @param body 正文
+         * @param body 正文流
+         * @param contentLength 声明的长度
          * @return 200 和 {@code llm-ok}
          */
         @Override
-        public UpstreamResponse exchange(String method, URI uri, Map<String, List<String>> headers, byte[] body) {
+        public UpstreamResponse exchange(String method, URI uri, Map<String, List<String>> headers, InputStream body, long contentLength) {
             calls++;
             lastUri = uri;
             lastHeaders = headers == null ? Map.of() : headers;
-            lastBody = body == null ? new byte[0] : body;
-            return UpstreamResponse.reached(200, "text/plain;charset=UTF-8", "llm-ok".getBytes(StandardCharsets.UTF_8));
+            lastBody = read(body);
+            return UpstreamResponse.reached(200, "text/plain;charset=UTF-8",
+                    new ByteArrayInputStream("llm-ok".getBytes(StandardCharsets.UTF_8)));
+        }
+
+        /**
+         * 测试替身把流收下来，方便断言正文。生产路径不这样做。
+         *
+         * @param body 调用方交来的流，可以是空
+         * @return 读到的字节；没有流时是空数组
+         */
+        private static byte[] read(InputStream body) {
+            if (body == null) {
+                return new byte[0];
+            }
+            try {
+                return body.readAllBytes();
+            } catch (IOException ex) {
+                throw new IllegalStateException(ex);
+            }
         }
     }
 

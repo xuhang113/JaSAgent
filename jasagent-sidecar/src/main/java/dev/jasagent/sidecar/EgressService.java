@@ -3,6 +3,7 @@ package dev.jasagent.sidecar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.InputStream;
 import java.net.URI;
 import java.util.Set;
 
@@ -39,28 +40,30 @@ public final class EgressService {
     /**
      * 处理一次出站。免证主机直接转发，并且不核销随请求带来的证。
      * 其它主机先校验，通过后再核销，只有核销成功才转发。校验未通过时不转发；除了服务不可达，仍会尝试核销以便 agentpass 记下这次使用。
-     * 副作用：可能调用通行证服务和上游。拒绝或失败时上游不会收到请求。
+     * 副作用：可能调用通行证服务和上游。拒绝或失败时上游不会收到请求，正文流也不会被读走。
      *
-     * @param request 目的地址、方法、正文、证明文和绑定字段
-     * @return 上游响应或拒绝 JSON。{@code forwarded} 为假时上游没有成功返回
+     * @param request 目的地址、方法、证明文和绑定字段；正文不在这个对象里
+     * @param body 要转发的正文流。拒绝时不读它。GET、HEAD 或长度为 0 时可以是空
+     * @param contentLength 正数是已知长度，0 表示没有正文，负数表示长度未知
+     * @return 上游响应流或拒绝 JSON。{@code forwarded} 为假时上游没有成功返回。调用方负责关闭
      */
-    public EgressOutcome forward(ForwardRequest request) {
+    public EgressExchange forward(ForwardRequest request, InputStream body, long contentLength) {
         Destination destination = Destination.parse(request.url());
         if (destination == null) {
             log.info("egress rejected reason={} host={}", EgressReasons.BAD_TARGET, "-");
-            return EgressOutcome.rejected(EgressReasons.BAD_TARGET);
+            return EgressExchange.rejected(EgressReasons.BAD_TARGET);
         }
         if (!METHODS.contains(request.method())) {
             log.info("egress rejected reason={} host={}", EgressReasons.METHOD_NOT_ALLOWED, destination.host());
-            return EgressOutcome.rejected(EgressReasons.METHOD_NOT_ALLOWED);
+            return EgressExchange.rejected(EgressReasons.METHOD_NOT_ALLOWED);
         }
         if (allowlist.permits(destination.host())) {
             log.info("egress forwarded host={} allow=llm", destination.host());
-            return send(request, destination);
+            return send(request, destination, body, contentLength);
         }
         if (request.ticket().isBlank()) {
             log.info("egress rejected reason={} host={}", EgressReasons.MISSING_TICKET, destination.host());
-            return EgressOutcome.rejected(EgressReasons.MISSING_TICKET);
+            return EgressExchange.rejected(EgressReasons.MISSING_TICKET);
         }
         TicketCall call = new TicketCall(request.tenantId(), request.userId(), request.sessionId(),
                 request.executionId(), destination.canonical(), request.toolName());
@@ -71,16 +74,16 @@ public final class EgressService {
             }
             String reason = TicketVerdict.explain(verdict);
             log.info("egress rejected reason={} host={}", reason, destination.host());
-            return EgressOutcome.rejected(reason);
+            return EgressExchange.rejected(reason);
         }
         TicketRedeem redeemed = redeem(call, request.ticket());
         if (!redeemed.redeemed()) {
             String reason = TicketVerdict.explain(redeemed.verdict());
             log.info("egress rejected reason={} host={}", reason, destination.host());
-            return EgressOutcome.rejected(reason);
+            return EgressExchange.rejected(reason);
         }
         log.info("egress forwarded host={} allow=ticket", destination.host());
-        return send(request, destination);
+        return send(request, destination, body, contentLength);
     }
 
     /**
@@ -133,24 +136,47 @@ public final class EgressService {
     }
 
     /**
-     * 把已经获准的请求送到上游。头在这里滤掉通行证。连接失败变成 502，不附带异常原文。
+     * 把已经获准的请求送到上游。头在这里滤掉通行证。正文按流送出，响应也按流交回。
+     * 连接失败变成 502，不附带异常原文，也不读取正文来拼错误信息。
      *
      * @param request 原始出站请求
      * @param destination 已经解析的目的地
-     * @return 上游结果，或未转发的失败结果
+     * @param body 正文流，可以是空
+     * @param contentLength 正数是已知长度，0 表示没有正文，负数表示长度未知
+     * @return 上游结果，或未转发的失败结果。调用方负责关闭
      */
-    private EgressOutcome send(ForwardRequest request, Destination destination) {
+    private EgressExchange send(ForwardRequest request, Destination destination, InputStream body, long contentLength) {
+        InputStream payload = noBody(request.method(), contentLength) ? null : body;
+        long length = payload == null ? 0 : contentLength;
+        UpstreamResponse response = null;
         try {
-            UpstreamResponse response = upstream.exchange(request.method(), URI.create(destination.canonical()),
-                    UpstreamHeaders.outbound(request.headers()), request.body());
+            response = upstream.exchange(request.method(), URI.create(destination.canonical()),
+                    UpstreamHeaders.outbound(request.headers()), payload, length);
             if (response == null || !response.reached()) {
+                if (response != null) {
+                    response.close();
+                }
                 log.info("egress upstream failed host={}", destination.host());
-                return EgressOutcome.rejected(EgressReasons.UPSTREAM_FAILED);
+                return EgressExchange.rejected(EgressReasons.UPSTREAM_FAILED);
             }
-            return EgressOutcome.forwarded(response.status(), response.contentType(), response.body());
+            return EgressExchange.forwarded(response);
         } catch (RuntimeException ex) {
+            if (response != null) {
+                response.close();
+            }
             log.info("egress upstream failed host={} kind={}", destination.host(), ex.getClass().getSimpleName());
-            return EgressOutcome.rejected(EgressReasons.UPSTREAM_FAILED);
+            return EgressExchange.rejected(EgressReasons.UPSTREAM_FAILED);
         }
+    }
+
+    /**
+     * 判断这次获准的请求要不要带正文。GET 和 HEAD 不带；长度为 0 也不带。
+     *
+     * @param method 已经规范成大写的方法
+     * @param contentLength 调用方声明的长度
+     * @return 不向上游写正文时为真
+     */
+    private static boolean noBody(String method, long contentLength) {
+        return "GET".equals(method) || "HEAD".equals(method) || contentLength == 0;
     }
 }

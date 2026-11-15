@@ -1,16 +1,19 @@
 package dev.jasagent.app;
 
+import dev.jasagent.llm.egress.SidecarForward;
+
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 在领到一次性证之后访问示例检索服务。证放在请求头里，不写入异常说明。
+ * 本机和集群内的检索地址直连；离开集群时才经 sidecar，避免把集群内服务的证交给转发层核销。
  */
 public final class RemoteRagClient {
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    private final SidecarForward http = SidecarForward.open(Duration.ofSeconds(2), false);
 
     /**
      * 向检索服务提交查询。地址无效或调用失败时返回说明，不包含证文本。
@@ -41,17 +44,17 @@ public final class RemoteRagClient {
                     + ",\"executionId\":" + quote(executionId)
                     + ",\"sessionId\":" + quote(sessionId)
                     + ",\"answerId\":" + quote(answerId) + "}";
-            HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl.endsWith("/") ? baseUrl + "search" : baseUrl + "/search"))
-                    .timeout(Duration.ofSeconds(5))
-                    .header("Content-Type", "application/json")
-                    .header("X-Jasagent-Ticket", ticket == null ? "" : ticket)
-                    .POST(HttpRequest.BodyPublishers.ofString(payload))
-                    .build();
-            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                return "检索服务拒绝了这次调用";
+            URI uri = URI.create(baseUrl.endsWith("/") ? baseUrl + "search" : baseUrl + "/search");
+            try (SidecarForward.Call response = http.exchange("POST", uri, Map.of(
+                    "Content-Type", List.of("application/json"),
+                    "X-Jasagent-Ticket", List.of(ticket == null ? "" : ticket)),
+                    payload.getBytes(StandardCharsets.UTF_8), Duration.ofSeconds(5))) {
+                String text = response.text();
+                if (response.rejected(text) || response.status() < 200 || response.status() >= 300) {
+                    return "检索服务拒绝了这次调用";
+                }
+                return text;
             }
-            return response.body() == null ? "" : response.body();
         } catch (Exception ex) {
             return "检索服务不可达";
         }

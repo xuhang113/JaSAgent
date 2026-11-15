@@ -1,15 +1,16 @@
 package dev.jasagent.sidecar;
 
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.CacheControl;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
@@ -23,6 +24,10 @@ import java.util.Map;
  */
 @RestController
 public class EgressController {
+    /**
+     * 在调用方和上游之间搬正文时用的块大小。只保留这一小块，不把整段收进内存。
+     */
+    private static final int CHUNK = 8192;
     private final EgressService egress;
 
     /**
@@ -35,13 +40,13 @@ public class EgressController {
     }
 
     /**
-     * 接收 {@code /v1/forward} 并按同一方法转发。拒绝时返回 JSON；转发成功时返回上游的状态和正文。
-     * 副作用由 {@link EgressService#forward(ForwardRequest)} 产生：可能访问 agentpass 和上游。
+     * 接收 {@code /v1/forward} 并按同一方法转发。拒绝时返回短 JSON；转发时把上游状态和正文按块写回。
+     * 副作用由 {@link EgressService#forward(ForwardRequest, InputStream, long)} 产生：可能访问 agentpass 和上游。
      * 响应不缓存，避免中间层记住一次核销结果或模型正文。
      *
-     * @param request 当前 HTTP 请求，含目的地址、证明文和正文
-     * @return 给 agent 的响应
-     * @throws IOException 读取调用方正文失败时抛出，不附带正文内容
+     * @param request 当前 HTTP 请求，含目的地址、证明文和正文流
+     * @param response 写回给 agent 的响应，正文按块刷出
+     * @throws IOException 写回响应失败时抛出，不附带正文内容
      */
     @RequestMapping(path = EgressPaths.FORWARD, method = {
             RequestMethod.GET,
@@ -51,24 +56,50 @@ public class EgressController {
             RequestMethod.PATCH,
             RequestMethod.DELETE
     })
-    public ResponseEntity<byte[]> forward(HttpServletRequest request) throws IOException {
-        byte[] body = request.getInputStream().readAllBytes();
+    public void forward(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ForwardRequest forward = new ForwardRequest(
                 request.getMethod(),
                 request.getHeader(EgressHeaders.URL),
                 headers(request),
-                body,
                 ticket(request),
                 request.getHeader(EgressHeaders.TENANT),
                 request.getHeader(EgressHeaders.USER),
                 request.getHeader(EgressHeaders.SESSION),
                 request.getHeader(EgressHeaders.EXECUTION),
                 request.getHeader(EgressHeaders.TOOL));
-        EgressOutcome outcome = egress.forward(forward);
-        return ResponseEntity.status(outcome.status())
-                .contentType(media(outcome.contentType()))
-                .cacheControl(CacheControl.noStore())
-                .body(outcome.body());
+        response.setHeader("Cache-Control", "no-store");
+        if (!response.isCommitted()) {
+            response.setBufferSize(CHUNK);
+        }
+        try (EgressExchange outcome = egress.forward(forward, request.getInputStream(), request.getContentLengthLong())) {
+            if (!response.isCommitted()) {
+                response.setStatus(outcome.status());
+                response.setContentType(media(outcome.contentType()).toString());
+            }
+            copy(outcome.body(), response);
+        }
+    }
+
+    /**
+     * 把上游或拒绝 JSON 按块写到响应里，每块都刷出，流式调用方不用等整段结束。
+     * 不把读到的块拼成完整数组。
+     *
+     * @param body 要写回的正文流
+     * @param response 当前 HTTP 响应
+     * @throws IOException 读写失败时抛出，不含正文内容
+     */
+    private static void copy(InputStream body, HttpServletResponse response) throws IOException {
+        OutputStream out = response.getOutputStream();
+        byte[] chunk = new byte[CHUNK];
+        int read;
+        while ((read = body.read(chunk)) >= 0) {
+            if (read == 0) {
+                continue;
+            }
+            out.write(chunk, 0, read);
+            out.flush();
+            response.flushBuffer();
+        }
     }
 
     /**

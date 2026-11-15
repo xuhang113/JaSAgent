@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -47,5 +48,23 @@ class SidecarContractTest {
         assertTrue(text.contains("server.port=8080"));
         assertFalse(text.contains("BEGIN PRIVATE KEY"));
         assertEquals(LlmAllowlist.ALLOWLIST_ENV, "JASAGENT_LLM_ALLOWLIST");
+    }
+
+    /**
+     * 转发实现不再把整段正文读进内存。生产源码里不能再出现这两种整包读法。
+     */
+    @Test
+    void forwardPathDoesNotBufferTheWholeBody() throws Exception {
+        Path root = Path.of("src/main/java");
+        if (!Files.exists(root)) {
+            root = Path.of("jasagent-sidecar/src/main/java");
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            for (Path path : walk.filter(file -> file.toString().endsWith(".java")).toList()) {
+                String text = Files.readString(path);
+                assertFalse(text.contains("readAllBytes"), path.toString());
+                assertFalse(text.contains("ofByteArray"), path.toString());
+            }
+        }
     }
 }

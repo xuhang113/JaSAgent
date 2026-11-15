@@ -19,7 +19,7 @@ jasagent_stop_recorded() {
 }
 
 jasagent_stop_recorded "$(jasagent_running_pid || true)"
-for file in "$JASAGENT_WEB_PID_FILE" "$JASAGENT_AGENT_PRIMARY_PID_FILE" "$JASAGENT_AGENT_SECONDARY_PID_FILE"; do
+for file in "$JASAGENT_WEB_PID_FILE" "$JASAGENT_SIDECAR_PID_FILE" "$JASAGENT_AGENT_PRIMARY_PID_FILE" "$JASAGENT_AGENT_SECONDARY_PID_FILE"; do
   if [[ -f "$file" ]]; then
     jasagent_stop_recorded "$(tr -d '[:space:]' < "$file" || true)"
   fi
@@ -27,7 +27,7 @@ done
 while IFS= read -r pid; do
   jasagent_stop_recorded "$pid"
 done < <(jasagent_repo_server_pids)
-rm -f "$JASAGENT_PID_FILE" "$JASAGENT_WEB_PID_FILE" "$JASAGENT_AGENT_PRIMARY_PID_FILE" "$JASAGENT_AGENT_SECONDARY_PID_FILE"
+rm -f "$JASAGENT_PID_FILE" "$JASAGENT_WEB_PID_FILE" "$JASAGENT_SIDECAR_PID_FILE" "$JASAGENT_AGENT_PRIMARY_PID_FILE" "$JASAGENT_AGENT_SECONDARY_PID_FILE"
 # 只停本入口拉起的 Nacos。外部注册中心没有管理标记，这里不动。
 jasagent_stop_managed_nacos
 exit 0

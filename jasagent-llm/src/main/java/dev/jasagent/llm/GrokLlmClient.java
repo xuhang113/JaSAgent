@@ -9,6 +9,7 @@ import dev.jasagent.api.llm.LlmClient;
 import dev.jasagent.api.llm.LlmEmbedRequest;
 import dev.jasagent.api.llm.LlmEmbedResponse;
 import dev.jasagent.api.llm.LlmMessage;
+import dev.jasagent.llm.egress.SidecarLlmTransportBuilder;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -52,7 +53,7 @@ public final class GrokLlmClient implements LlmClient {
     }
 
     /**
-     * 按 Grok 配置同时建聊天补全客户端和 responses 客户端。两者都关闭请求日志和响应日志。
+     * 按 Grok 配置同时建聊天补全客户端和 responses 客户端。两者都关闭请求日志和响应日志，并经 sidecar 访问离开集群的地址。
      *
      * @param settings 含 Grok 密钥和超时的配置
      * @return 可按可用性在两条接口之间选择的客户端
@@ -60,6 +61,7 @@ public final class GrokLlmClient implements LlmClient {
     public static GrokLlmClient create(LlmSettings settings) {
         OpenAiCallConfig config = OpenAiCallConfig.grok(settings);
         OpenAiResponsesChatModel responses = OpenAiResponsesChatModel.builder()
+                .httpClientBuilder(new SidecarLlmTransportBuilder())
                 .baseUrl(config.baseUrl())
                 .apiKey(config.apiKey())
                 .modelName(config.modelName())

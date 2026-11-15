@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -85,16 +86,17 @@ class TicketWireTest {
             try (HttpTicketOffice office = new HttpTicketOffice("http://127.0.0.1:" + pass.getAddress().getPort(), 2000);
                  JdkUpstreamClient client = new JdkUpstreamClient(2000)) {
                 EgressService service = new EgressService(LlmAllowlist.parse(""), office, client);
+                byte[] payload = "{\"a\":1}".getBytes(StandardCharsets.UTF_8);
                 ForwardRequest request = new ForwardRequest("POST", url, Map.of(
                         "Authorization", List.of("Bearer test-token"),
                         EgressHeaders.TICKET, List.of("ticket-once"),
                         "Content-Type", List.of("application/json")),
-                        "{\"a\":1}".getBytes(StandardCharsets.UTF_8),
                         "ticket-once", "", "", "", "", "");
-                EgressOutcome first = service.forward(request);
-                assertTrue(first.forwarded());
-                assertEquals(200, first.status());
-                assertEquals("seen", new String(first.body(), StandardCharsets.UTF_8));
+                try (EgressExchange first = service.forward(request, new ByteArrayInputStream(payload), payload.length)) {
+                    assertTrue(first.forwarded());
+                    assertEquals(200, first.status());
+                    assertEquals("seen", new String(first.body().readAllBytes(), StandardCharsets.UTF_8));
+                }
                 assertEquals(1, hits.get());
                 assertEquals(url, verifyTarget.get());
                 assertEquals("POST " + EgressPaths.VERIFY, verifyLine.get());
@@ -102,10 +104,11 @@ class TicketWireTest {
                 assertEquals("Bearer test-token", authorization.get());
                 assertNull(ticketHeader.get());
                 assertEquals("{\"a\":1}", new String(seen.get(), StandardCharsets.UTF_8));
-                EgressOutcome second = service.forward(request);
-                assertFalse(second.forwarded());
-                assertEquals(403, second.status());
-                assertTrue(new String(second.body(), StandardCharsets.UTF_8).contains("\"reason\":\"used\""));
+                try (EgressExchange second = service.forward(request, new ByteArrayInputStream(payload), payload.length)) {
+                    assertFalse(second.forwarded());
+                    assertEquals(403, second.status());
+                    assertTrue(new String(second.body().readAllBytes(), StandardCharsets.UTF_8).contains("\"reason\":\"used\""));
+                }
                 assertEquals(1, hits.get());
             }
         } finally {
@@ -133,9 +136,10 @@ class TicketWireTest {
             assertEphemeral(upstream.getAddress().getPort());
             URI uri = URI.create("http://127.0.0.1:" + upstream.getAddress().getPort() + "/go");
             try (JdkUpstreamClient client = new JdkUpstreamClient(2000)) {
-                UpstreamResponse response = client.exchange("GET", uri, Map.of(), new byte[0]);
-                assertTrue(response.reached());
-                assertEquals(302, response.status());
+                try (UpstreamResponse response = client.exchange("GET", uri, Map.of(), null, 0)) {
+                    assertTrue(response.reached());
+                    assertEquals(302, response.status());
+                }
                 assertEquals(1, hits.get());
             }
         } finally {

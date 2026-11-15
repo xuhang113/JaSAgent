@@ -7,12 +7,11 @@ import java.util.Map;
 
 /**
  * 调用方交给 sidecar 的一次出站请求。通行证和身份只放在字段里，真正拨号前会从头映射里去掉。
- * 正文按字节保存，不假定编码，也不写进日志。
+ * 正文不放在这里，避免把整段收进内存；调用方另交一个流。
  *
  * @param method 调用方的 HTTP 方法，构造时收成大写
  * @param url {@code X-Jasagent-Url} 的原文，还没做规范化和主机判断
  * @param headers 调用方带来的头，可能仍含通行证；送到上游之前会再滤一遍
- * @param body 要转发给上游的正文，空引用会收成空数组
  * @param ticket 证明文；免证主机可以是空串。本字段不进入日志
  * @param tenantId 声称的租户，空白表示不额外对照
  * @param userId 声称的登录名，空白表示不额外对照
@@ -24,7 +23,6 @@ public record ForwardRequest(
         String method,
         String url,
         Map<String, List<String>> headers,
-        byte[] body,
         String ticket,
         String tenantId,
         String userId,
@@ -33,13 +31,12 @@ public record ForwardRequest(
         String toolName) {
 
     /**
-     * 把空引用收成空值，并复制头和正文，避免调用方事后改动影响已经收下的请求。
+     * 把空引用收成空值，并复制头，避免调用方事后改动影响已经收下的请求。
      * 通行证只做两端空白裁剪，不记录裁剪前后的内容。
      *
      * @param method 方法原文
      * @param url 目的地址原文
      * @param headers 原始头
-     * @param body 原始正文
      * @param ticket 证明文
      * @param tenantId 租户
      * @param userId 登录名
@@ -51,7 +48,6 @@ public record ForwardRequest(
         method = method == null ? "" : method.trim().toUpperCase(Locale.ROOT);
         url = url == null ? "" : url.trim();
         headers = copyHeaders(headers);
-        body = body == null ? new byte[0] : body.clone();
         ticket = ticket == null ? "" : ticket.trim();
         tenantId = clean(tenantId);
         userId = clean(userId);

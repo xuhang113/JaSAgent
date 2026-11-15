@@ -6,21 +6,24 @@ import dev.jasagent.api.pass.OneTimeTicket;
 import dev.jasagent.api.pass.OneTimeTicketClient;
 import dev.jasagent.api.pass.TicketRequest;
 
+import dev.jasagent.llm.egress.SidecarForward;
+
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * 向本机 agentpass 领取一次性证。失败、超时或返回空白证时给出无效证，不把请求体写进异常。
+ * agentpass 在本集群内，领证请求直连，不经 sidecar。
  */
 public final class HttpOneTimeTicketClient implements OneTimeTicketClient {
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Duration TIMEOUT = Duration.ofSeconds(2);
     private final URI endpoint;
-    private final HttpClient http;
+    private final SidecarForward http;
 
     /**
      * 连到给定的领证地址，超时两秒。
@@ -29,7 +32,7 @@ public final class HttpOneTimeTicketClient implements OneTimeTicketClient {
      */
     public HttpOneTimeTicketClient(String endpoint) {
         this.endpoint = URI.create(endpoint);
-        this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+        this.http = SidecarForward.open(TIMEOUT, false);
     }
 
     /**
@@ -48,18 +51,17 @@ public final class HttpOneTimeTicketClient implements OneTimeTicketClient {
             body.put("executionId", text(request.executionId()));
             body.put("target", text(request.target()));
             body.put("toolName", text(request.toolName()));
-            HttpRequest httpRequest = HttpRequest.newBuilder(endpoint)
-                    .timeout(Duration.ofSeconds(2))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)))
-                    .build();
-            HttpResponse<String> response = http.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                return new OneTimeTicket("");
+            byte[] payload = JSON.writeValueAsString(body).getBytes(StandardCharsets.UTF_8);
+            try (SidecarForward.Call response = http.exchange("POST", endpoint, Map.of(
+                    "Content-Type", List.of("application/json")), payload, TIMEOUT)) {
+                String text = response.text();
+                if (response.rejected(text) || response.status() < 200 || response.status() >= 300) {
+                    return new OneTimeTicket("");
+                }
+                JsonNode root = JSON.readTree(text);
+                String ticket = root.path("ticket").asText("");
+                return new OneTimeTicket(ticket);
             }
-            JsonNode root = JSON.readTree(response.body() == null ? "" : response.body());
-            String ticket = root.path("ticket").asText("");
-            return new OneTimeTicket(ticket);
         } catch (Exception ex) {
             return new OneTimeTicket("");
         }

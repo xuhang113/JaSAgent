@@ -3,17 +3,17 @@ package dev.jasagent.app;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.jasagent.llm.OpenAiCallConfig;
+import dev.jasagent.llm.egress.SidecarForward;
 
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 按 DeepSeek 的模型列表接口取出可用模型 id，并在一分钟内复用上次成功或回退的结果。
+ * 官方地址离开集群，请求经 sidecar 发出；测试用的回环地址仍直连。
  */
 final class DeepSeekModelDirectory implements SessionModelCatalog.DeepSeekModels {
     /**
@@ -30,7 +30,7 @@ final class DeepSeekModelDirectory implements SessionModelCatalog.DeepSeekModels
     private static final Duration TIMEOUT = Duration.ofSeconds(4);
 
     private final URI endpoint;
-    private final HttpClient client;
+    private final SidecarForward client;
     private volatile List<String> cached = List.of();
     private volatile long cachedAt;
 
@@ -44,13 +44,13 @@ final class DeepSeekModelDirectory implements SessionModelCatalog.DeepSeekModels
 
     /**
      * 用指定的模型列表地址构造目录，测试可以把地址指到本机桩。
-     * 副作用：保存地址并创建连接超时为 4 秒的 HTTP 客户端。
+     * 副作用：保存地址。离开集群的列表请求会经 sidecar 发出，回环地址仍直连。
      *
      * @param endpoint 返回模型列表 JSON 的完整地址
      */
     DeepSeekModelDirectory(URI endpoint) {
         this.endpoint = endpoint;
-        this.client = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
+        this.client = SidecarForward.open(TIMEOUT, false);
     }
 
     /**
@@ -76,25 +76,23 @@ final class DeepSeekModelDirectory implements SessionModelCatalog.DeepSeekModels
     }
 
     /**
-     * 向模型列表地址发 GET。非 2xx、网络失败或解析结果为空时，只返回默认模型，避免目录整体消失。线程被中断时恢复中断标记。
+     * 向模型列表地址发 GET。离开集群时经 sidecar。非 2xx、被 sidecar 拒绝、网络失败或解析结果为空时，只返回默认模型。线程被中断时恢复中断标记。
      *
      * @param apiKey 放进 Authorization 的 Bearer 密钥
      * @return 解析出的 id；失败时只有 deepseek-flash
      */
     private List<String> load(String apiKey) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(endpoint)
-                    .timeout(TIMEOUT)
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() / 100 != 2) {
-                return List.of(SessionModelCatalog.DEFAULT_MODEL);
+            try (SidecarForward.Call response = client.exchange("GET", endpoint, Map.of(
+                    "Authorization", List.of("Bearer " + apiKey),
+                    "Accept", List.of("application/json")), new byte[0], TIMEOUT)) {
+                String text = response.text();
+                if (response.rejected(text) || response.status() / 100 != 2) {
+                    return List.of(SessionModelCatalog.DEFAULT_MODEL);
+                }
+                List<String> parsed = parse(text);
+                return parsed.isEmpty() ? List.of(SessionModelCatalog.DEFAULT_MODEL) : parsed;
             }
-            List<String> parsed = parse(response.body());
-            return parsed.isEmpty() ? List.of(SessionModelCatalog.DEFAULT_MODEL) : parsed;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             return List.of(SessionModelCatalog.DEFAULT_MODEL);

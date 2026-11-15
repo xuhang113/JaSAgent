@@ -484,13 +484,29 @@ class LlmRouterTest {
     }
 
     /**
-     * 读本模块源码和构建文件，断言聊天走 LangChain4j，而不是手写 HTTP 客户端或 Spring。
+     * 读本模块源码和构建文件。聊天协议仍走 LangChain4j，不引入 Spring。
+     * 只有出站包可以拨号，并且离开集群的请求写明走 sidecar 的转发入口。
      */
     @Test
     void moduleDoesNotUseSpringOrHandWrittenHttpClient() throws Exception {
-        String source = readMainSources();
-        assertFalse(source.contains("java.net.http"));
-        assertFalse(source.contains("httpClientBuilder"));
+        Path root = Path.of("src/main/java");
+        StringBuilder builder = new StringBuilder();
+        try (Stream<Path> walk = Files.walk(root)) {
+            for (Path path : walk.filter(file -> file.toString().endsWith(".java")).toList()) {
+                String text = Files.readString(path);
+                builder.append(text).append('\n');
+                String unix = path.toString().replace('\\', '/');
+                if (!unix.contains("/egress/")) {
+                    assertFalse(text.contains("java.net.http"), path.toString());
+                }
+            }
+        }
+        String source = builder.toString();
+        assertTrue(source.contains("/v1/forward"));
+        assertTrue(source.contains("X-Jasagent-Url"));
+        assertTrue(source.contains("OpenAiChatModel.builder"));
+        assertTrue(source.contains("OpenAiStreamingChatModel.builder"));
+        assertTrue(source.contains("SidecarLlmTransportBuilder"));
         String pom = Files.readString(Path.of("pom.xml"));
         assertFalse(pom.contains("springframework"));
         assertFalse(pom.contains("spring-ai"));
