@@ -4,26 +4,31 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
+import dev.jasagent.llm.egress.SidecarForward;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 用 HTTP POST 维持一条 MCP 会话。
- * 响应可以是单个 JSON，也可以是事件流；会话编号和协议版本会在后续请求里带回。
+ * 离开集群的端点改送到本机回环上 sidecar 的 {@code /v1/forward}，正文按流读回；回环、Nacos、MySQL、Redis、网关和其它本集群地址仍直连。
+ * 响应可以是单个 JSON，也可以是分块到达的事件流。会话编号和协议版本会在后续请求里带回。
+ * 授权头、票据和口令不写进异常。
  */
 final class HttpMcpSession implements McpProtocol.Exchange, AutoCloseable {
     private final URI endpoint;
     private final Map<String, String> headers;
     private final Duration timeout;
-    private final HttpClient client;
+    private final SidecarForward client;
     private final AtomicInteger ids = new AtomicInteger();
     private final Object lock = new Object();
     private List<McpProtocol.RemoteTool> tools = List.of();
@@ -32,14 +37,14 @@ final class HttpMcpSession implements McpProtocol.Exchange, AutoCloseable {
     private boolean closed;
 
     /**
-     * 记住端点、额外请求头、超时和已经建好的客户端。
+     * 记住端点、额外请求头、超时和已经建好的出站客户端。
      *
      * @param endpoint JSON-RPC 地址
      * @param headers 每次请求都附带的请求头
      * @param timeout 单次请求的最长等待
-     * @param client 发送请求的 HTTP 客户端
+     * @param client 直连或转发到 sidecar 的客户端
      */
-    private HttpMcpSession(URI endpoint, Map<String, String> headers, Duration timeout, HttpClient client) {
+    private HttpMcpSession(URI endpoint, Map<String, String> headers, Duration timeout, SidecarForward client) {
         this.endpoint = endpoint;
         this.headers = headers;
         this.timeout = timeout;
@@ -47,7 +52,7 @@ final class HttpMcpSession implements McpProtocol.Exchange, AutoCloseable {
     }
 
     /**
-     * 建立客户端并完成握手。
+     * 建立出站客户端并完成握手。离开集群的端点走 sidecar {@code /v1/forward}，回环和本集群端点直连。
      * 副作用：握手失败时关闭这次会话再把异常抛出。
      *
      * @param transport 端点和额外请求头
@@ -55,7 +60,7 @@ final class HttpMcpSession implements McpProtocol.Exchange, AutoCloseable {
      * @return 已经拉回工具列表的会话
      */
     static HttpMcpSession open(McpTransport.Http transport, Duration timeout) {
-        HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
+        SidecarForward client = SidecarForward.open(timeout, false);
         HttpMcpSession session = new HttpMcpSession(transport.endpoint(), transport.headers(), timeout, client);
         try {
             session.tools = McpProtocol.load(session);
@@ -139,8 +144,8 @@ final class HttpMcpSession implements McpProtocol.Exchange, AutoCloseable {
     }
 
     /**
-     * 关闭 HTTP 客户端。
-     * 副作用：已关闭过则直接返回；否则标记关闭并关闭客户端。
+     * 关闭出站客户端。
+     * 副作用：已关闭过则直接返回；否则标记关闭并关闭直连和 sidecar 两路客户端。
      */
     @Override
     public void close() {
@@ -153,7 +158,8 @@ final class HttpMcpSession implements McpProtocol.Exchange, AutoCloseable {
 
     /**
      * 把报文 POST 到端点，并按是否需要响应体解释状态码。
-     * 副作用：若响应带回 Mcp-Session-Id，就记到这条会话上。通知只要 2xx；正式请求的非 2xx 会失败。
+     * 离开集群时请求发到 sidecar 的 {@code /v1/forward}，原地址放在 {@code X-Jasagent-Url}。
+     * 副作用：若响应带回 Mcp-Session-Id，就记到这条会话上。通知只要 2xx；正式请求的非 2xx 会失败。失败说明不带响应正文。
      *
      * @param message 要发送的 JSON-RPC 报文
      * @param id 期望响应使用的编号；通知传 0
@@ -163,31 +169,24 @@ final class HttpMcpSession implements McpProtocol.Exchange, AutoCloseable {
      */
     private JsonNode post(ObjectNode message, int id, boolean expectBody, String executionId) {
         try {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint)
-                    .timeout(timeout)
-                    .header("Content-Type", "application/json")
-                    .header("Accept", "application/json, text/event-stream")
-                    .POST(HttpRequest.BodyPublishers.ofString(McpProtocol.MAPPER.writeValueAsString(message), StandardCharsets.UTF_8));
-            headers.forEach(builder::header);
-            if (sessionId != null) {
-                builder.header("Mcp-Session-Id", sessionId);
-            }
-            if (protocolVersion != null) {
-                builder.header("MCP-Protocol-Version", protocolVersion);
-            }
-            HttpResponse<String> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            response.headers().firstValue("Mcp-Session-Id").ifPresent(value -> sessionId = value);
-            int status = response.statusCode();
-            if (!expectBody) {
-                if (status >= 200 && status < 300) {
-                    return McpProtocol.MAPPER.createObjectNode();
+            byte[] payload = McpProtocol.MAPPER.writeValueAsString(message).getBytes(StandardCharsets.UTF_8);
+            try (SidecarForward.Call response = client.exchange("POST", endpoint, outboundHeaders(), payload, timeout)) {
+                String returned = response.header("Mcp-Session-Id");
+                if (!returned.isBlank()) {
+                    sessionId = returned;
                 }
-                throw new AgentException(ErrorCode.MCP, "mcp 通知失败", executionId, null);
+                int status = response.status();
+                if (!expectBody) {
+                    if (status >= 200 && status < 300) {
+                        return McpProtocol.MAPPER.createObjectNode();
+                    }
+                    throw new AgentException(ErrorCode.MCP, "mcp 通知失败", executionId, null);
+                }
+                if (status < 200 || status >= 300) {
+                    throw new AgentException(ErrorCode.MCP, "mcp 请求失败", executionId, null);
+                }
+                return readBody(response, id, executionId);
             }
-            if (status < 200 || status >= 300) {
-                throw new AgentException(ErrorCode.MCP, "mcp 请求失败", executionId, null);
-            }
-            return readBody(response, id, executionId);
         } catch (AgentException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -196,18 +195,61 @@ final class HttpMcpSession implements McpProtocol.Exchange, AutoCloseable {
     }
 
     /**
-     * 按内容类型把响应体读成报文，并核对响应编号。
-     * 事件流走事件解析，其它内容按单个 JSON 解析。编号存在但不一致时失败。
+     * 组装这一次请求的头。内容类型和接受类型先放上，调用方的头按原样追加，会话编号和协议版本放在最后。
      *
-     * @param response 已经收到的 HTTP 响应
+     * @return 可以交给出站客户端的头；没有额外头时仍含内容类型和接受类型
+     */
+    private Map<String, List<String>> outboundHeaders() {
+        Map<String, List<String>> outbound = new LinkedHashMap<>();
+        addHeader(outbound, "Content-Type", "application/json");
+        addHeader(outbound, "Accept", "application/json, text/event-stream");
+        headers.forEach((name, value) -> addHeader(outbound, name, value));
+        if (sessionId != null) {
+            addHeader(outbound, "Mcp-Session-Id", sessionId);
+        }
+        if (protocolVersion != null) {
+            addHeader(outbound, "MCP-Protocol-Version", protocolVersion);
+        }
+        return outbound;
+    }
+
+    /**
+     * 往出站头里追加一个值。空名字或空值不追加，避免把空白会话编号送出去。
+     *
+     * @param headers 正在组装的头
+     * @param name 头名字
+     * @param value 头的值
+     */
+    private static void addHeader(Map<String, List<String>> headers, String name, String value) {
+        if (name == null || name.isBlank() || value == null) {
+            return;
+        }
+        headers.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
+    }
+
+    /**
+     * 按内容类型把响应体读成报文，并核对响应编号。
+     * 事件流按行从正文流里读取，其它内容按单个 JSON 解析。编号存在但不一致时失败。拒绝 JSON 不当成工具结果。
+     *
+     * @param response 已经收到的出站响应，正文尚未读完
      * @param id 这次请求发出的编号
      * @param executionId 当前执行标识
      * @return 对上编号的响应报文
      */
-    private JsonNode readBody(HttpResponse<String> response, int id, String executionId) throws Exception {
-        String type = response.headers().firstValue("Content-Type").orElse("");
-        String body = response.body() == null ? "" : response.body();
-        JsonNode node = type.contains("text/event-stream") ? readEvent(body, id, executionId) : readJson(body, executionId);
+    private JsonNode readBody(SidecarForward.Call response, int id, String executionId) throws Exception {
+        String type = response.header("Content-Type");
+        if (type.contains("text/event-stream")) {
+            JsonNode node = readEvent(response.body(), id, executionId);
+            if (node.hasNonNull("id") && node.get("id").asInt() != id) {
+                throw new AgentException(ErrorCode.MCP, "mcp 响应编号不一致", executionId, null);
+            }
+            return node;
+        }
+        String body = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+        if (response.rejected(body)) {
+            throw new AgentException(ErrorCode.MCP, "mcp 请求失败", executionId, null);
+        }
+        JsonNode node = readJson(body, executionId);
         if (node.hasNonNull("id") && node.get("id").asInt() != id) {
             throw new AgentException(ErrorCode.MCP, "mcp 响应编号不一致", executionId, null);
         }
@@ -230,17 +272,19 @@ final class HttpMcpSession implements McpProtocol.Exchange, AutoCloseable {
 
     /**
      * 从事件流里挑出编号匹配、并且带结果或错误的那条报文。
-     * 以 data 开头的行拼成一个事件，空行结束该事件。找不到可用事件时失败。
+     * 按行读取，先到的块可以先拼进当前事件；空行结束该事件。流结束前会看完后续事件，保留最后一条可用报文。找不到时失败。
      *
-     * @param body 事件流正文
+     * @param body 事件流正文，按块到达
      * @param id 这次请求发出的编号
      * @param executionId 当前执行标识
      * @return 选中的响应报文
      */
-    private static JsonNode readEvent(String body, int id, String executionId) throws Exception {
+    private static JsonNode readEvent(InputStream body, int id, String executionId) throws Exception {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8));
         StringBuilder data = new StringBuilder();
         JsonNode matched = null;
-        for (String line : body.split("\n", -1)) {
+        String line;
+        while ((line = reader.readLine()) != null) {
             if (line.startsWith("data:")) {
                 String piece = line.substring(5).stripLeading();
                 if (!piece.isEmpty()) {

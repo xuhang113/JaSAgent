@@ -81,8 +81,25 @@ if grep -R -n -E 'readAllBytes|ofByteArray' "${repo}/jasagent-sidecar/src/main" 
   grep -R -n -E 'readAllBytes|ofByteArray' "${repo}/jasagent-sidecar/src/main" >&2
   exit 1
 fi
-if ! grep -R -n '/v1/forward' "${repo}/jasagent-llm/src/main" "${repo}/jasagent-app/src/main" >/dev/null; then
-  echo "agent 或大模型没有走 /v1/forward。" >&2
+if ! grep -R -n '/v1/forward' \
+  "${repo}/jasagent-llm/src/main" "${repo}/jasagent-app/src/main" \
+  "${repo}/jasagent-mcp/src/main" "${repo}/jasagent-plugin/src/main" >/dev/null; then
+  echo "agent、大模型、MCP 或外部工具没有走 /v1/forward。" >&2
+  exit 1
+fi
+# MCP 会话和外部链接必须复用同一份 /v1/forward 客户端，不能再自己拨公网。
+for egress_file in \
+  "${repo}/jasagent-mcp/src/main/java/dev/jasagent/mcp/HttpMcpSession.java" \
+  "${repo}/jasagent-plugin/src/main/java/dev/jasagent/plugin/HttpLinkFetcher.java"
+do
+  if ! grep -n '/v1/forward' "${egress_file}" >/dev/null || ! grep -n 'SidecarForward' "${egress_file}" >/dev/null; then
+    echo "MCP 或外部工具没有复用 sidecar 转发客户端：${egress_file}" >&2
+    exit 1
+  fi
+done
+route_defs="$(grep -R -l --include='*.java' 'final class EgressRoute' "${repo}" | wc -l | tr -d ' ')"
+if [[ "${route_defs}" != "1" ]]; then
+  echo "出站判断被复制了一份。" >&2
   exit 1
 fi
 if grep -R -n '/v1/forward' "${repo}/jasagent-app/src/main/java/dev/jasagent/app/nacos" >/dev/null; then
@@ -104,7 +121,9 @@ fi
 
 if grep -R -n -E 'BEGIN PRIVATE KEY|AKIA[0-9A-Z]{16}' \
   "${repo}/jasagent-sidecar/src/main" "${repo}/jasagent-llm/src/main/java/dev/jasagent/llm/egress" \
-  "${repo}/jasagent-app/src/main/java/dev/jasagent/app" "${repo}/scripts/start.sh" \
+  "${repo}/jasagent-app/src/main/java/dev/jasagent/app" \
+  "${repo}/jasagent-mcp/src/main" "${repo}/jasagent-plugin/src/main" \
+  "${repo}/scripts/start.sh" \
   "${repo}/scripts/stop.sh" "${repo}/scripts/common.sh" "${repo}/changelog/2026-11-15-sidecar-egress.md" \
   >/dev/null; then
   echo "仓库里出现了密钥材料。" >&2
@@ -118,9 +137,9 @@ if ! command -v mvn >/dev/null 2>&1; then
   echo "找不到 mvn。" >&2
   exit 1
 fi
-mvn -pl jasagent-sidecar,jasagent-llm,jasagent-app -am test \
+mvn -pl jasagent-sidecar,jasagent-llm,jasagent-app,jasagent-mcp,jasagent-plugin -am test \
   -Dsurefire.failIfNoSpecifiedTests=false \
-  -Dtest=SidecarEgressTest,SidecarHealthTest,SidecarContractTest,SidecarStreamTest,TicketWireTest,LlmAllowlistTest,LlmRouterTest,StreamingThinkingTest,ReasoningTextTest,ToolCallTextTest,EgressRouteTest,SidecarLlmTransportTest,LeavingClusterHttpTest,SessionModelCatalogTest,ReachableAddressTest,NacosRegistrationTest,NacosClientNamingTest,DefaultPortTest
+  -Dtest=SidecarEgressTest,SidecarHealthTest,SidecarContractTest,SidecarStreamTest,TicketWireTest,LlmAllowlistTest,LlmRouterTest,StreamingThinkingTest,ReasoningTextTest,ToolCallTextTest,EgressRouteTest,SidecarLlmTransportTest,LeavingClusterHttpTest,SessionModelCatalogTest,ReachableAddressTest,NacosRegistrationTest,NacosClientNamingTest,DefaultPortTest,HttpMcpSessionEgressTest,HttpLinkFetcherEgressTest,McpClientTest,PluginToolTest
 pass "模块测试"
 
 printf '018 TEST PASSED\n'

@@ -17,6 +17,11 @@
       <artifactId>jasagent-api</artifactId>
     </dependency>
     <dependency>
+      <groupId>dev.jasagent</groupId>
+      <artifactId>jasagent-llm</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
       <version>2.21.2</version>

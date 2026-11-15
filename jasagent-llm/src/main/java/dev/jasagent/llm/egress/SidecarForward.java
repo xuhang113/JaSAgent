@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -14,7 +15,7 @@ import java.util.Map;
 
 /**
  * 代理进程里的 HTTP。离开集群的请求改送到 sidecar 的 {@code /v1/forward}，正文和响应都按流传递。
- * 本集群和回环地址仍直连，不经过 sidecar。日志和异常不包含证明文、授权头或口令。
+ * 本集群和回环地址仍直连，不经过 sidecar。响应头留给调用方读取，本类不把它们、证明文或口令写进日志和异常。
  */
 public final class SidecarForward implements AutoCloseable {
     private final HttpClient direct;
@@ -53,7 +54,7 @@ public final class SidecarForward implements AutoCloseable {
      * @param headers 要带上的头，可以是空。走 sidecar 时原样交给它，由它决定哪些能到上游
      * @param body 正文；没有时为空数组
      * @param timeout 这次请求等到响应头的时间
-     * @return 状态和正文流
+     * @return 状态、响应头和正文流
      * @throws IOException 连接失败时抛出，消息不含正文和密钥
      * @throws InterruptedException 等待被中断时抛出，并恢复中断标记
      */
@@ -83,7 +84,7 @@ public final class SidecarForward implements AutoCloseable {
         try {
             HttpResponse<InputStream> response = (viaSidecar ? sidecar : direct)
                     .send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
-            return new Call(response.statusCode(), response.body(), viaSidecar);
+            return new Call(response.statusCode(), response.headers(), response.body(), viaSidecar);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw ex;
@@ -141,22 +142,26 @@ public final class SidecarForward implements AutoCloseable {
     }
 
     /**
-     * 一次出站的状态和正文流。走了 sidecar 时，短 JSON 里的 {@code admitted:false} 表示没有到达上游。
+     * 一次出站的状态、响应头和正文流。走了 sidecar 时，短 JSON 里的 {@code admitted:false} 表示没有到达上游。
+     * 响应头只给调用方读取，不写入日志。
      */
     public static final class Call implements AutoCloseable {
         private final int status;
+        private final Map<String, List<String>> headers;
         private final InputStream body;
         private final boolean viaSidecar;
 
         /**
-         * 记住状态、正文流，以及这次有没有经过 sidecar。
+         * 记住状态、响应头、正文流，以及这次有没有经过 sidecar。
          *
          * @param status HTTP 状态码
+         * @param headers 响应头，空引用会收成空头
          * @param body 响应流，不会是空引用
          * @param viaSidecar 请求发往 sidecar 时为真
          */
-        private Call(int status, InputStream body, boolean viaSidecar) {
+        private Call(int status, HttpHeaders headers, InputStream body, boolean viaSidecar) {
             this.status = status;
+            this.headers = headers == null ? Map.of() : headers.map();
             this.body = body == null ? InputStream.nullInputStream() : body;
             this.viaSidecar = viaSidecar;
         }
@@ -168,6 +173,29 @@ public final class SidecarForward implements AutoCloseable {
          */
         public int status() {
             return status;
+        }
+
+        /**
+         * 读取响应头的第一个值。名字不区分大小写。没有这个头时为空串，不把值写进日志。
+         *
+         * @param name 头的名字，例如内容类型或 MCP 会话编号
+         * @return 第一个值；没有或名字为空时为空串
+         */
+        public String header(String name) {
+            if (name == null || name.isBlank() || headers.isEmpty()) {
+                return "";
+            }
+            for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+                if (entry.getKey() == null || !name.equalsIgnoreCase(entry.getKey()) || entry.getValue() == null) {
+                    continue;
+                }
+                for (String value : entry.getValue()) {
+                    if (value != null) {
+                        return value;
+                    }
+                }
+            }
+            return "";
         }
 
         /**
