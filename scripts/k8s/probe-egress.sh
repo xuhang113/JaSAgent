@@ -2,14 +2,15 @@
 # 对已经部署的 jasagent 命名空间做真实探测。失败就退出非零，不把失败写成通过。
 # 不打印口令、内部令牌、模型密钥或通行证正文。
 # agent 相关项按当时从 Nacos 发现到的实例验收，不再写死 jasagent-agent-0 / jasagent-agent-1。
-# 现有的 egress 与 gVisor 检查范围不缩小。
+# /v1/forward 探测走发现到的 agent Pod 本机回环 sidecar（127.0.0.1:18761），不打已删除的 sidecar Service。
+# gvisor-sidecar 检查的是 agent Pod 里的 sidecar 容器。现有的 egress 与 gVisor 检查范围不缩小。
 set -euo pipefail
 
 NS=jasagent
 FAIL=0
 TICKET_TOOL="${JASAGENT_TICKET_TOOL:-net.egress}"
 TICKET_TARGET="${JASAGENT_TICKET_TARGET:-https://example.com/}"
-SIDECAR_URL="${JASAGENT_SIDECAR_URL:-http://jasagent-sidecar.jasagent.svc.cluster.local:8080}"
+SIDECAR_URL="${JASAGENT_SIDECAR_URL:-http://127.0.0.1:18761}"
 # 发现结果缓存：每行 "ip port pod"
 DISCOVERED_FILE=""
 
@@ -139,12 +140,13 @@ show_addresses() {
     "gateway=http://jasagent-gateway.jasagent.svc.cluster.local:18721" \
     "nacos=http://jasagent-nacos.jasagent.svc.cluster.local:8848" \
     "agentpass=http://jasagent-agentpass.jasagent.svc.cluster.local:18741" \
-    "sidecar=http://jasagent-sidecar.jasagent.svc.cluster.local:8080" \
+    "sidecar=http://127.0.0.1:18761 (agent pod loopback)" \
     "mysql=jasagent-mysql.jasagent.svc.cluster.local:3306" \
     "redis=jasagent-redis.jasagent.svc.cluster.local:6379"
   if [[ -f "${DISCOVERED_FILE}" ]]; then
     while read -r ip port pod; do
       printf 'discovered-agent=%s %s:%s\n' "${pod}" "${ip}" "${port}"
+      printf 'sidecar-in-pod=%s http://127.0.0.1:18761\n' "${pod}"
     done < "${DISCOVERED_FILE}"
   fi
 }
@@ -257,6 +259,23 @@ fi
 echo "direct-blocked"
 exit 0
 EOF
+  # 额外观察同 Pod sidecar 是否还能出站，避免本机兜底仍按 Pod IP 误伤 sidecar。
+  # 本项是否通过仍只看 agent 进程被拦住。
+  kubectl -n "${NS}" exec -i "${pod}" -c sidecar -- bash -s <<'EOF' || true
+set -eu
+ip="$(getent ahostsv4 example.com | awk '{print $1; exit}')"
+if [ -z "${ip}" ]; then
+  echo "sidecar-no-ipv4"
+  exit 0
+fi
+echo "sidecar-resolved=${ip}"
+if timeout 5 bash -c "echo >/dev/tcp/${ip}/443"; then
+  echo "sidecar-open"
+  exit 0
+fi
+echo "sidecar-blocked"
+exit 0
+EOF
 }
 
 forward_via_sidecar() {
@@ -321,8 +340,10 @@ gateway_pod() {
   kubectl -n "${NS}" get pod -l app.kubernetes.io/component=gateway -o jsonpath='{.items[0].metadata.name}'
 }
 
+# sidecar 已放入 agent Pod，不再有独立的 component=sidecar 工作负载。
+# 检查发现到的 agent Pod 里的 sidecar 容器。
 sidecar_pod() {
-  kubectl -n "${NS}" get pod -l app.kubernetes.io/component=sidecar -o jsonpath='{.items[0].metadata.name}'
+  first_agent_pod
 }
 
 nacos_pod() {

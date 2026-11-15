@@ -1,4 +1,8 @@
-# 业务 Pod 的出站。agent 不能直接访问外网，外部请求只能先到 sidecar。
+# 业务 Pod 的出站。sidecar 已放入每个 agent Pod，同一网络命名空间共享策略。
+# agent Pod 可出站到 DNS、Nacos、MySQL、Redis、agentpass、otel，以及公网 80/443（排除 RFC1918），
+# 供同 Pod 里的 sidecar 转发离开集群的 HTTP。agent 进程本身不能直连外网，由本机 cgroup 级兜底执行。
+# 原先按 component=sidecar 选择独立 Pod 的 jasagent-sidecar-egress 已去掉，规则合并到本策略。
+# 本机 k3s 因缺少 IP_SET 会跳过 NetworkPolicy 控制器，清单仍会写入 API。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -24,14 +28,6 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: jasagent
-              app.kubernetes.io/component: sidecar
-      ports:
-        - protocol: TCP
-          port: 8080
     - to:
         - podSelector:
             matchLabels:
@@ -74,48 +70,6 @@ spec:
           port: 8848
         - protocol: TCP
           port: 9848
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: jasagent-sidecar-egress
-  namespace: jasagent
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: jasagent
-      app.kubernetes.io/component: sidecar
-  policyTypes:
-    - Egress
-  egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: jasagent
-              app.kubernetes.io/component: agentpass
-      ports:
-        - protocol: TCP
-          port: 18741
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: jasagent
-              app.kubernetes.io/component: otel-collector
-      ports:
-        - protocol: TCP
-          port: 4318
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

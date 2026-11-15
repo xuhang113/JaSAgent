@@ -61,7 +61,6 @@ JASAGENT_EARLY_WAITS=(
 JASAGENT_LATE_MANIFESTS=(
   networkpolicy.yaml
   agentpass.yaml
-  sidecar.yaml
   agent.yaml
   gateway.yaml
   web.yaml
@@ -73,7 +72,6 @@ JASAGENT_LATE_MANIFESTS=(
 # 业务工作负载的滚动等待。web、grafana、otel-collector、prometheus 和 rag 都在里面。
 JASAGENT_LATE_WAITS=(
   "deployment/jasagent-agentpass|420s"
-  "deployment/jasagent-sidecar|420s"
   "statefulset/jasagent-agent|420s"
   "deployment/jasagent-gateway|420s"
   "deployment/jasagent-web|420s"
@@ -89,7 +87,6 @@ JASAGENT_RESTART_TARGETS=(
   statefulset/jasagent-agent
   deployment/jasagent-gateway
   deployment/jasagent-agentpass
-  deployment/jasagent-sidecar
   deployment/jasagent-web
   deployment/jasagent-otel-collector
   deployment/jasagent-prometheus
@@ -920,7 +917,7 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: jasagent
-      app.kubernetes.io/component: sidecar
+      app.kubernetes.io/component: agent
   policyTypes:
     - Egress
   egress:
@@ -942,11 +939,22 @@ spec:
           hostnames:
             - ${effective}
 EOF
-    kctl -n "${NS}" patch deployment jasagent-sidecar --type merge --patch-file "${meta}/alias.yaml" >/dev/null
+    kctl -n "${NS}" patch statefulset jasagent-agent --type merge --patch-file "${meta}/alias.yaml" >/dev/null
   fi
   rm -rf "${meta}"
   SIDECAR_PROXY_PATCHED=1
   say "sidecar 已改用当前机器上配置的代理。凭据未写入仓库。"
+}
+
+
+# 在本机编译并安装 agent 进程级出站过滤库，供 agent Pod 的 hostPath 挂载。
+# 这台云电脑没有 xt_owner，也不能按 Pod IP / 共享 sandbox cgroup 丢弃出站。
+install_egress_filter() {
+  local script="${SCRIPT_ROOT}/scripts/k8s/install-egress-filter.sh"
+  if [[ -x "${script}" ]]; then
+    say "安装 agent 进程级出站过滤库。"
+    bash "${script}"
+  fi
 }
 
 # 确认集群库 jasagent 存在。口令只在数据库容器里使用，不打印。
@@ -959,6 +967,15 @@ ensure_jasagent_database() {
     mysql --defaults-extra-file=/tmp/jasagent-client.cnf -h 127.0.0.1 --protocol=TCP -e "CREATE DATABASE IF NOT EXISTS jasagent CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
     rm -f /tmp/jasagent-client.cnf
   '
+}
+
+
+# 共享 sidecar Deployment 改为每 Pod 容器后，kubectl apply 不会删掉遗留对象。
+remove_legacy_shared_sidecar() {
+  say "删除遗留的共享 sidecar Deployment 和 Service。"
+  kctl -n "${NS}" delete deployment jasagent-sidecar --ignore-not-found=true
+  kctl -n "${NS}" delete service jasagent-sidecar --ignore-not-found=true
+  kctl -n "${NS}" delete networkpolicy jasagent-sidecar-egress --ignore-not-found=true
 }
 
 # apply 一份清单。文件不存在时以非 0 退出。
@@ -1004,8 +1021,9 @@ apply_stack() {
     apply_manifest "${name}"
   done
   configure_sidecar_proxy
+  remove_legacy_shared_sidecar
   if [[ "${SIDECAR_PROXY_PATCHED}" == "1" ]]; then
-    existed+=("deployment/jasagent-sidecar")
+    existed+=("statefulset/jasagent-agent")
   fi
   if [[ "${#existed[@]}" -gt 0 ]]; then
     for target in "${existed[@]}"; do
@@ -1016,6 +1034,51 @@ apply_stack() {
   for item in "${JASAGENT_LATE_WAITS[@]}"; do
     wait_rollout_item "${item}"
   done
+}
+
+
+
+# 等到 jasagent 命名空间里已有 Pod 都就绪，避免滚动时旧副本还在导致官方探测 pods-ready 失败。
+wait_namespace_ready() {
+  local deadline=$((SECONDS + 300))
+  local bad line ready running
+  say "等待命名空间 ${NS} 中的 Pod 全部就绪。"
+  while (( SECONDS < deadline )); do
+    bad=0
+    while IFS= read -r line; do
+      [[ -n "${line}" ]] || continue
+      ready="$(printf '%s\n' "${line}" | awk '{print $2}')"
+      running="$(printf '%s\n' "${line}" | awk '{print $3}')"
+      if [[ "${running}" != "Running" || "${ready%%/*}" != "${ready##*/}" ]]; then
+        bad=1
+      fi
+    done < <(kctl -n "${NS}" get pods --no-headers)
+    if [[ "${bad}" -eq 0 ]]; then
+      kctl -n "${NS}" get pods --no-headers
+      return 0
+    fi
+    sleep 5
+  done
+  say "等待 Pod 就绪超时。" >&2
+  kctl -n "${NS}" get pods -o wide || true
+  return 1
+}
+
+# 这台云电脑上 k3s 因缺少 IP_SET 会跳过 NetworkPolicy 控制器。
+# 若本机存在出站兜底脚本，探测前刷新：放行 cni0，并确认已去掉按 Pod IP 丢弃的 nft 表。
+# agent 进程直连外网由 agent 容器的 LD_PRELOAD 过滤库拦住，不是 cgroup BPF。
+# 脚本不在仓库里时跳过，不把本机路径写成必须步骤。
+refresh_box_egress_helper() {
+  local allow="${JASAGENT_ALLOW_CNI:-/home/box/bin/jasagent-allow-cni-forward.sh}"
+  local helper="${JASAGENT_ENFORCE_EGRESS:-/home/box/bin/jasagent-enforce-agent-egress.sh}"
+  if [[ -x "${allow}" ]]; then
+    say "刷新本机 cni0 FORWARD 放行（云电脑兜底）。"
+    as_root "${allow}" || true
+  fi
+  if [[ -x "${helper}" ]]; then
+    say "刷新本机 agent 出站兜底（进程级 LD_PRELOAD，不是按 Pod IP 丢弃）。"
+    as_root "${helper}" || true
+  fi
 }
 
 # 部署失败时打印 Pod 和事件，不打印 Secret 内容。
@@ -1032,6 +1095,7 @@ main() {
   resolve_java21
   ensure_cluster
   require_manifests
+  install_egress_filter
   package_jars
   prepare_image_base
   need docker
@@ -1054,6 +1118,8 @@ main() {
     say "找不到探测脚本。" >&2
     exit 1
   fi
+  wait_namespace_ready
+  refresh_box_egress_helper
   if ! bash "${JASAGENT_PROBE_SCRIPT}"; then
     dump_fail
     exit 1
@@ -1069,10 +1135,10 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
       ;;
     --configure-proxy)
       ensure_cluster
-      apply_manifest sidecar.yaml
+      apply_manifest agent.yaml
       configure_sidecar_proxy
-      kctl -n "${NS}" rollout restart deployment/jasagent-sidecar
-      kctl -n "${NS}" rollout status deployment/jasagent-sidecar --timeout=240s
+      kctl -n "${NS}" rollout restart statefulset/jasagent-agent
+      kctl -n "${NS}" rollout status statefulset/jasagent-agent --timeout=240s
       exit 0
       ;;
     "")

@@ -1,7 +1,12 @@
 # agent 运行时。容器端口 8080，向 Nacos 注册 Pod IP，由 HPA 按进行中的会话扩缩容。
 # 副本不再钉死为不可扩缩的两台：HPA 最小 2、最大 10。主指标是 jasagent_sessions_active，CPU 只作补充。
 # 不再提供把 jasagent-agent-0 / jasagent-agent-1 钉在 18731 / 18732 的 Service，网关只从 Nacos 发现实例。
-# 直接出网被网络策略拦住。外部请求走 jasagent-sidecar 的 /v1/forward。RuntimeClass 是 gvisor。
+# 每个 agent Pod 带一个 sidecar 容器，监听 0.0.0.0:18761（覆盖镜像默认的 8080，避免和 agent 抢端口）。
+# agent 经本机回环 http://127.0.0.1:18761 访问 /v1/forward；离开集群的 HTTP 走 sidecar，集群内仍直连。
+# sidecar 以 UID 10002 运行，便于同一网络命名空间内与 agent（UID 10001）区分出站。
+# 直接出网由 agent 容器的 LD_PRELOAD 进程级过滤拦住；sidecar 不加载该库，可以代表它出站。
+# 本机内核没有 xt_owner，gVisor 同 Pod 还共用 hostinet sandbox（插座在宿主机上显示为 UID 0），
+# 不能再用按 Pod IP 或 sandbox cgroup 的兜底，否则会误伤 sidecar。RuntimeClass 是 gvisor。
 apiVersion: v1
 kind: Service
 metadata:
@@ -103,6 +108,10 @@ spec:
                 secretKeyRef:
                   name: jasagent-internal
                   key: token
+            - name: JASAGENT_SIDECAR_URL
+              value: "http://127.0.0.1:18761"
+            - name: LD_PRELOAD
+              value: /opt/jasagent/libjasagent-egress-filter.so
             - name: XAI_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -149,6 +158,62 @@ spec:
               mountPath: /var/lib/jasagent/.config/urag-mysql-root.password
               subPath: urag-mysql-root.password
               readOnly: true
+            # 本机进程级出站过滤：只拦 agent 进程直连外网，不影响同 Pod sidecar。
+            - name: egress-filter
+              mountPath: /opt/jasagent/libjasagent-egress-filter.so
+              readOnly: true
+        # sidecar 与 agent 同 Pod、同网络命名空间，随 StatefulSet / HPA 一起扩缩。
+        # 镜像入口默认 --server.port=8080，这里只在 Pod 里覆盖为 18761，不改镜像和 Java。
+        # 探针对 Pod IP 访问 /health，所以必须绑 0.0.0.0 而不是只绑 127.0.0.1。
+        - name: sidecar
+          image: jasagent-sidecar:0.1.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /opt/java/bin/java
+            - -XX:MaxRAMPercentage=60
+            - -jar
+            - /opt/jasagent/jasagent-sidecar.jar
+            - --server.address=0.0.0.0
+            - --server.port=18761
+          ports:
+            - name: sidecar
+              containerPort: 18761
+          env:
+            - name: JASAGENT_AGENTPASS_BASE_URL
+              value: http://jasagent-agentpass.jasagent.svc.cluster.local:18741
+            - name: JAVA_TOOL_OPTIONS
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-proxy
+                  key: java-tool-options
+                  optional: true
+          startupProbe:
+            httpGet:
+              path: /health
+              port: sidecar
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: sidecar
+            periodSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10002
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: sidecar-home
+              mountPath: /var/lib/jasagent
+            - name: sidecar-tmp
+              mountPath: /tmp
       volumes:
         - name: home
           emptyDir: {}
@@ -161,6 +226,14 @@ spec:
             items:
               - key: password
                 path: urag-mysql-root.password
+        - name: sidecar-home
+          emptyDir: {}
+        - name: sidecar-tmp
+          emptyDir: {}
+        - name: egress-filter
+          hostPath:
+            path: /home/box/lib/libjasagent-egress-filter.so
+            type: File
 ---
 # HPA 管理副本。主指标是进行中的会话，CPU 只作补充，不能当作唯一依据。
 apiVersion: autoscaling/v2
