@@ -82,6 +82,12 @@ JASAGENT_LATE_WAITS=(
   "deployment/jasagent-metrics-adapter|300s"
 )
 
+# 公网入口：Ingress-nginx 与只转到网关的 Ingress。镜像拉取走 each_manifest，apply 在业务就绪之后。
+JASAGENT_INGRESS_MANIFESTS=(
+  ingress-nginx.yaml
+  ingress-gateway.yaml
+)
+
 # 镜像标签不变时，这些已经存在的工作负载需要滚动重启才会用上新导入的镜像。
 JASAGENT_RESTART_TARGETS=(
   statefulset/jasagent-agent
@@ -536,7 +542,7 @@ build_sidecar() {
 # 清单里的这些镜像由本仓库在当前机器上构建。其余镜像改为拉取。
 image_is_local() {
   case "$1" in
-    jasagent-agent:*|jasagent-gateway:*|jasagent-agentpass:*|jasagent-web:*|jasagent-rag:*|jasagent-sidecar:*)
+    jasagent-agent:*|jasagent-gateway:*|jasagent-agentpass:*|jasagent-web:*|jasagent-rag:*|jasagent-sidecar:*|jasagent-ingress-nginx:*)
       return 0
       ;;
     *)
@@ -546,6 +552,18 @@ image_is_local() {
 }
 
 # 按清单里的镜像名在当前机器上构建。只接受 image_is_local 认过的名字。
+# 构建去掉文件 capabilities 的 Ingress-nginx 控制器镜像，以便在 gVisor 里启动。
+build_ingress_nginx() {
+  local image="$1"
+  local dockerfile="${SCRIPT_ROOT}/deploy/k8s/ingress-nginx.Dockerfile"
+  if [[ ! -f "${dockerfile}" ]]; then
+    say "找不到 Ingress-nginx Dockerfile：${dockerfile}" >&2
+    exit 1
+  fi
+  say "构建 ${image}（去掉文件 capabilities，供 gVisor 使用）。"
+  DOCKER_BUILDKIT=0 docker build -t "${image}" -f "${dockerfile}" "${SCRIPT_ROOT}/deploy/k8s"
+}
+
 build_known_image() {
   local image="$1"
   local jar=""
@@ -578,6 +596,9 @@ build_known_image() {
     jasagent-sidecar:*)
       build_sidecar "${image}"
       ;;
+    jasagent-ingress-nginx:*)
+      build_ingress_nginx "${image}"
+      ;;
     *)
       say "不会在本机构建：${image}" >&2
       exit 1
@@ -594,7 +615,7 @@ manifest_images() {
 # 按 apply 顺序遍历清单名。
 each_manifest() {
   local name
-  for name in "${JASAGENT_EARLY_MANIFESTS[@]}" "${JASAGENT_LATE_MANIFESTS[@]}"; do
+  for name in "${JASAGENT_EARLY_MANIFESTS[@]}" "${JASAGENT_LATE_MANIFESTS[@]}" "${JASAGENT_INGRESS_MANIFESTS[@]}"; do
     printf '%s\n' "${name}"
   done
 }
@@ -682,7 +703,7 @@ import_images_from_manifests() {
       esac
       seen="${seen}${image} "
       case "${image}" in
-        jasagent-agent:*|jasagent-gateway:*|jasagent-agentpass:*|jasagent-web:*|jasagent-rag:*|jasagent-sidecar:*)
+        jasagent-agent:*|jasagent-gateway:*|jasagent-agentpass:*|jasagent-web:*|jasagent-rag:*|jasagent-sidecar:*|jasagent-ingress-nginx:*)
           if ! docker image inspect "${image}" >/dev/null 2>&1; then
             say "清单依赖的镜像还没有在本机构建：${image}" >&2
             exit 1
@@ -979,6 +1000,111 @@ remove_legacy_shared_sidecar() {
 }
 
 # apply 一份清单。文件不存在时以非 0 退出。
+
+# 把 Ingress-nginx 这一跳的实际地址写成网关受信任转发名单。
+# 只收 Ingress 控制器 Pod IP，或探测到的实际对端；拒绝 0.0.0.0/0、::/0 以及前缀为 0 的网段。
+is_unrestricted_cidr() {
+  local item="$1"
+  case "${item}" in
+    0.0.0.0|0.0.0.0/0|::|::/0|0.0.0.0/0,*|*,0.0.0.0/0) return 0 ;;
+  esac
+  if [[ "${item}" =~ ^[0-9.]+/0$ || "${item}" =~ ^[^,]+/0$ ]]; then
+    return 0
+  fi
+  return 1
+}
+
+# 规范化成逗号分隔的 IP/前缀，并拒绝全网信任。
+normalize_trusted_cidrs() {
+  local raw="$1"
+  local item out=""
+  IFS=',' read -r -a parts <<< "${raw}"
+  for item in "${parts[@]}"; do
+    item="$(printf '%s' "${item}" | awk '{$1=$1; print}')"
+    [[ -n "${item}" ]] || continue
+    if is_unrestricted_cidr "${item}"; then
+      say "JASAGENT_GATEWAY_FORWARDED_TRUSTED 不能设成 ${item}。" >&2
+      return 1
+    fi
+    if [[ "${item}" =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then
+      item="${item}/32"
+    elif [[ "${item}" =~ ^[0-9a-fA-F:]+$ && "${item}" == *:* && "${item}" != */* ]]; then
+      item="${item}/128"
+    fi
+    if [[ -n "${out}" ]]; then
+      out="${out},${item}"
+    else
+      out="${item}"
+    fi
+  done
+  if [[ -z "${out}" ]]; then
+    say "没有可用的 Ingress 对端地址，不能写入受信任转发名单。" >&2
+    return 1
+  fi
+  if is_unrestricted_cidr "${out}"; then
+    say "JASAGENT_GATEWAY_FORWARDED_TRUSTED 不能设成 ${out}。" >&2
+    return 1
+  fi
+  printf '%s\n' "${out}"
+}
+
+# 读出 Ingress-nginx 控制器 Pod IP。
+ingress_controller_pod_ips() {
+  kctl -n ingress-nginx get pods \
+    -l app.kubernetes.io/name=ingress-nginx,app.kubernetes.io/component=controller \
+    -o jsonpath='{range .items[*]}{.status.podIP}{"\n"}{end}'
+}
+
+# 把受信任转发名单写入 jasagent 命名空间的 ConfigMap，必要时重启网关。
+write_forwarded_trusted() {
+  local trusted="$1"
+  trusted="$(normalize_trusted_cidrs "${trusted}")" || return 1
+  local current=""
+  current="$(kctl -n "${NS}" get configmap jasagent-gateway-forwarded -o jsonpath='{.data.trusted}' 2>/dev/null || true)"
+  kctl -n "${NS}" create configmap jasagent-gateway-forwarded \
+    --from-literal=trusted="${trusted}" \
+    --dry-run=client -o yaml | kctl apply -f - >/dev/null
+  say "已写入 jasagent-gateway-forwarded：Ingress 这一跳 ${trusted}"
+  if [[ "${current}" != "${trusted}" ]]; then
+    say "受信任转发名单有变化，滚动网关。"
+    kctl -n "${NS}" rollout restart deployment/jasagent-gateway
+    kctl -n "${NS}" rollout status deployment/jasagent-gateway --timeout=180s
+  fi
+}
+
+# 业务就绪后安装 Ingress-nginx，再挂上只到网关的 Ingress，并写入受信任转发名单。
+apply_ingress_stack() {
+  local name
+  for name in "${JASAGENT_INGRESS_MANIFESTS[@]}"; do
+    apply_manifest "${name}"
+  done
+  say "等待 ingress-nginx-controller 滚动完成。"
+  kctl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=300s
+  local ips="" ip
+  local n=0
+  while [[ "${n}" -lt 30 ]]; do
+    ips=""
+    while IFS= read -r ip; do
+      [[ -n "${ip}" ]] || continue
+      if [[ -n "${ips}" ]]; then
+        ips="${ips},${ip}"
+      else
+        ips="${ip}"
+      fi
+    done < <(ingress_controller_pod_ips)
+    if [[ -n "${ips}" ]]; then
+      break
+    fi
+    n=$((n + 1))
+    sleep 2
+  done
+  if [[ -z "${ips}" ]]; then
+    say "Ingress-nginx 没有拿到 Pod IP。" >&2
+    return 1
+  fi
+  write_forwarded_trusted "${ips}"
+}
+
 apply_manifest() {
   local name="$1"
   local path="${SCRIPT_ROOT}/deploy/k8s/${name}"
@@ -1034,6 +1160,7 @@ apply_stack() {
   for item in "${JASAGENT_LATE_WAITS[@]}"; do
     wait_rollout_item "${item}"
   done
+  apply_ingress_stack
 }
 
 

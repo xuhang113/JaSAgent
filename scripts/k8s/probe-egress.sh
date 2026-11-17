@@ -3,7 +3,7 @@
 # 不打印口令、内部令牌、模型密钥或通行证正文。
 # agent 相关项按当时从 Nacos 发现到的实例验收，不再写死 jasagent-agent-0 / jasagent-agent-1。
 # /v1/forward 探测走发现到的 agent Pod 本机回环 sidecar（127.0.0.1:18761），不打已删除的 sidecar Service。
-# gvisor-sidecar 检查的是 agent Pod 里的 sidecar 容器。现有的 egress 与 gVisor 检查范围不缩小。
+# gvisor-sidecar 检查的是 agent Pod 里的 sidecar 容器。现有的 egress 与 gVisor 检查范围不缩小。另增 Ingress-nginx（无 hostNetwork、gVisor、只转到网关）检查，不依赖 Funnel 是否已登录。
 set -euo pipefail
 
 NS=jasagent
@@ -430,6 +430,119 @@ redis_discovered() {
   [[ "${bad}" -eq 0 ]]
 }
 
+
+# Ingress-nginx 控制器 Pod。没有时输出空字符串。
+ingress_controller_pod() {
+  kubectl -n ingress-nginx get pods -l app.kubernetes.io/name=ingress-nginx,app.kubernetes.io/component=controller -o jsonpath='{.items[0].metadata.name}'
+}
+
+# 控制器不得使用 hostNetwork，必须纳入 gVisor。
+ingress_nginx_runtime() {
+  local pod runtime hostnet
+  pod="$(ingress_controller_pod)"
+  if [[ -z "${pod}" ]]; then
+    printf 'ingress-nginx-missing\n'
+    return 1
+  fi
+  runtime="$(kubectl -n ingress-nginx get pod "${pod}" -o jsonpath='{.spec.runtimeClassName}')"
+  hostnet="$(kubectl -n ingress-nginx get pod "${pod}" -o jsonpath='{.spec.hostNetwork}')"
+  printf 'ingress-nginx %s runtime=%s hostNetwork=%s\n' "${pod}" "${runtime}" "${hostnet:-false}"
+  if [[ "${hostnet}" == "true" ]]; then
+    return 1
+  fi
+  if [[ "${runtime}" != "gvisor" ]]; then
+    return 1
+  fi
+  gvisor_proc_ns ingress-nginx "${pod}" controller
+}
+
+# 与 gvisor_proc 相同，但命名空间可指定。
+gvisor_proc_ns() {
+  local ns="$1"
+  local pod="$2"
+  local container="$3"
+  local ver
+  if [[ -z "${pod}" ]]; then
+    return 1
+  fi
+  ver="$(kubectl -n "${ns}" exec "${pod}" -c "${container}" -- cat /proc/version 2>/dev/null || true)"
+  printf '%s %s %s %s\n' "${ns}" "${pod}" "${container}" "${ver}"
+  case "${ver}" in
+    *gvisor*|*gVisor*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# 公网 Ingress 只能转到 jasagent-gateway:18721。
+ingress_only_gateway() {
+  local bad=0
+  local out
+  if ! kubectl -n "${NS}" get ingress jasagent-gateway >/dev/null 2>&1; then
+    printf 'ingress-missing\n'
+    return 1
+  fi
+  out="$(kubectl -n "${NS}" get ingress jasagent-gateway -o jsonpath='{range .spec.rules[*].http.paths[*]}{.backend.service.name}:{.backend.service.port.number}{"\n"}{end}')"
+  printf '%s\n' "${out}"
+  if [[ -z "${out}" ]]; then
+    return 1
+  fi
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] || continue
+    if [[ "${line}" != "jasagent-gateway:18721" ]]; then
+      printf 'unexpected-backend %s\n' "${line}"
+      bad=1
+    fi
+  done <<< "${out}"
+  [[ "${bad}" -eq 0 ]]
+}
+
+# 受信任转发名单必须存在，且不是全网信任。
+forwarded_trusted_ingress_only() {
+  local trusted
+  trusted="$(kubectl -n "${NS}" get configmap jasagent-gateway-forwarded -o jsonpath='{.data.trusted}' 2>/dev/null || true)"
+  printf 'trusted=%s\n' "${trusted}"
+  if [[ -z "${trusted}" ]]; then
+    return 1
+  fi
+  case ",${trusted}," in
+    *,0.0.0.0,*|*,0.0.0.0/0,*|*,::,*|*,::/0,*) return 1 ;;
+  esac
+  if printf '%s\n' "${trusted}" | grep -E '(^|,)[^,/]+/0(,|$)' >/dev/null; then
+    return 1
+  fi
+  # 只接受明确的这一跳地址或小网段，不能是全网或整个集群默认 Pod CIDR。
+  local item prefix
+  IFS=',' read -r -a parts <<< "${trusted}"
+  for item in "${parts[@]}"; do
+    item="$(printf '%s' "${item}" | awk '{$1=$1; print}')"
+    [[ -n "${item}" ]] || continue
+    prefix="${item##*/}"
+    if [[ "${item}" == *:* ]]; then
+      if [[ "${item}" != */* || "${prefix}" -lt 64 ]]; then
+        printf 'trusted-too-broad %s\n' "${item}"
+        return 1
+      fi
+    else
+      if [[ "${item}" != */* || "${prefix}" -lt 24 ]]; then
+        printf 'trusted-too-broad %s\n' "${item}"
+        return 1
+      fi
+    fi
+  done
+  kubectl -n ingress-nginx get pods -l app.kubernetes.io/name=ingress-nginx,app.kubernetes.io/component=controller -o jsonpath='{range .items[*]}{.status.podIP}{"\n"}{end}'
+  return 0
+}
+
+# 网关仍是单副本，web 上游仍是集群内地址。
+gateway_single_replica_and_web_origin() {
+  local replicas ready origin
+  replicas="$(kubectl -n "${NS}" get deploy jasagent-gateway -o jsonpath='{.spec.replicas}')"
+  ready="$(kubectl -n "${NS}" get deploy jasagent-gateway -o jsonpath='{.status.readyReplicas}')"
+  origin="$(kubectl -n "${NS}" get deploy jasagent-gateway -o jsonpath='{range .spec.template.spec.containers[?(@.name=="gateway")].env[*]}{.name}={.value}{"\n"}{end}' | awk -F= '$1=="JASAGENT_GATEWAY_WEB_ORIGIN"{print $2}')"
+  printf 'replicas=%s ready=%s origin=%s\n' "${replicas}" "${ready}" "${origin}"
+  [[ "${replicas}" == "1" && "${ready}" == "1" && "${origin}" == "http://jasagent-web.jasagent.svc.cluster.local:18722" ]]
+}
+
 main() {
   DISCOVERED_FILE="$(mktemp)"
   trap 'rm -f "${DISCOVERED_FILE}"' EXIT
@@ -465,6 +578,10 @@ main() {
   fi
   run_test external-with-ticket forward_via_sidecar "${TICKET_TARGET}" forwarded-ticket
   kubectl -n "${NS}" exec "$(first_agent_pod)" -c agent -- rm -f /tmp/jasagent-ticket >/dev/null 2>&1 || true
+  run_test ingress-nginx-runtime ingress_nginx_runtime
+  run_test ingress-only-gateway ingress_only_gateway
+  run_test forwarded-trusted-ingress-only forwarded_trusted_ingress_only
+  run_test gateway-single-replica-web-origin gateway_single_replica_and_web_origin
   if [[ "${FAIL}" -ne 0 ]]; then
     printf 'PROBE FAILED\n'
     exit 1

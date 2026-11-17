@@ -1,0 +1,32 @@
+# 公网入口只转到 jasagent-gateway:18721。
+# 不写死某个 *.ts.net 主机名，避免 Funnel 主机名变化后还要改清单；任意 Host 都只到网关。
+# 不把 jasagent-web、Nacos、MySQL、Redis、agent 或其它非网关组件挂到这条 Ingress。
+# 关闭缓冲并拉长读超时，控制台 EventSource 经此入口可用。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jasagent-gateway
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: gateway
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jasagent-gateway
+                port:
+                  number: 18721
