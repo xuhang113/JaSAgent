@@ -30,10 +30,15 @@ import java.util.Map;
  * 在网关的表单过滤器改写正文之前，把登录表单收成可重复读取的参数。
  * 网关自带的表单过滤器会先读参数再换一层请求。登录接口如果赶在正文被读掉之后才取参数，登录名和口令都会是空的。
  * 这个过滤器只处理 POST /login，不记录口令。
+ * 它晚于转发头过滤器，仍早于 Spring 自带的表单过滤器，避免正文被提前读掉。
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
-public class LoginFormFilter extends OncePerRequestFilter {
+@Order(LoginFormFilter.ORDER)
+public class LoginFormFilter extends OncePerRequestFilter implements Ordered {
+    /**
+     * 晚于转发头过滤器两个优先级，仍早于容器的表单过滤器。数值越小越早。
+     */
+    public static final int ORDER = Ordered.HIGHEST_PRECEDENCE + 2;
     /**
      * 请求属性名。登录接口从这里读登录名，不再依赖被表单过滤器换掉的参数表。
      */
@@ -42,6 +47,17 @@ public class LoginFormFilter extends OncePerRequestFilter {
      * 请求属性名。值是口令字符数组，用完由登录接口清掉。
      */
     static final String PASSWORD = "jasagent.login.password";
+
+    /**
+     * 返回固定顺序。转发头先处理，这里再读登录表单。
+     *
+     * @return {@link #ORDER}
+     */
+    @Override
+    public int getOrder() {
+        return ORDER;
+    }
+
     /**
      * 只缓存登录表单。其它请求原样交给后面的过滤器。
      *
@@ -138,20 +154,40 @@ public class LoginFormFilter extends OncePerRequestFilter {
         public ServletInputStream getInputStream() {
             ByteArrayInputStream input = new ByteArrayInputStream(body);
             return new ServletInputStream() {
+                /**
+                 * 缓冲区里没有剩余字节时，正文已经读完。
+                 *
+                 * @return 读完时为真
+                 */
                 @Override
                 public boolean isFinished() {
                     return input.available() == 0;
                 }
 
+                /**
+                 * 正文还在内存里，可以立刻读。
+                 *
+                 * @return 总是真
+                 */
                 @Override
                 public boolean isReady() {
                     return true;
                 }
 
+                /**
+                 * 这个包装只在当前线程同步读取，不注册非阻塞监听。
+                 *
+                 * @param readListener 容器传入的监听；这里不使用
+                 */
                 @Override
                 public void setReadListener(ReadListener readListener) {
                 }
 
+                /**
+                 * 读下一个正文字节。
+                 *
+                 * @return 字节；读完时为 -1
+                 */
                 @Override
                 public int read() {
                     return input.read();

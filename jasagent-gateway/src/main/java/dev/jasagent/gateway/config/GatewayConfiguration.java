@@ -12,6 +12,7 @@ import dev.jasagent.gateway.nacos.UnavailableAgentDiscovery;
 import dev.jasagent.gateway.proxy.StickyProxy;
 import dev.jasagent.gateway.route.AgentCallHeaders;
 import dev.jasagent.gateway.route.StickyAgentRouter;
+import dev.jasagent.gateway.ingress.TrustedProxyList;
 import dev.jasagent.gateway.proxy.WebConsoleProxy;
 import dev.jasagent.gateway.store.MysqlAffinityStore;
 import dev.jasagent.gateway.token.InternalToken;
@@ -27,6 +28,7 @@ import java.nio.file.Path;
  * 组装网关运行时需要的登录、令牌、粘性、集群、长连接和控制台上游。
  * 长连接默认开启，只连当时从 Nacos 查到的实例。测试把它关掉。
  * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
+ * 转发头默认不信任任何地址，只有配置的 Ingress/Funnel 这一跳可以声明 HTTPS。
  */
 @Configuration
 public class GatewayConfiguration {
@@ -124,6 +126,18 @@ public class GatewayConfiguration {
             @Value("${" + MysqlAffinityStore.USER_PROPERTY + "}") String username,
             @Value("${" + MysqlAffinityStore.PASSWORD_FILE_PROPERTY + "}") String passwordFile) {
         return MysqlAffinityStore.open(url, username, Path.of(passwordFile));
+    }
+
+    /**
+     * 受信任的 Ingress/Funnel 这一跳。默认空白，本机和集群内明文直连都不采用 X-Forwarded-*。
+     * 环境变量 {@code JASAGENT_GATEWAY_FORWARDED_TRUSTED} 可以覆盖这项。不要把凭证写进这个值。
+     *
+     * @param trusted 逗号分隔的 IP 或 CIDR
+     * @return 用来判断这一跳能不能声明 HTTPS 的名单
+     */
+    @Bean
+    public TrustedProxyList trustedProxyList(@Value("${" + TrustedProxyList.PROPERTY + ":}") String trusted) {
+        return new TrustedProxyList(trusted);
     }
 
     /**

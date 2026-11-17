@@ -8,7 +8,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -21,10 +23,15 @@ import java.util.concurrent.CompletionException;
  * 网关自己的会话过滤。未登录只放行健康检查、登录、退出、登录页和登录页静态资源。
  * 控制台业务页和 /api 必须带本网关签发的会话。校验用的是本进程读到的会话文件，不把口令或令牌写进日志。
  * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
+ * 未登录页面用相对 Location 转到 /admin/login，不把主机或协议写进跳转。
  */
 @Component
-@Order(1)
-public class GatewaySessionFilter extends OncePerRequestFilter {
+@Order(GatewaySessionFilter.ORDER)
+public class GatewaySessionFilter extends OncePerRequestFilter implements Ordered {
+    /**
+     * 在转发头和登录表单之后核对会话。数值越小越早。
+     */
+    public static final int ORDER = 1;
     /**
      * 登录 Cookie 的名字，和原来的控制台一致。值是会话令牌，只在网关和浏览器之间使用。
      */
@@ -49,6 +56,7 @@ public class GatewaySessionFilter extends OncePerRequestFilter {
      * 放行健康检查、登录、退出、登录页和登录页静态资源。
      * 必须有会话的 /api 没有会话时返回 401，errorCode 为 AUTH。
      * 必须有会话的页面没有会话时转到 /admin/login，不返回控制台业务正文。
+     * Location 保持相对路径，不调用会拼出绝对地址的 sendRedirect。
      *
      * @param request 当前请求
      * @param response 用来写 401 或重定向
@@ -74,11 +82,21 @@ public class GatewaySessionFilter extends OncePerRequestFilter {
                 response.getWriter().write("{\"executionId\":null,\"errorCode\":\"AUTH\"}");
                 return;
             }
-            response.sendRedirect("/admin/login");
+            redirectToLogin(response);
             return;
         }
         request.setAttribute(SESSION, session);
         chain.doFilter(request, response);
+    }
+
+    /**
+     * 晚于转发头过滤器，早于具体控制器。
+     *
+     * @return {@link #ORDER}
+     */
+    @Override
+    public int getOrder() {
+        return ORDER;
     }
 
     /**
@@ -130,5 +148,16 @@ public class GatewaySessionFilter extends OncePerRequestFilter {
             }
         }
         return null;
+    }
+
+    /**
+     * 把未登录的页面转到 /admin/login。直接写相对 Location，不调用 sendRedirect。
+     * sendRedirect 会按容器地址或转发头拼成绝对 URL，本机就会变成 http://127.0.0.1。
+     *
+     * @param response 当前响应
+     */
+    private static void redirectToLogin(HttpServletResponse response) {
+        response.setStatus(HttpServletResponse.SC_FOUND);
+        response.setHeader(HttpHeaders.LOCATION, GatewayPaths.ADMIN_LOGIN);
     }
 }

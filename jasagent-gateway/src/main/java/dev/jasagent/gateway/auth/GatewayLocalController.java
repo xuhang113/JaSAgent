@@ -25,6 +25,8 @@ import java.util.concurrent.CompletionException;
  * 网关自己的登录、退出、当前用户、健康检查和页面入口。
  * 不提供自助注册。第一个用户仍由本机命令创建，口令规则仍是用户目录里的 PBKDF2。
  * agent 不再提供登录页和控制台，所以这里的页面只跳到 /admin/。
+ * 会话 Cookie 的 Secure 跟随请求是否已被认定成 HTTPS：只有受信任的上一跳声明 https，或网关自己终止了 TLS，才会加上。
+ * 站点根和登录页的 Location 保持相对路径。
  */
 @RestController
 public class GatewayLocalController {
@@ -41,7 +43,7 @@ public class GatewayLocalController {
 
     /**
      * 用登录名和口令签发会话 Cookie。口令只在这次调用里转成字符数组，用完清掉。
-     * 失败时返回 AUTH，正文不包含口令。
+     * 失败时返回 AUTH，正文不包含口令。Secure 只在当前请求被认定成 HTTPS 时写入。
      *
      * @param user 登录名
      * @param password 口令
@@ -54,7 +56,7 @@ public class GatewayLocalController {
         char[] chars = request.getAttribute(LoginFormFilter.PASSWORD) instanceof char[] value ? value : new char[0];
         try {
             Session session = auth.login(user, chars).toCompletableFuture().join();
-            response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie(session.token(), -1).toString());
+            response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie(request, session.token(), -1).toString());
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("login", session.login());
             return ResponseEntity.ok(body);
@@ -71,6 +73,7 @@ public class GatewayLocalController {
 
     /**
      * 注销当前会话并清掉 Cookie。没有会话时也清 Cookie，避免浏览器留下旧令牌。
+     * 清除时的 Secure 与签发时一致，都看当前请求是不是 HTTPS。
      *
      * @param request 可能带会话 Cookie 的请求
      * @param response 用来清掉 Cookie 的响应
@@ -86,7 +89,7 @@ public class GatewayLocalController {
                 // 会话已经无效时仍然清掉浏览器上的 Cookie。
             }
         }
-        response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie("", 0).toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie(request, "", 0).toString());
         return ResponseEntity.noContent().build();
     }
 
@@ -118,7 +121,7 @@ public class GatewayLocalController {
     /**
      * 把站点根转到控制台入口 /admin/。
      *
-     * @return 302，Location 为 /admin/
+     * @return 302，Location 为相对路径 /admin/，不写主机，也不写 http://
      */
     @GetMapping("/")
     public ResponseEntity<Void> root() {
@@ -128,7 +131,7 @@ public class GatewayLocalController {
     /**
      * 把旧的登录地址转到控制台登录页。POST /login 仍是接口，不走这里。
      *
-     * @return 302，Location 为 /admin/login
+     * @return 302，Location 为相对路径 /admin/login，不写主机，也不写 http://
      */
     @GetMapping("/login")
     public ResponseEntity<Void> loginPage() {
@@ -137,14 +140,19 @@ public class GatewayLocalController {
 
     /**
      * 做一枚会话 Cookie。maxAge 为 0 时立刻过期。
+     * Secure 只在 {@code request.isSecure()} 为真时加上。转发头过滤器只在受信任的上一跳声明 https，
+     * 或连接本身是 TLS 时，才把请求标成安全。本机明文直连不会强行加上 Secure。
+     * HttpOnly、path / 和 SameSite=Lax 始终保留。
      *
+     * @param request 已经按受信任转发头处理过的请求
      * @param value Cookie 值；退出时是空串
      * @param maxAge 存活秒数；-1 表示随浏览器会话
-     * @return 只允许 HTTP 读取的 Cookie
+     * @return 会话 Cookie
      */
-    private static ResponseCookie sessionCookie(String value, long maxAge) {
+    private static ResponseCookie sessionCookie(HttpServletRequest request, String value, long maxAge) {
         ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(GatewaySessionFilter.COOKIE, value)
                 .httpOnly(true)
+                .secure(request.isSecure())
                 .path("/")
                 .sameSite("Lax");
         if (maxAge >= 0) {

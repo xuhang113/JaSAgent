@@ -1,0 +1,6 @@
+# 网关按受信任转发头识别 HTTPS
+
+- 日期：2026-11-17（Asia/Shanghai）
+- 做了什么：jasagent-gateway 仍把 jasagent.gateway.web-origin 留在本机 jasagent-web（http://127.0.0.1:18722）。集群里的 JASAGENT_GATEWAY_WEB_ORIGIN 仍是 http://jasagent-web.jasagent.svc.cluster.local:18722，这次没有改 deploy/k8s。网关默认不信任任何 X-Forwarded-*。只有直接连上来的套接字地址落在 jasagent.gateway.forwarded.trusted（环境变量 JASAGENT_GATEWAY_FORWARDED_TRUSTED，逗号分隔的 IP 或 CIDR，默认空白）里，才采用这一跳的 X-Forwarded-Proto、X-Forwarded-Host、X-Forwarded-Port 和 X-Forwarded-For。判断看的是套接字对端，不看客户端写在 X-Forwarded-For 里的地址。协议取最右侧一段，这样 Ingress 追加的方案盖过客户端事先塞进来的值。只有这一段是 https 时，签发和清除 JASAGENT_SESSION 才带 Secure，并仍是 HttpOnly、path=/、SameSite=Lax。本机或集群内明文直连、没有受信任转发头时不加 Secure。不受信任的 X-Forwarded-* 和 Forwarded 会被丢掉，不能把 Cookie 设成 Secure，也不能改跳转或协议。server.forward-headers-strategy 固定为 none，避免 Tomcat 按私网默认名单信任 127.0.0.0/8 和 10.0.0.0/8。站点根到 /admin/、登录页到 /admin/login、未登录页面到 /admin/login 都写相对 Location，不调用会拼出绝对地址的 sendRedirect。网关仍是单副本。这次只改 jasagent-gateway。没有接入 Tailscale Funnel、Ingress-nginx 或 Cloudflare Tunnel，没有写入凭证。
+- 涉及模块：jasagent-gateway
+- 怎么验证：`bash scripts/test-019-gateway-public-ingress.sh`。脚本覆盖验收第 1 到第 8 条（仓库内合同：上游地址、受信任 HTTPS 的 Secure Cookie、明文直连不加 Secure、不受信任的转发头、相对跳转、只改网关、单副本、注释和测试）。第 9 到第 14 条（Funnel 主机名、Ingress、公网登录、官方探测、deploy.md）属于部署阶段，这次没有做，不能算通过。
