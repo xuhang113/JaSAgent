@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-002"
+result_text='当受信任的 Ingress/Funnel 这一跳声明请求是 HTTPS 时，签发和清除的 `JASAGENT_SESSION` 都带 Secure，并仍为 HttpOnly、path `/`、SameSite=Lax。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  controller="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewayLocalController.java"
+  filter="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/ingress/TrustedForwardedHeaderFilter.java"
+  proxies="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/ingress/TrustedProxyList.java"
+  session="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewaySessionFilter.java"
+  if [[ ! -f "${controller}" || ! -f "${filter}" || ! -f "${proxies}" || ! -f "${session}" ]]; then
+    echo "缺少会话 Cookie 或转发头实现。" >&2
+    exit 1
+  fi
+  if ! grep -q 'COOKIE = "JASAGENT_SESSION"' "${session}"; then
+    echo "会话 Cookie 名字不再是 JASAGENT_SESSION。" >&2
+    exit 1
+  fi
+  if ! grep -q 'sessionCookie(request, session.token(), -1)' "${controller}"; then
+    echo "签发会话时没有按当前请求决定 Cookie。" >&2
+    exit 1
+  fi
+  if ! grep -q 'sessionCookie(request, "", 0)' "${controller}"; then
+    echo "清除会话时没有按当前请求决定 Cookie。" >&2
+    exit 1
+  fi
+  if ! grep -q '.httpOnly(true)' "${controller}"; then
+    echo "会话 Cookie 不再是 HttpOnly。" >&2
+    exit 1
+  fi
+  if ! grep -q '.secure(request.isSecure())' "${controller}"; then
+    echo "Secure 没有跟随受信任转发头认定后的 isSecure()。" >&2
+    exit 1
+  fi
+  if ! grep -q '.path("/")' "${controller}"; then
+    echo "会话 Cookie 路径不再是 /。" >&2
+    exit 1
+  fi
+  if ! grep -q '.sameSite("Lax")' "${controller}"; then
+    echo "会话 Cookie 的 SameSite 不再是 Lax。" >&2
+    exit 1
+  fi
+  if ! grep -q '"https".equals(declared)' "${filter}" || ! grep -q 'this.secure = true' "${filter}"; then
+    echo "受信任的上一跳没有按声明的 https 把请求标成安全。" >&2
+    exit 1
+  fi
+  if ! grep -q 'declaredScheme(request.getRemoteAddr()' "${filter}"; then
+    echo "过滤器没有按套接字对端判断这一跳是否受信任。" >&2
+    exit 1
+  fi
+  if ! grep -q 'rightmost' "${proxies}" || ! grep -qi 'https' "${proxies}"; then
+    echo "信任名单没有按最右侧一段识别 https。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "签发和清除都走 sessionCookie，Secure 跟随 isSecure" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-gateway" \
+    "PublicIngressFilterTest#trustedHttpsSetsSecureOnIssueAndClear,PublicIngressServerTest#trustedLoopbackHttpsSetsSecureWithoutAbsoluteLocation,TrustedProxyListTest#rightmostSchemeComesFromTheTrustedHop"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "受信任 HTTPS 下签发和清除都带 Secure" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

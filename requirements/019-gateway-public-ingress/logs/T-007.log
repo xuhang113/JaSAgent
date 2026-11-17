@@ -1,0 +1,4 @@
+2026-11-17T18:36:54+0800	T-007	本机与集群副本配置	28	都是 1
+2026-11-17T18:36:54+0800	T-007	实现提交是否改掉单副本	40	无
+2026-11-17T18:36:56+0800	T-007	模块测试 PublicIngressContractTest#clusterManifestKeepsInClusterOriginAndOneReplica	2249	退出码 0
+2026-11-17T18:36:56+0800	T-007	网关仍按单副本配置	2266	通过

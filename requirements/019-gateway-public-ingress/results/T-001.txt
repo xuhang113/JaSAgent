@@ -1,0 +1,1 @@
+T-001	通过	`jasagent.gateway.web-origin` 和 `JASAGENT_GATEWAY_WEB_ORIGIN` 仍指向本机或集群内的 `jasagent-web` 上游，没有被改成公网主机名或 `*.ts.net`。	16476	logs/T-001.log

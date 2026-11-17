@@ -1,0 +1,5 @@
+2026-11-17T18:36:15+0800	T-001	本机与集群内 web 上游	58	127.0.0.1:18722 与 jasagent-web.jasagent.svc.cluster.local:18722
+2026-11-17T18:36:15+0800	T-001	实现提交是否把上游改成公网	70	无
+2026-11-17T18:36:15+0800	T-001	本机启动脚本上游改动	84	无
+2026-11-17T18:36:31+0800	T-001	模块测试 DefaultForwardedTrustTest#shippedDefaultsTrustNobodyAndKeepLocalWeb,PublicIngressContractTest#gatewayConfigKeepsLocalOriginAndEmptyTrust,PublicIngressContractTest#clusterManifestKeepsInClusterOriginAndOneReplica	16432	退出码 0
+2026-11-17T18:36:31+0800	T-001	web 上游仍指向本机或集群内 jasagent-web	16459	通过

@@ -1,0 +1,3 @@
+2026-11-17T18:36:31+0800	T-002	签发和清除都走 sessionCookie，Secure 跟随 isSecure	50	通过
+2026-11-17T18:36:37+0800	T-002	模块测试 PublicIngressFilterTest#trustedHttpsSetsSecureOnIssueAndClear,PublicIngressServerTest#trustedLoopbackHttpsSetsSecureWithoutAbsoluteLocation,TrustedProxyListTest#rightmostSchemeComesFromTheTrustedHop	5398	退出码 0
+2026-11-17T18:36:37+0800	T-002	受信任 HTTPS 下签发和清除都带 Secure	5413	通过

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-005"
+result_text='站点根、登录页和登录后的跳转保持相对路径，响应里的 `Location` 不得写死为 `127.0.0.1` 或 `http://` 绝对地址。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  props="${REPO_ROOT}/jasagent-gateway/src/main/resources/application.properties"
+  controller="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewayLocalController.java"
+  session="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewaySessionFilter.java"
+  if ! grep -q '^server.tomcat.use-relative-redirects=true$' "${props}"; then
+    echo "容器跳转仍可能被拼成绝对地址。" >&2
+    exit 1
+  fi
+  if ! grep -q 'header(HttpHeaders.LOCATION, "/admin/")' "${controller}"; then
+    echo "站点根没有写成相对路径 /admin/。" >&2
+    exit 1
+  fi
+  if ! grep -q 'header(HttpHeaders.LOCATION, "/admin/login")' "${controller}"; then
+    echo "登录页没有写成相对路径 /admin/login。" >&2
+    exit 1
+  fi
+  if ! grep -q 'response.setHeader(HttpHeaders.LOCATION, GatewayPaths.ADMIN_LOGIN)' "${session}"; then
+    echo "未登录页面跳转没有写成相对 Location。" >&2
+    exit 1
+  fi
+  if grep -n 'sendRedirect(' "${controller}" "${session}" \
+    "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/LoginFormFilter.java" \
+    "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/ingress/TrustedForwardedHeaderFilter.java" \
+    >/dev/null; then
+    echo "登录或会话跳转仍调用会拼绝对地址的 sendRedirect。" >&2
+    grep -n 'sendRedirect(' "${controller}" "${session}" \
+      "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/LoginFormFilter.java" \
+      "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/ingress/TrustedForwardedHeaderFilter.java" >&2
+    exit 1
+  fi
+  python3 - "${REPO_ROOT}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+files = [
+    root / "jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewayLocalController.java",
+    root / "jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewaySessionFilter.java",
+    root / "jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/LoginFormFilter.java",
+    root / "jasagent-gateway/src/main/java/dev/jasagent/gateway/ingress/TrustedForwardedHeaderFilter.java",
+]
+pattern = re.compile(
+    r'(setHeader\([^;]*LOCATION[^;]*\)|\.header\([^;]*LOCATION[^;]*\)|sendRedirect\([^;]*\))',
+    re.IGNORECASE,
+)
+bad = []
+for path in files:
+    text = path.read_text(encoding="utf-8")
+    for match in pattern.finditer(text):
+        snippet = re.sub(r'\s+', ' ', match.group(0))
+        if "127.0.0.1" in snippet or re.search(r'https?://', snippet):
+            bad.append(f"{path.name}: {snippet}")
+if bad:
+    print("Location 被写成了绝对地址：", file=sys.stderr)
+    print("\n".join(bad), file=sys.stderr)
+    raise SystemExit(1)
+PY
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "站点根、登录页和未登录跳转都是相对 Location" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-gateway" \
+    "PublicIngressFilterTest#controllerRedirectsStayRelative,PublicIngressServerTest#plainHttpKeepsRelativeRedirectsAndOmitsSecure,PublicIngressServerTest#trustedLoopbackHttpsSetsSecureWithoutAbsoluteLocation"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "跳转保持相对路径，没有写死 127.0.0.1 或 http://" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

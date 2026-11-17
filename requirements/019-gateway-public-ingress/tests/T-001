@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-001"
+result_text='`jasagent.gateway.web-origin` 和 `JASAGENT_GATEWAY_WEB_ORIGIN` 仍指向本机或集群内的 `jasagent-web` 上游，没有被改成公网主机名或 `*.ts.net`。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  props="${REPO_ROOT}/jasagent-gateway/src/main/resources/application.properties"
+  test_props="${REPO_ROOT}/jasagent-gateway/src/test/resources/application.properties"
+  gateway="${REPO_ROOT}/deploy/k8s/gateway.yaml"
+  if [[ ! -f "${props}" || ! -f "${gateway}" ]]; then
+    echo "缺少网关配置或集群清单。" >&2
+    exit 1
+  fi
+  if ! grep -q '^jasagent.gateway.web-origin=http://127.0.0.1:18722$' "${props}"; then
+    echo "本机 web 上游不再是 http://127.0.0.1:18722。" >&2
+    grep -n 'jasagent.gateway.web-origin' "${props}" >&2 || true
+    exit 1
+  fi
+  if ! grep -q '^[[:space:]]*- name: JASAGENT_GATEWAY_WEB_ORIGIN$' "${gateway}"; then
+    echo "集群清单没有 JASAGENT_GATEWAY_WEB_ORIGIN。" >&2
+    exit 1
+  fi
+  if ! grep -A1 '^[[:space:]]*- name: JASAGENT_GATEWAY_WEB_ORIGIN$' "${gateway}" \
+    | grep -q '^[[:space:]]*value: http://jasagent-web.jasagent.svc.cluster.local:18722$'; then
+    echo "集群内 web 上游不再是 jasagent-web 的集群内地址。" >&2
+    grep -A2 'JASAGENT_GATEWAY_WEB_ORIGIN' "${gateway}" >&2 || true
+    exit 1
+  fi
+  if [[ -f "${test_props}" ]] && ! grep -q '^jasagent.gateway.web-origin=http://127.0.0.1:18722$' "${test_props}"; then
+    echo "测试配置把 web 上游改掉了。" >&2
+    exit 1
+  fi
+  # 只认这两处合同值，拒绝公网主机名、*.ts.net 和临时隧道。
+  python3 - "${props}" "${gateway}" "${test_props}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+props, gateway, test_props = sys.argv[1], sys.argv[2], sys.argv[3]
+allowed = {
+    "http://127.0.0.1:18722",
+    "http://jasagent-web.jasagent.svc.cluster.local:18722",
+}
+public = re.compile(r"(?i)(\.ts\.net|trycloudflare|cloudflare|funnel)")
+bad = []
+
+def check_value(label, value):
+    value = value.strip().strip('"').strip("'")
+    if not value:
+        return
+    if public.search(value) or value not in allowed:
+        bad.append(f"{label}={value}")
+
+for line in Path(props).read_text(encoding="utf-8").splitlines():
+    if line.startswith("jasagent.gateway.web-origin="):
+        check_value("jasagent.gateway.web-origin", line.split("=", 1)[1])
+if Path(test_props).is_file():
+    for line in Path(test_props).read_text(encoding="utf-8").splitlines():
+        if line.startswith("jasagent.gateway.web-origin="):
+            check_value("test jasagent.gateway.web-origin", line.split("=", 1)[1])
+text = Path(gateway).read_text(encoding="utf-8").splitlines()
+for i, line in enumerate(text):
+    if "JASAGENT_GATEWAY_WEB_ORIGIN" in line:
+        for follow in text[i + 1:i + 4]:
+            stripped = follow.strip()
+            if stripped.startswith("value:"):
+                check_value("JASAGENT_GATEWAY_WEB_ORIGIN", stripped.split(":", 1)[1].strip())
+                break
+if bad:
+    print("web 上游被改成了非本机或非集群内地址：", file=sys.stderr)
+    print("\n".join(bad), file=sys.stderr)
+    raise SystemExit(1)
+PY
+  changed_origin="$(git -C "${REPO_ROOT}" diff "${ATDD_SPEC_BASE}" HEAD -- "${props}" "${gateway}" "${test_props}" | python3 -c '
+import sys
+bad = []
+for line in sys.stdin:
+    if line.startswith("+") and not line.startswith("+++"):
+        body = line[1:]
+        if "jasagent.gateway.web-origin=" in body or "JASAGENT_GATEWAY_WEB_ORIGIN" in body or "value: http://" in body:
+            if any(token in body for token in (".ts.net", "trycloudflare", "https://")):
+                bad.append(body.strip())
+print("\n".join(bad))
+')"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本机与集群内 web 上游" "127.0.0.1:18722 与 jasagent-web.jasagent.svc.cluster.local:18722" >> "${ATDD_LOG}"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "实现提交是否把上游改成公网" "${changed_origin:-无}" >> "${ATDD_LOG}"
+  if [[ -n "${changed_origin}" ]]; then
+    echo "实现把 web 上游改成了公网地址：" >&2
+    printf '%s\n' "${changed_origin}" >&2
+    exit 1
+  fi
+  origin_files="$(git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- scripts/start.sh)"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本机启动脚本上游改动" "${origin_files:-无}" >> "${ATDD_LOG}"
+  if [[ -n "${origin_files}" ]]; then
+    echo "本轮改动了 start.sh 的上游配置，需单独核对本机 web 上游。" >&2
+    exit 1
+  fi
+  atdd_mvn_test "jasagent-gateway" \
+    "DefaultForwardedTrustTest#shippedDefaultsTrustNobodyAndKeepLocalWeb,PublicIngressContractTest#gatewayConfigKeepsLocalOriginAndEmptyTrust,PublicIngressContractTest#clusterManifestKeepsInClusterOriginAndOneReplica"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "web 上游仍指向本机或集群内 jasagent-web" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

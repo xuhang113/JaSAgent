@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-008"
+result_text='本轮改到的模块有注释，有自动测试，并且有可执行的测试脚本。口令、令牌、Funnel/Tailscale 凭证和密钥不出现在仓库、说明或日志里。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  script="${REPO_ROOT}/scripts/test-019-gateway-public-ingress.sh"
+  if [[ ! -x "${script}" ]]; then
+    echo "实现提交的合同测试脚本不可执行。" >&2
+    exit 1
+  fi
+  if ! head -n 5 "${script}" | grep -q '^#'; then
+    echo "合同测试脚本缺少说明注释。" >&2
+    exit 1
+  fi
+  atdd_assert_comments "${script}" 1
+  if ! grep -q '第 1 到第 8 条' "${script}" || ! grep -q '第 9 到第 14 条' "${script}"; then
+    echo "合同测试脚本没有写明只覆盖验收第 1 到第 8 条，并把第 9 到第 14 条留给部署。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "合同测试脚本可执行且有说明注释" "通过" >> "${ATDD_LOG}"
+
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'PY'
+import pathlib
+import re
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+modules = ("jasagent-gateway/",)
+
+def is_main_java(path):
+    return path.endswith(".java") and "/src/main/java/" in path and path.startswith(modules)
+
+def is_declaration(stripped):
+    if not stripped:
+        return False
+    if stripped.startswith(("//", "/*", "*", "@", "package ", "import ", "return ", "throw ", "new ", "if ", "for ", "while ", "switch ", "catch ", "else ", "try ", "assert ", "case ", "this(", "super(", "synchronized (")):
+        return False
+    if stripped.startswith("}") or stripped.startswith("default:"):
+        return False
+    if re.search(r"\b(class|interface|enum|record)\s+\w+", stripped):
+        return True
+    # 私有字段不按对外常量检查，避免把实现细节当成缺注释。
+    if re.search(r"\b(public|protected)\s+(static\s+final|final\s+static)\s+", stripped) and re.search(r"\b[A-Za-z_][A-Za-z0-9_]*\s*=", stripped):
+        return True
+    if "(" not in stripped:
+        return False
+    head = stripped.split("(", 1)[0].strip()
+    if "=" in head or not re.search(r"\b[A-Za-z_][A-Za-z0-9_]*$", head):
+        return False
+    if re.search(r"\b(public|protected|private)\b", head):
+        return True
+    return bool(re.search(r"\b(void|boolean|byte|short|char|int|long|float|double|[A-Z][A-Za-z0-9_.<>,\s\[\]]*)\s+[A-Za-z_][A-Za-z0-9_]*$", head))
+
+def has_javadoc(lines, index):
+    i = index - 1
+    skipping_annotation = False
+    while i >= 0:
+        stripped = lines[i].strip()
+        if stripped == "" or stripped.startswith("//"):
+            i -= 1
+            continue
+        if skipping_annotation:
+            if stripped.startswith("@"):
+                skipping_annotation = False
+            i -= 1
+            continue
+        if stripped.endswith("*/") or stripped.startswith("/**") or stripped.startswith("*"):
+            return True
+        if stripped.startswith("@"):
+            i -= 1
+            continue
+        # 多行注解的参数行，例如 @RequestMapping({ ... })。
+        if re.match(r"^[@A-Za-z0-9_.,(){}\[\]=\s]+$", stripped) and any(token in stripped for token in ("(", ")", "{", "}", ",")):
+            skipping_annotation = True
+            i -= 1
+            continue
+        return False
+    return False
+
+diff = subprocess.check_output(["git", "-C", repo, "diff", "-U0", base, "HEAD", "--", "**.java"], text=True)
+current = None
+wanted = {}
+for line in diff.splitlines():
+    if line.startswith("+++ b/"):
+        current = line[6:]
+        continue
+    if current is None or not is_main_java(current):
+        continue
+    if not line.startswith("+") or line.startswith("+++"):
+        continue
+    body = line[1:].strip()
+    if is_declaration(body):
+        wanted.setdefault(current, []).append(body)
+
+if not wanted:
+    raise SystemExit("本轮没有新增或改动的 Java 实现符号。")
+
+missing = []
+for rel, decls in wanted.items():
+    path = pathlib.Path(repo, rel)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for decl in decls:
+        found = False
+        for i, raw in enumerate(lines):
+            if raw.strip() != decl:
+                continue
+            found = True
+            if not has_javadoc(lines, i):
+                missing.append(f"{rel}:{i + 1} 缺少注释：{decl}")
+            break
+        if not found:
+            missing.append(f"{rel}: 找不到本轮新增或改动的符号：{decl}")
+if missing:
+    print("本轮新增或改动的实现缺少注释：", file=sys.stderr)
+    print("\n".join(missing), file=sys.stderr)
+    raise SystemExit(1)
+PY
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本轮新增或改动的 Java 实现注释" "通过" >> "${ATDD_LOG}"
+
+  auto_tests="$(git -C "${REPO_ROOT}" diff --name-only --diff-filter=A "${ATDD_SPEC_BASE}" HEAD -- 'jasagent-gateway/src/test/java/**')"
+  if [[ -z "${auto_tests}" ]]; then
+    echo "本轮实现没有新增自动测试。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本轮新增的自动测试" "$(printf '%s\n' "${auto_tests}" | sed '/^$/d' | wc -l | tr -d ' ') 个文件" >> "${ATDD_LOG}"
+
+  leaked="$(
+    python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'PY'
+import re
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+text = subprocess.check_output(
+    [
+        "git", "-C", repo, "diff", "-U0", base, "HEAD", "--",
+        "*.md", "*.properties", "*.sh", "*.java",
+        ":!**/logs/**", ":!**/results/**", ":!**/src/test/**", ":!requirements/**",
+    ],
+    text=True,
+)
+
+def literal_secret(body):
+    if re.search(r"(?i)(atdd_|test_|fake_|dummy_|not-for-logs|-atdd|for-test)", body):
+        return None
+    # 只看赋值右侧的字面量。扫描脚本里的拒绝模式、注释和正则不算密文。
+    for match in re.finditer(
+        r"(?i)(?:^|[^\w.])(?:this\.)?(password|token|secret|ticket)\s*=\s*(.+)",
+        body,
+    ):
+        rhs = match.group(2).strip().rstrip(";").strip()
+        lower = body.lower()
+        if "password-file" in lower or "password_file" in lower or "passwordfile" in lower:
+            continue
+        if any(mark in body for mark in ("不能带", "不能包含", "含 password=", "包含 password=", "password= must")):
+            continue
+        if re.search(r"\$\{|\$\(|\$[A-Za-z_]", rhs):
+            continue
+        if " + " in rhs or "++" in rhs or "?" in rhs:
+            continue
+        if re.match(r"^(null|None|readSecret\b|[A-Za-z_][A-Za-z0-9_.]*(\s*\(.*\))?)$", rhs):
+            continue
+        if rhs in ('""', "''"):
+            continue
+        if re.match(r"^['\"][^'\"]+['\"]$", rhs) or re.match(r"^[A-Za-z0-9_./:+-]{8,}$", rhs):
+            return rhs
+    return None
+
+bad = []
+for line in text.splitlines():
+    if not line.startswith("+") or line.startswith("+++"):
+        continue
+    body = line[1:]
+    found = literal_secret(body)
+    if found:
+        bad.append(body.strip())
+print("\n".join(bad))
+PY
+  )"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "仓库新增行密文检查" "${leaked:-无}" >> "${ATDD_LOG}"
+  if [[ -n "${leaked}" ]]; then
+    echo "实现提交里出现了口令、令牌、Funnel/Tailscale 凭证或密钥原文：" >&2
+    printf '%s\n' "${leaked}" >&2
+    exit 1
+  fi
+
+  # 不直接跑官方脚本：它会把本目录尚未提交的 ATDD 文件当成超出范围。这里独立复跑自动测试。
+  atdd_mvn_test "jasagent-gateway" \
+    "TrustedProxyListTest,PublicIngressFilterTest,PublicIngressContractTest,DefaultForwardedTrustTest,PublicIngressServerTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "自动测试通过且仓库新增行无密文" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

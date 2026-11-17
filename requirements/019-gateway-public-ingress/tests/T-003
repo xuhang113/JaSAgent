@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-003"
+result_text='本机或测试里以明文 HTTP 直连网关、没有受信任转发头时，会话 Cookie 不得被强行加上 Secure。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  props="${REPO_ROOT}/jasagent-gateway/src/main/resources/application.properties"
+  controller="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewayLocalController.java"
+  proxies="${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/ingress/TrustedProxyList.java"
+  if ! grep -F -q -x 'jasagent.gateway.forwarded.trusted=${JASAGENT_GATEWAY_FORWARDED_TRUSTED:}' "${props}"; then
+    echo "信任名单默认不是空白，明文直连可能被当成受信任跳。" >&2
+    exit 1
+  fi
+  if ! grep -q '^server.forward-headers-strategy=none$' "${props}"; then
+    echo "容器仍可能按私网默认名单信任转发头，把本机明文当成 HTTPS。" >&2
+    exit 1
+  fi
+  if grep -q '.secure(true)' "${controller}"; then
+    echo "会话 Cookie 被写死成 Secure。" >&2
+    exit 1
+  fi
+  if ! grep -q '.secure(request.isSecure())' "${controller}"; then
+    echo "明文直连时没有按 isSecure() 决定是否加 Secure。" >&2
+    exit 1
+  fi
+  if ! grep -q 'raw == null || raw.isBlank()' "${proxies}"; then
+    echo "空白信任名单没有明确不信任任何地址。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "默认不信任转发头，Secure 不写死" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-gateway" \
+    "PublicIngressFilterTest#plainHttpOmitsSecureAndDirectTlsKeepsIt,PublicIngressFilterTest#trustedHttpDoesNotForceSecure,DefaultForwardedTrustTest#plainLoopbackLoginOmitsSecure,PublicIngressServerTest#plainHttpKeepsRelativeRedirectsAndOmitsSecure"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "明文 HTTP 直连不加 Secure" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

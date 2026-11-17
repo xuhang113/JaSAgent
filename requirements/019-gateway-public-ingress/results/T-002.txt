@@ -1,0 +1,1 @@
+T-002	通过	当受信任的 Ingress/Funnel 这一跳声明请求是 HTTPS 时，签发和清除的 `JASAGENT_SESSION` 都带 Secure，并仍为 HttpOnly、path `/`、SameSite=Lax。	5426	logs/T-002.log

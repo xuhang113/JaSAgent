@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-007"
+result_text='网关仍按单副本配置。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  props="${REPO_ROOT}/jasagent-gateway/src/main/resources/application.properties"
+  gateway="${REPO_ROOT}/deploy/k8s/gateway.yaml"
+  if ! grep -q '^jasagent.gateway.replicas=1$' "${props}"; then
+    echo "网关副本配置不是 1。" >&2
+    grep -n 'jasagent.gateway.replicas' "${props}" >&2 || true
+    exit 1
+  fi
+  if ! grep -q '^[[:space:]]*replicas: 1$' "${gateway}"; then
+    echo "集群网关不再是单副本。" >&2
+    grep -n 'replicas:' "${gateway}" >&2 || true
+    exit 1
+  fi
+  if grep -q 'replicas: [2-9]' "${gateway}"; then
+    echo "集群网关把副本数配成了大于 1。" >&2
+    grep -n 'replicas:' "${gateway}" >&2
+    exit 1
+  fi
+  if ! grep -q '^[[:space:]]*- name: JASAGENT_GATEWAY_REPLICAS$' "${gateway}" \
+    || ! grep -A1 '^[[:space:]]*- name: JASAGENT_GATEWAY_REPLICAS$' "${gateway}" \
+      | grep -q '^[[:space:]]*value: "1"$'; then
+    echo "集群环境变量 JASAGENT_GATEWAY_REPLICAS 不再是 1。" >&2
+    grep -A2 'JASAGENT_GATEWAY_REPLICAS' "${gateway}" >&2 || true
+    exit 1
+  fi
+  replica_change="$(git -C "${REPO_ROOT}" diff "${ATDD_SPEC_BASE}" HEAD -- "${props}" "${gateway}" | python3 -c '
+import sys
+bad = []
+for line in sys.stdin:
+    if line.startswith("+") and not line.startswith("+++"):
+        body = line[1:].strip()
+        if "replicas" in body.lower() and not any(ok in body for ok in ("replicas=1", "replicas: 1", "value: \"1\"", "单副本")):
+            if body.startswith("#"):
+                continue
+            bad.append(body)
+print("\n".join(bad))
+')"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本机与集群副本配置" "都是 1" >> "${ATDD_LOG}"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "实现提交是否改掉单副本" "${replica_change:-无}" >> "${ATDD_LOG}"
+  if [[ -n "${replica_change}" ]]; then
+    echo "实现把网关副本配置改掉了：" >&2
+    printf '%s\n' "${replica_change}" >&2
+    exit 1
+  fi
+  atdd_mvn_test "jasagent-gateway" "PublicIngressContractTest#clusterManifestKeepsInClusterOriginAndOneReplica"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "网关仍按单副本配置" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

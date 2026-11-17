@@ -1,0 +1,1 @@
+T-004	通过	任意客户端自己带来的 `X-Forwarded-*` 不被信任，不能据此把 Cookie 设成 Secure，也不能据此改跳转或协议。	5496	logs/T-004.log

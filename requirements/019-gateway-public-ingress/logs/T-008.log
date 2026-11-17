@@ -1,0 +1,6 @@
+2026-11-17T18:37:20+0800	T-008	合同测试脚本可执行且有说明注释	25	通过
+2026-11-17T18:37:20+0800	T-008	本轮新增或改动的 Java 实现注释	70	通过
+2026-11-17T18:37:20+0800	T-008	本轮新增的自动测试	87	8 个文件
+2026-11-17T18:37:20+0800	T-008	仓库新增行密文检查	131	无
+2026-11-17T18:37:26+0800	T-008	模块测试 TrustedProxyListTest,PublicIngressFilterTest,PublicIngressContractTest,DefaultForwardedTrustTest,PublicIngressServerTest	6262	退出码 0
+2026-11-17T18:37:26+0800	T-008	自动测试通过且仓库新增行无密文	6279	通过
