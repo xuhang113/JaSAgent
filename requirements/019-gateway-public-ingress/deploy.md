@@ -1,10 +1,10 @@
 # 部署记录 019-gateway-public-ingress
 
-**时间**：2026-11-18 08:42 Asia/Shanghai（集群在 11-18 凌晨再次被抹后按 11-17 路径恢复。官方 `probe-egress` 于 08:39:39 通过；015 风格 I-001 至 I-016 于 08:41:42 通过，总结果 `016 IT PASSED`。11-17 首次部署的探测与专项结果见文末历史记录。）
+**时间**：2026-11-18 08:51 Asia/Shanghai（集群在 11-18 凌晨再次被抹后按 11-17 路径恢复。官方 `probe-egress` 于 08:39:39 通过；015 风格 I-001 至 I-016 于 08:41:42 通过，总结果 `016 IT PASSED`。Hang 于 08:48 在控制台开启 Serve 后，Funnel 已指向 Ingress-nginx NodePort 30080。11-17 首次部署的探测与专项结果见文末历史记录。）
 
 本轮 ATDD（T-001 至 T-008）此前已全部通过（`bd520d6`，2026-11-17 18:37 Asia/Shanghai）。按规格在云电脑上补 Ingress-nginx（不使用 hostNetwork，纳入 gVisor）和只转到 `jasagent-gateway:18721` 的入口，写入 `JASAGENT_GATEWAY_FORWARDED_TRUSTED`（只信任 Ingress 这一跳，当前为 `10.42.0.18/32`，不是 `0.0.0.0/0` 或 `::/0`），并保持官方 `scripts/k8s/probe-egress.sh` 与 015–018 的 egress、gVisor 检查范围。018 的每 Pod sidecar 与 LD_PRELOAD 出站约定仍然有效。验收环境是部署角色的云电脑，不再依赖 Hang 的 Mac。
 
-预定公网主机名是 `https://jasagent-cloud.tail01f87a.ts.net`（本机 Tailscale 已登录，稳定 DNSName 实测为此值，IPv4 `100.69.17.4`，主机名 `jasagent-cloud`）。Funnel 尚未就绪：`bash scripts/k8s/configure-funnel.sh` 在执行 `tailscale serve --bg http://127.0.0.1:30080` 时被控制台拦住，提示该 tailnet 未开启 Serve，需要访问 `https://login.tailscale.com/f/serve?node=nePWyyCqVM11CNTRL`。本机对本机 `https://jasagent-cloud.tail01f87a.ts.net` 的 TLS 握手以 unexpected EOF 失败，`100.69.17.4:443` 连接被拒绝。本轮没有执行 `tailscale up` 或 `tailscale login`，也没有把平台工具当作 JaSAgent 公网 Funnel。因此第 9、12 条里依赖公网主机名的部分，以及第 11 条里「经该主机名打开 EventSource」和第 14 条里集群外浏览器验收，目前仍被挡住。Ingress、一键脚本、官方探测和 I-001 至 I-016 已在恢复后的集群上重跑完成。
+公网主机名是 `https://jasagent-cloud.tail01f87a.ts.net`（本机 Tailscale 已登录，稳定 DNSName 实测为此值，IPv4 `100.69.17.4`，主机名 `jasagent-cloud`）。Hang 在 1:1 里用自己的账号批准这台云电脑加入 tailnet，并于 08:48 Asia/Shanghai 在控制台开启 Serve / Funnel / HTTPS。随后在本机配置 Funnel，官方路径为该主机名 → Tailscale Funnel → Ingress-nginx NodePort `30080` → 只转到 `jasagent-gateway:18721`。经公网边缘访问 `/health` 与 `/admin/login` 均返回 200，证书由 Let's Encrypt 签发。本轮没有执行 `tailscale up` 或 `tailscale login`，也没有把平台工具当作 JaSAgent 公网 Funnel。Ingress、一键脚本、官方探测和 I-001 至 I-016 已在恢复后的集群上重跑完成。集群外（含手机）浏览器的登录与 EventSource 手测仍待 Hang 确认。
 
 ## 环境
 
@@ -21,7 +21,7 @@
 
 | 服务 | 地址 |
 | --- | --- |
-| 预定公网入口 | `https://jasagent-cloud.tail01f87a.ts.net`。目标路径为该主机名 → Tailscale Funnel → Ingress-nginx NodePort `30080` → 只转到 `jasagent-gateway:18721`。Funnel 尚未创建，见下文阻挡说明 |
+| 公网入口 | `https://jasagent-cloud.tail01f87a.ts.net`。路径为该主机名 → Tailscale Funnel → Ingress-nginx NodePort `30080` → 只转到 `jasagent-gateway:18721`。Funnel 已开启。公网 DNS 解析为 `209.177.145.97`、`209.177.145.192`（以及对应 IPv6）。本机 MagicDNS 会把该主机名解析到 `198.18.0.1`，从这台云电脑直接访问会出现 TLS unexpected EOF，不代表公网不可用 |
 | 本机 Ingress-nginx（Funnel 将要转到的端口） | `http://127.0.0.1:30080`（Service `ingress-nginx/ingress-nginx-controller`，ClusterIP `10.43.196.119`，NodePort HTTP 30080 / HTTPS 30443） |
 | 网关（集群内） | `http://jasagent-gateway.jasagent.svc.cluster.local:18721`，ClusterIP `10.43.183.90` |
 | 控制台上游 jasagent-web（集群内） | `http://jasagent-web.jasagent.svc.cluster.local:18722`，ClusterIP `10.43.106.194` |
@@ -59,7 +59,7 @@ bash scripts/up-stack.sh
 bash scripts/k8s/configure-funnel.sh
 ```
 
-该脚本不会发起登录或设备码。未登录时以状态码 2 退出。已登录但该 tailnet 尚未在控制台开启 Serve / Funnel / HTTPS 时，也会以状态码 2 退出，并打印 `https://login.tailscale.com/f/serve?...` 链接，而不会一直等待。已登录且 Serve 已开启时，把 Funnel 指到 `http://127.0.0.1:30080`，并打印 `FUNNEL READY https://<*.ts.net>`。
+该脚本不会发起登录或设备码。未登录时以状态码 2 退出。已登录但该 tailnet 尚未在控制台开启 Serve / Funnel / HTTPS 时，也会以状态码 2 退出，并打印 `https://login.tailscale.com/f/serve?...` 链接，而不会一直等待。已登录且 Serve 已开启时，执行 `tailscale funnel --bg http://127.0.0.1:30080`，并打印 `FUNNEL READY https://<*.ts.net>`。不要先 `tailscale serve --bg` 再执行 `tailscale funnel --bg 443`，那会把后端改成 `http://127.0.0.1:443`，本机 443 没有业务进程。
 
 这台云电脑没有可用的 systemd 作为 1 号进程，内核也缺少 VXLAN、ipset、xt_owner、xt_cgroup 等模块，没有 `/lib/modules`，也没有公网 IP，所以还需要下列环境准备：
 
@@ -82,7 +82,7 @@ bash scripts/k8s/configure-funnel.sh
 - `deploy/k8s/gateway.yaml`：增加 `JASAGENT_GATEWAY_FORWARDED_TRUSTED`，从 ConfigMap `jasagent-gateway-forwarded` 读取（可选）。`JASAGENT_GATEWAY_WEB_ORIGIN` 不变，副本仍为 1。
 - `scripts/up-stack.sh`：构建并导入包装镜像；业务就绪后 apply Ingress，按 Ingress 控制器 Pod IP 写入受信任名单，拒绝 `0.0.0.0/0`、`::/0` 以及前缀为 0 的网段；名单变化时滚动网关。
 - `scripts/k8s/probe-egress.sh`：在原有检查之后增加 `ingress-nginx-runtime`、`ingress-only-gateway`、`forwarded-trusted-ingress-only`、`gateway-single-replica-web-origin`。既有 egress 与 gVisor 检查一项都没有删。
-- `scripts/k8s/configure-funnel.sh`：仅在 Tailscale 已登录时启用 Funnel，不发起交互登录。2026-11-18 起，若控制台尚未开启 Serve，脚本限时执行并以状态码 2 退出，打印需要 Hang 点击的 `login.tailscale.com/f/serve` 链接，而不会一直等待。
+- `scripts/k8s/configure-funnel.sh`：仅在 Tailscale 已登录时启用 Funnel，不发起交互登录。若控制台尚未开启 Serve，脚本限时执行并以状态码 2 退出，打印需要 Hang 点击的 `login.tailscale.com/f/serve` 链接，而不会一直等待。Serve 已开启后，使用 `tailscale funnel --bg http://127.0.0.1:30080` 指向 Ingress NodePort；避免 `funnel --bg 443` 把后端改到本机 443。
 
 ## 集成测试结果（2026-11-18）
 
@@ -123,7 +123,7 @@ bash scripts/k8s/configure-funnel.sh
 | I-015-gateway-gvisor | 通过 | 网关 Pod 运行在 gVisor |
 | I-016-host-port-forward | 通过 | 本机 `127.0.0.1:18721` 上 `/health` 和 `/admin/login` 均为 200 |
 
-### 经 Ingress NodePort 的入口检查（Funnel 尚未就绪）
+### 经 Ingress NodePort 的入口检查（Funnel 开启前）
 
 测试时间：2026-11-18 08:42 Asia/Shanghai。请求打到本机 `http://127.0.0.1:30080`，`Host: jasagent-cloud.tail01f87a.ts.net`，由 Ingress 补 `X-Forwarded-Proto: https`。这是 Funnel 终止 TLS 后的同一条路径，但还不是公网 `https://jasagent-cloud.tail01f87a.ts.net`。
 
@@ -134,36 +134,37 @@ bash scripts/k8s/configure-funnel.sh
 - 用一次性测试账号经 `POST /login` 登录后，`JASAGENT_SESSION` 带 Secure、HttpOnly、path `/`、SameSite=Lax。随后 `GET /api/me` 返回 200（`login` 为该测试账号），`GET /admin` 与 `GET /admin/cluster` 返回 200 HTML（控制台为同一套前端壳）。该测试账号只用于本轮验收，随后已从网关 Pod 删除，口令和会话未写入仓库或本记录。
 - 本机明文直连 `http://127.0.0.1:18721` 登录时，Cookie 有 HttpOnly，但没有 Secure。客户端自己带上 `X-Forwarded-Proto: https` 也不会被加上 Secure。
 - Ingress 实际生成的 nginx 配置含 `proxy_buffering off`、`proxy_request_buffering off`，并把 `X-Forwarded-Proto` 设为 `https`。没有现成的真实执行流可供端到端打开 EventSource；对不存在的执行访问 `/api/executions/<id>/events` 经 NodePort 立即返回 400（`errorCode` 为 `PERSIST`，`message` 为「执行不存在」），说明这条路径没有把短响应整包卡住，但还不能当成经公网主机名的 EventSource 验收。
-- 本机访问 `https://jasagent-cloud.tail01f87a.ts.net/health` 与 `/admin/login` 均因 TLS unexpected EOF 失败；访问 `https://100.69.17.4:443` 连接被拒绝。`tailscale serve status` / `funnel status` 均为 “No serve config”。
+- 当时本机访问 `https://jasagent-cloud.tail01f87a.ts.net/health` 与 `/admin/login` 均因 TLS unexpected EOF 失败；访问 `https://100.69.17.4:443` 连接被拒绝。`tailscale serve status` / `funnel status` 均为 “No serve config”。该结论只适用于 08:42 当时，已被下文公网 Funnel 检查取代。
+
+
+### 经公网 Funnel 的入口检查
+
+测试时间：2026-11-18 08:50 Asia/Shanghai。Hang 开启 Serve 后，本机执行 `tailscale funnel --bg http://127.0.0.1:30080`，状态为 Funnel on，代理为 `http://127.0.0.1:30080`。第一次 `configure-funnel.sh` 里的 `tailscale funnel --bg 443` 曾把代理改成 `http://127.0.0.1:443`，已当场纠正，并改了脚本。证书由 Let's Encrypt 签发，主题为 `jasagent-cloud.tail01f87a.ts.net`，有效期 2026-11-17 23:50:04 UTC 至 2027-02-15 23:50:03 UTC。
+
+从本机经公网 DNS（绕过 MagicDNS 的 `198.18.0.1`）访问 Funnel 边缘 `209.177.145.97` 与 `209.177.145.192`：
+
+- `GET https://jasagent-cloud.tail01f87a.ts.net/health` 返回 200，正文 `{"status":"up"}`，证书校验通过。
+- 未登录 `GET /admin`、`GET /admin/`、`GET /admin/cluster`、`GET /nacos/` 的 `Location` 均为相对路径 `/admin/login`，都不含 `127.0.0.1`，也不是写死的 `http://` 绝对地址。未登录 `GET /admin/login` 返回 200 HTML（标题为「登录 · JaSAgent」）。
+- 未登录 `GET /api/me` 返回 401。
+- 未登录访问不存在的执行 `/api/executions/not-a-real-id/events` 立即返回 401（`errorCode` 为 `AUTH`），没有被整包卡住。这还不能代替登录后的 EventSource 验收，也还没有一条真实执行流。
+- 经本机 Tailscale 地址 `100.69.17.4:443` 并带上正确 SNI 时，`/health` 同样为 200。从这台云电脑直接解析该主机名会得到 MagicDNS 地址 `198.18.0.1`，TLS 会出现 unexpected EOF；这是本机拦截，不是公网入口失败。
+
+登录后的会话 Cookie、控制台页面和 EventSource，请 Hang 用集群外浏览器（含手机）打开 `https://jasagent-cloud.tail01f87a.ts.net/admin/login` 确认。经 NodePort 的一次性测试账号登录此前已确认 Cookie 带 Secure、HttpOnly、path `/`、SameSite=Lax。
 
 ### 规格第 9 到第 14 条
 
 | 验收 | 结果 | 说明 |
 | --- | --- | --- |
-| 9. Funnel 给出稳定的 `*.ts.net` HTTPS 主机名，路径为该主机名 → Funnel → Ingress-nginx → 只转到 `jasagent-gateway:18721` | 未完成 | 预定主机名是 `https://jasagent-cloud.tail01f87a.ts.net`。Ingress-nginx 与只到网关的 Ingress 已就绪，本机 NodePort 30080 已验证。本机 Tailscale 已登录，但 tailnet 未开启 Serve，Funnel 未创建，该主机名目前不能提供 HTTPS |
-| 10. 公网入口不暴露 web、Nacos、MySQL、Redis、agent 或其它非网关组件 | 通过（入口清单与本机路径） | Ingress 后端只有 `jasagent-gateway:18721`；经 NodePort 访问 `/nacos/` 仍落到网关登录跳转。公网主机名尚未接上 Funnel |
-| 11. Ingress-nginx 不使用 hostNetwork，并纳入 gVisor；Funnel 与 Ingress 不整包缓冲，控制台 EventSource 经 `https://<*.ts.net>` 可用 | 部分通过 | 控制器 `hostNetwork=false`、`runtimeClassName=gvisor`，nginx 已关闭整包缓冲。经 Funnel 主机名的 EventSource 尚未验证 |
-| 12. 经该 HTTPS 主机名可以打开控制台并完成登录；会话 Cookie 带 Secure；跳转不落到 `127.0.0.1` 或 HTTP | 部分通过 | 经 Ingress NodePort（Funnel 终止 TLS 后的同一跳，Host 为预定公网主机名）登录成功，Cookie 带 Secure、HttpOnly、path `/`、SameSite=Lax，跳转为相对路径。直连 HTTP 不加 Secure。本机与集群外都还不能打开 `https://jasagent-cloud.tail01f87a.ts.net` |
+| 9. Funnel 给出稳定的 `*.ts.net` HTTPS 主机名，路径为该主机名 → Funnel → Ingress-nginx → 只转到 `jasagent-gateway:18721` | 通过 | 公网主机名是 `https://jasagent-cloud.tail01f87a.ts.net`。Funnel 已开启并指向 NodePort 30080，Ingress 只转到 `jasagent-gateway:18721`。经公网边缘访问 `/health` 为 200，证书由 Let's Encrypt 签发 |
+| 10. 公网入口不暴露 web、Nacos、MySQL、Redis、agent 或其它非网关组件 | 通过 | Ingress 后端只有 `jasagent-gateway:18721`；经公网主机名访问 `/nacos/` 仍落到网关登录跳转 |
+| 11. Ingress-nginx 不使用 hostNetwork，并纳入 gVisor；Funnel 与 Ingress 不整包缓冲，控制台 EventSource 经 `https://<*.ts.net>` 可用 | 部分通过 | 控制器 `hostNetwork=false`、`runtimeClassName=gvisor`，nginx 已关闭整包缓冲。经公网主机名访问不存在的执行 `/events` 立即返回 401，没有被整包卡住；登录后的 EventSource 仍待集群外浏览器确认，本轮没有现成的真实执行流 |
+| 12. 经该 HTTPS 主机名可以打开控制台并完成登录；会话 Cookie 带 Secure；跳转不落到 `127.0.0.1` 或 HTTP | 部分通过 | 经公网 HTTPS 已打开登录页；未登录访问控制台的跳转是相对路径 `/admin/login`。经 NodePort 的登录此前已确认 Cookie 带 Secure、HttpOnly、path `/`、SameSite=Lax。集群外（含手机）完成登录并进入控制台、`/admin/cluster` 仍待 Hang 确认 |
 | 13. 官方探测整体 `PROBE PASSED`；egress 与 gVisor 范围未缩小；I-001 至 I-016 通过；网关单副本；018 sidecar 与出站约定仍有效 | 通过 | 08:39:39 官方探测通过，08:41:42 I-001 至 I-016 通过；网关副本为 1；发现结果为两台非回环 Pod IP:8080；agent 直连外网仍被拦，同 Pod sidecar 可出站 |
-| 14. Funnel/Tailscale 凭证不进 Git；`deploy.md` 写有公网主机名、环境地址、命令和集成测试结果 | 部分完成 | 本文件写有预定公网主机名 `https://jasagent-cloud.tail01f87a.ts.net`、环境地址、命令和已做完的测试结果，仓库中无 Tailscale 凭证。Funnel 尚未就绪，集群外 / 手机浏览器验收待 Hang 开启 Serve 并再次配置 Funnel 后进行 |
+| 14. Funnel/Tailscale 凭证不进 Git；`deploy.md` 写有公网主机名、环境地址、命令和集成测试结果 | 部分完成 | 本文件已写公网主机名 `https://jasagent-cloud.tail01f87a.ts.net`、环境地址、命令、官方探测、I-001 至 I-016 以及公网 HTTPS 探测结果，仓库中无 Tailscale 凭证。集群外 / 手机浏览器的登录验收仍待 Hang 确认 |
 
 ## 还需要 Hang 做的事
 
-本机 Tailscale 已经用 Hang 的账号登录，设备名为 `jasagent-cloud`，稳定主机名为 `jasagent-cloud.tail01f87a.ts.net`。不要再执行 `tailscale up` 或 `tailscale login`，也不要在群里走设备码。当前挡住 Funnel 的是 tailnet 控制台尚未开启 Serve / Funnel / HTTPS。
-
-请 Hang 用已经登录的 Tailscale 账号在浏览器打开：
-
-https://login.tailscale.com/f/serve?node=nePWyyCqVM11CNTRL
-
-按页面提示为该 tailnet 开启 Serve / Funnel / HTTPS。若该短链过期，可改到 Tailscale 管理控制台（[https://login.tailscale.com/admin](https://login.tailscale.com/admin)）打开 DNS 或 Features 里与 HTTPS、Funnel、Serve 相关的开关，确保 `jasagent-cloud` 所在 tailnet 允许 Funnel。
-
-开启之后，在这台云电脑上重新执行：
-
-```bash
-bash scripts/k8s/configure-funnel.sh
-```
-
-预期输出类似：`FUNNEL READY https://jasagent-cloud.tail01f87a.ts.net`。然后再用集群外浏览器（含手机）打开：
+Funnel 已经开启，不必再执行 `tailscale up`、`tailscale login` 或 `configure-funnel.sh`，也不要在群里走设备码。请用集群外浏览器（含手机）打开：
 
 - `https://jasagent-cloud.tail01f87a.ts.net/admin/login` 完成登录，进入控制台和 `/admin/cluster`
 - 未登录访问控制台应被转到 `/admin/login`
@@ -180,7 +181,7 @@ bash scripts/k8s/configure-funnel.sh
 - 节点 `CIDRAssignmentFailed` 事件仍会出现，但 Pod 实际拿到了 `10.42.0.0/24` 地址，业务与探测未因此失败。
 - 这台云电脑的 Docker / k3s 状态已两次被抹（11-17 下午与 11-18 凌晨）。二进制和辅助脚本还在，但进程与 `/var/lib/docker`、`/var/lib/rancher/k3s` 不会自动恢复。
 
-019 在云电脑上的 Ingress、官方探测和 I-001 至 I-016 已在 11-18 恢复后重跑完成。公网 Funnel 待 Hang 在控制台开启 Serve 后再补。
+019 在云电脑上的 Ingress、官方探测、I-001 至 I-016 和公网 Funnel HTTPS 已在 11-18 落地。集群外（含手机）登录与 EventSource 仍待 Hang 确认。
 
 ## 2026-11-17 首次部署（历史）
 

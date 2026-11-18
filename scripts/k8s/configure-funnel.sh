@@ -57,8 +57,10 @@ run_tailscale_bg() {
   rm -f "${log}"
 }
 
-run_tailscale_bg "tailscale serve" tailscale serve --bg "${LOCAL_URL}"
-run_tailscale_bg "tailscale funnel" tailscale funnel --bg 443
+# 必须把 Funnel 的后端写成 NodePort 地址。
+# `tailscale serve --bg "${LOCAL_URL}"` 后再执行 `tailscale funnel --bg 443`
+# 会把代理改成 http://127.0.0.1:443，本机 443 没有业务进程，公网 HTTPS 会失败。
+run_tailscale_bg "tailscale funnel" tailscale funnel --bg "${LOCAL_URL}"
 
 host="$(tailscale status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("Self") or {}).get("DNSName") or "")' | sed 's/\.$//')"
 if [[ -z "${host}" || "${host}" != *.ts.net ]]; then
