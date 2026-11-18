@@ -1,0 +1,2 @@
+2026-11-18T19:55:26+0800	T-001	模块测试 SidecarPlatformThreadTest#waitingForAgentpassDoesNotHoldPlatformWorkers,SidecarPlatformThreadTest#waitingForUpstreamHeadersDoesNotHoldPlatformWorkers,SidecarPlatformThreadTest#longStreamsExceedPlatformWorkers	7343	退出码 0
+2026-11-18T19:55:26+0800	T-001	等待和抄写不占平台工作线程	7356	通过

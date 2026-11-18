@@ -1,0 +1,2 @@
+2026-11-18T19:55:35+0800	T-004	压低用平台工作线程参数且 threads.max 保持较高	27	通过
+2026-11-18T19:55:39+0800	T-004	模块测试 SidecarPlatformThreadTest#longStreamsExceedPlatformWorkers	4080	退出码 0

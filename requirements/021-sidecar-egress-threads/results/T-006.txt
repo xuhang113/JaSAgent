@@ -1,0 +1,1 @@
+T-006	通过	018 规格第 1 到 9 条的行为约定仍然成立，本轮复跑须通过：离开集群的 HTTP 仍由 agent 经 `/v1/forward` 发出；Nacos（含 gRPC 9848）、MySQL、Redis、网关和本集群服务不经 sidecar；向 Nacos 注册的仍是非回环地址；`/v1/forward` 对请求体和响应体做流式转发；大模型白名单和票据核销规则仍然有效；本机启动脚本拉起 sidecar，两台 agent 可共用一个回环 sidecar。本轮不要求再改 `jasagent-app` / `jasagent-llm`。	4674	logs/T-006.log

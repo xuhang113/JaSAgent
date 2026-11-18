@@ -1,0 +1,27 @@
+changelog/2026-11-18-sidecar-egress-threads.md
+jasagent-sidecar/src/main/java/dev/jasagent/sidecar/CarrierFreeBody.java
+jasagent-sidecar/src/main/java/dev/jasagent/sidecar/EgressController.java
+jasagent-sidecar/src/main/java/dev/jasagent/sidecar/EgressResponsePump.java
+jasagent-sidecar/src/main/java/dev/jasagent/sidecar/HttpTicketOffice.java
+jasagent-sidecar/src/main/java/dev/jasagent/sidecar/JdkUpstreamClient.java
+jasagent-sidecar/src/main/java/dev/jasagent/sidecar/SidecarConfiguration.java
+jasagent-sidecar/src/main/java/dev/jasagent/sidecar/SidecarProperties.java
+jasagent-sidecar/src/main/java/dev/jasagent/sidecar/TomcatPlatformWorkerCustomizer.java
+jasagent-sidecar/src/main/resources/application.properties
+jasagent-sidecar/src/test/java/dev/jasagent/sidecar/SidecarContractTest.java
+jasagent-sidecar/src/test/java/dev/jasagent/sidecar/SidecarEgressTest.java
+jasagent-sidecar/src/test/java/dev/jasagent/sidecar/SidecarPlatformThreadTest.java
+requirements/021-sidecar-egress-threads/tdd.md
+requirements/021-sidecar-egress-threads/tests/021-sidecar-egress-threads.sh
+requirements/021-sidecar-egress-threads/tests/T-001
+requirements/021-sidecar-egress-threads/tests/T-002
+requirements/021-sidecar-egress-threads/tests/T-003
+requirements/021-sidecar-egress-threads/tests/T-004
+requirements/021-sidecar-egress-threads/tests/T-005
+requirements/021-sidecar-egress-threads/tests/T-006
+requirements/021-sidecar-egress-threads/tests/T-007
+requirements/021-sidecar-egress-threads/tests/T-008
+requirements/021-sidecar-egress-threads/tests/T-009
+requirements/021-sidecar-egress-threads/tests/lib.sh
+scripts/test-021-sidecar-egress-threads.sh
+2026-11-18T19:55:15+0800	T-007	改动只在 sidecar、本轮脚本、变更记录和 ATDD	45	通过

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-007"
+result_text='实现改动只覆盖 `jasagent-sidecar` 以及对应测试和脚本，不改 `jasagent-app` / `jasagent-llm`，不改运行时执行模型。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'CHK'
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+cmd = "cd %s && { git diff --name-only %s HEAD; git ls-files --others --exclude-standard; } | sed '/^$/d' | sort -u" % (repo, base)
+names = subprocess.check_output(["bash", "-lc", cmd], text=True).splitlines()
+bad = []
+for name in names:
+    if name.startswith("jasagent-sidecar/"):
+        continue
+    if name == "scripts/test-021-sidecar-egress-threads.sh":
+        continue
+    if name == "changelog/2026-11-18-sidecar-egress-threads.md":
+        continue
+    if name.startswith("requirements/021-sidecar-egress-threads/"):
+        continue
+    bad.append(name)
+if not names:
+    raise SystemExit("相对规格提交没有改动。")
+if bad:
+    print("改动超出 021 允许范围：", file=sys.stderr)
+    print("\n".join(bad), file=sys.stderr)
+    raise SystemExit(1)
+print("\n".join(names))
+CHK
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "改动只在 sidecar、本轮脚本、变更记录和 ATDD" "通过" >> "${ATDD_LOG}"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"
