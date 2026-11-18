@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 /**
  * 用 JDK HTTP 客户端访问已经获准的上游。请求体和响应体都按流传递，不把整段收进内存。
@@ -39,7 +40,8 @@ public final class JdkUpstreamClient implements UpstreamClient, AutoCloseable {
 
     /**
      * 把请求送到上游。HEAD 和空正文不带体；其余方法把调用方的流原样写出去。
-     * 响应体留在返回的流里，由调用方按块读。连接失败时返回未到达，不附带异常原文。
+     * 用 {@code sendAsync} 等待响应头，调用方若是虚拟线程会卸下载体，不占 Tomcat 平台工作线程。
+     * 响应体留在 {@link CarrierFreeBody} 的流里，读取时也不会把载体钉死。连接失败时返回未到达，不附带异常原文。
      *
      * @param method 大写的 HTTP 方法
      * @param uri 规范绝对地址
@@ -68,14 +70,18 @@ public final class JdkUpstreamClient implements UpstreamClient, AutoCloseable {
                     }
                 }
             }
-            HttpResponse<InputStream> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<InputStream> response = http.sendAsync(builder.build(), CarrierFreeBody.handler()).get();
             String contentType = response.headers().firstValue("content-type").orElse("");
             return UpstreamResponse.reached(response.statusCode(), contentType, response.body());
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             log.info("upstream interrupted kind={}", ex.getClass().getSimpleName());
             return UpstreamResponse.failed();
-        } catch (Exception ex) {
+        } catch (ExecutionException ex) {
+            Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+            log.info("upstream failed kind={}", cause.getClass().getSimpleName());
+            return UpstreamResponse.failed();
+        } catch (RuntimeException ex) {
             log.info("upstream failed kind={}", ex.getClass().getSimpleName());
             return UpstreamResponse.failed();
         }
