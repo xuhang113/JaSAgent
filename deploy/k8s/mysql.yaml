@@ -1,6 +1,10 @@
 # 集群内 MySQL。业务容器不把口令写进镜像或清单，只引用 Secret。
 # 中间件用节点默认运行时，不套 gVisor。库名是 jasagent。
 # 新数据目录由 MYSQL_DATABASE 创建。已有数据目录时，scripts/up-stack.sh 再执行 CREATE DATABASE IF NOT EXISTS。
+# 这是栈里已有的那一个 MySQL，不另建外部数据库。
+# 账号表 jasagent_account、登录会话表 jasagent_login_session 和聊天会话表 agent_session 都写在库 jasagent。
+# 数据目录仍是本 Deployment 已有的 emptyDir。删掉或重启网关 Pod 不会清掉这个目录。
+# 网关和 agent 的 home emptyDir 不是这些表的存储。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -71,6 +75,7 @@ spec:
             - name: data
               mountPath: /var/lib/mysql
       volumes:
+        # 已有 MySQL 的数据目录。库 jasagent 的表文件在这里，不在网关 home。
         - name: data
           emptyDir: {}
 ---
