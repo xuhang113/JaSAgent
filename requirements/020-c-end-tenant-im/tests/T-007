@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-007"
+result_text='已登录用户可以在 IM 会话壳里新建会话，并在自己的会话列表里看到它。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-gateway" \
+    "CEndTenantImTest#gatewayRejectsForeignSessionsBeforeForwarding"
+  atdd_npm_test "src/views/ConsoleView.spec.js src/views/RegisterView.spec.js"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "会话壳可新建会话并在列表中看到" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

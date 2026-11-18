@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-005"
+result_text='普通用户调用 `GET /api/cluster`（以及本轮存在的其它集群监控接口）被网关拒绝；直接访问 `/admin/cluster` 也被网关拒绝。不得只靠前端隐藏。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-gateway" \
+    "CEndTenantImTest#clusterIsAdminOnlyAndImportedOperatorKeepsAdmin"
+  atdd_npm_test "src/views/ConsoleView.spec.js src/router.spec.js"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "网关拒绝普通用户的集群接口和集群页" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

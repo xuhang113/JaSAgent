@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-011"
+result_text='019 的 Cookie 和跳转约定仍然成立：`JASAGENT_SESSION` 为 HttpOnly、path `/`、SameSite=Lax；Secure 只在受信任上一跳声明 HTTPS 时出现；本机明文直连不加 Secure；跳转 Location 不得写死 `127.0.0.1` 或 `http://` 绝对地址。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  if grep -q "sendRedirect(" "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewaySessionFilter.java"; then
+    echo "未登录跳转仍会拼绝对地址。" >&2
+    exit 1
+  fi
+  atdd_mvn_test "jasagent-gateway" \
+    "PublicIngressFilterTest,CEndTenantImTest#registerCreatesAnOrdinaryTenantAndCanEnterTheConsole"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "019 的 Cookie 和相对跳转约定仍然成立" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

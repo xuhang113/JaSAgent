@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-006"
+result_text='普通用户（以及 admin）构造对他人会话的详情、消息、时间线或删除等请求时，网关在转发前拒绝。不得只依赖 agent 侧 `SessionLedger` 才失败。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  gate_check="$(python3 "$HERE/check-admin-foreign-session.py" "${REPO_ROOT}")"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "转发前拒绝他人会话且 admin 无豁免" "${gate_check}" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-gateway" \
+    "ChatSessionGateTest,CEndTenantImTest#gatewayRejectsForeignSessionsBeforeForwarding"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "普通用户和 admin 请求他人会话都在转发前被拒绝" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

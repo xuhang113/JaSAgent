@@ -1,0 +1,2 @@
+2026-11-18T14:25:24+0800	T-013	模块测试 MysqlAccountAuthTest#importedOperatorStaysAdminAndDoesNotPromoteARegisteredUser,CEndTenantImTest#clusterIsAdminOnlyAndImportedOperatorKeepsAdmin	7115	退出码 0
+2026-11-18T14:25:24+0800	T-013	运维账号仍是 admin，新注册用户没有集群权限	7133	通过

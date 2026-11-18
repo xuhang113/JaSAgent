@@ -1,0 +1,1 @@
+T-011	通过	019 的 Cookie 和跳转约定仍然成立：`JASAGENT_SESSION` 为 HttpOnly、path `/`、SameSite=Lax；Secure 只在受信任上一跳声明 HTTPS 时出现；本机明文直连不加 Secure；跳转 Location 不得写死 `127.0.0.1` 或 `http://` 绝对地址。	5894	logs/T-011.log

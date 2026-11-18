@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-002"
+result_text='每次注册都创建独立租户，一人一租户；没有加入已有租户或邀请入租户的入口或接口。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  if grep -R -n -E '@(Post|Get|Request)Mapping\([^)]*(/join|tenants)' \
+    "${REPO_ROOT}/jasagent-gateway/src/main" \
+    "${REPO_ROOT}/jasagent-web/src" >/dev/null; then
+    echo "出现了加入已有租户的接口。" >&2
+    exit 1
+  fi
+  python3 - "${REPO_ROOT}/jasagent-web/frontend/src" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+# 说明性的“不能加入已有租户”不算入口。真正的加入/邀请符号才失败。
+positive = re.compile(r"(joinTenant|inviteToTenant|邀请入租户|/join\b|/invites?\b)")
+negated = re.compile(r"(不能|没有|不提供|不可|无法)加入已有租户")
+bad = []
+for path in root.rglob("*"):
+    if not path.is_file() or path.suffix not in {".js", ".vue", ".ts"}:
+        continue
+    text = path.read_text(encoding="utf-8")
+    for i, line in enumerate(text.splitlines(), 1):
+        if negated.search(line):
+            continue
+        if "加入已有租户" in line or positive.search(line):
+            bad.append(f"{path}:{i}:{line.strip()}")
+if bad:
+    print("前端出现了加入已有租户或邀请入租户的入口：", file=sys.stderr)
+    print("\n".join(bad), file=sys.stderr)
+    raise SystemExit(1)
+PY
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "没有加入已有租户或邀请入口" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-auth,jasagent-gateway" \
+    "MysqlAccountAuthTest#registrationIsOrdinaryAndSurvivesReopen,CEndTenantImTest#registerCreatesAnOrdinaryTenantAndCanEnterTheConsole"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "每次注册都创建独立租户" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

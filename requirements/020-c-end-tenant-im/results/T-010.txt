@@ -1,0 +1,1 @@
+T-010	通过	聊天会话仍落在 MySQL 的 `agent_session`（或本轮明确指定的同一已有库中的表），而不是只写在 emptyDir 或内存。	2377	logs/T-010.log

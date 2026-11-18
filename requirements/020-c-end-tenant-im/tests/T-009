@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-009"
+result_text='账号和登录会话写在已有 MySQL 里，而不是只写在 `${user.home}` 文件目录或 emptyDir。仓库内的测试须能证明存储后端是 MySQL（或同等已有库），并且进程重启后账号仍可登录。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  if ! grep -q "jdbc:mysql://127.0.0.1:3306/jasagent" \
+    "${REPO_ROOT}/jasagent-auth/src/main/java/dev/jasagent/auth/MysqlAccountAuth.java"; then
+    echo "账号存储没有指向已有 MySQL。" >&2
+    exit 1
+  fi
+  atdd_mvn_test "jasagent-auth,jasagent-gateway" \
+    "MysqlAccountAuthTest#registrationIsOrdinaryAndSurvivesReopen,CEndTenantImTest#clusterIsAdminOnlyAndImportedOperatorKeepsAdmin"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "账号和登录会话在 MySQL，重启后仍可登录" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

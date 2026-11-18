@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-010"
+result_text='聊天会话仍落在 MySQL 的 `agent_session`（或本轮明确指定的同一已有库中的表），而不是只写在 emptyDir 或内存。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  if ! grep -q "agent_session" \
+    "${REPO_ROOT}/jasagent-persist/src/main/java/dev/jasagent/persist/SessionLedger.java"; then
+    echo "聊天会话没有继续使用 agent_session。" >&2
+    exit 1
+  fi
+  atdd_mvn_test "jasagent-persist" \
+    "SessionLedgerMysqlTest#ownershipStaysInMysqlAndFollowsTheUserTenant"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "聊天会话仍落在 MySQL 的 agent_session" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"
