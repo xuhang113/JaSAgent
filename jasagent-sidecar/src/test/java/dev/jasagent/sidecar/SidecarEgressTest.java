@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.RequestBuilder;
+import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.io.ByteArrayInputStream;
@@ -18,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -57,6 +61,34 @@ class SidecarEgressTest {
     }
 
     /**
+     * 发出一次 {@code /v1/forward} 并等到虚拟线程把响应写完。健康检查不走这条路径。
+     *
+     * @param builder 已经带好目的地址和正文的请求
+     * @return 异步结束后的结果
+     */
+    private MvcResult completed(RequestBuilder builder) throws Exception {
+        MvcResult result = mvc.perform(builder).andReturn();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (result.getRequest().isAsyncStarted() && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertFalse(result.getRequest().isAsyncStarted(), "forward did not finish");
+        return result;
+    }
+
+    /**
+     * 对已经完成的结果套用状态和正文断言。
+     *
+     * @param result 异步结束后的结果
+     * @param matchers 状态、正文等断言
+     */
+    private static void expect(MvcResult result, ResultMatcher... matchers) throws Exception {
+        for (ResultMatcher matcher : matchers) {
+            matcher.match(result);
+        }
+    }
+
+    /**
      * {@code /health} 不访问通行证，也不转发。带上证明文头也不会核销。
      */
     @Test
@@ -79,12 +111,12 @@ class SidecarEgressTest {
                 "https://api.deepseek.com/chat/completions",
                 "https://api.x.ai/v1/chat/completions",
                 "https://API.X.AI/v1/models")) {
-            mvc.perform(post(EgressPaths.FORWARD)
+            expect(completed(post(EgressPaths.FORWARD)
                             .header(EgressHeaders.URL, url)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"ping\":true}"))
-                    .andExpect(status().isOk())
-                    .andExpect(content().string("llm-ok"));
+                            .content("{\"ping\":true}")),
+                    status().isOk(),
+                    content().string("llm-ok"));
         }
         assertEquals(3, upstream.calls);
         assertEquals(0, office.verifies);
@@ -120,12 +152,12 @@ class SidecarEgressTest {
                 "https://example.com/v1",
                 "https://api.deepseek.com.evil.com/chat/completions",
                 "https://evil.api.x.ai/v1")) {
-            mvc.perform(post(EgressPaths.FORWARD)
+            expect(completed(post(EgressPaths.FORWARD)
                             .header(EgressHeaders.URL, url)
                             .header("X-Forwarded-Host", "api.deepseek.com")
-                            .content("secret"))
-                    .andExpect(status().isUnauthorized())
-                    .andExpect(content().json("{\"admitted\":false,\"reason\":\"missing-ticket\"}"));
+                            .content("secret")),
+                    status().isUnauthorized(),
+                    content().json("{\"admitted\":false,\"reason\":\"missing-ticket\"}"));
         }
         assertEquals(0, upstream.calls);
         assertEquals(0, office.verifies);
@@ -137,10 +169,10 @@ class SidecarEgressTest {
     @Test
     void userInfoDoesNotBypassAllowlist() throws Exception {
         office.throwOnCall = true;
-        mvc.perform(post(EgressPaths.FORWARD)
-                        .header(EgressHeaders.URL, "https://api.deepseek.com@evil.example/chat"))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().json("{\"admitted\":false,\"reason\":\"bad-target\"}"));
+        expect(completed(post(EgressPaths.FORWARD)
+                        .header(EgressHeaders.URL, "https://api.deepseek.com@evil.example/chat")),
+                status().isBadRequest(),
+                content().json("{\"admitted\":false,\"reason\":\"bad-target\"}"));
         assertEquals(0, upstream.calls);
     }
 
@@ -152,7 +184,7 @@ class SidecarEgressTest {
     void validTicketIsForwarded() throws Exception {
         ListAppender<ILoggingEvent> logs = attachLogs();
         try {
-            mvc.perform(post(EgressPaths.FORWARD)
+            expect(completed(post(EgressPaths.FORWARD)
                             .header(EgressHeaders.URL, "https://example.com/hook?x=1")
                             .header(EgressHeaders.TICKET, TICKET)
                             .header(EgressHeaders.TENANT, "local")
@@ -162,9 +194,9 @@ class SidecarEgressTest {
                             .header(EgressHeaders.TOOL, "web.fetch")
                             .header("Authorization", BEARER)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"n\":1}"))
-                    .andExpect(status().isOk())
-                    .andExpect(content().string("llm-ok"));
+                            .content("{\"n\":1}")),
+                    status().isOk(),
+                    content().string("llm-ok"));
             assertEquals(1, upstream.calls);
             assertEquals(1, office.verifies);
             assertEquals(1, office.redeems);
@@ -191,11 +223,11 @@ class SidecarEgressTest {
      */
     @Test
     void passHeaderIsForwardedOnce() throws Exception {
-        mvc.perform(post(EgressPaths.FORWARD)
+        expect(completed(post(EgressPaths.FORWARD)
                         .header(EgressHeaders.URL, "https://example.com/pass")
                         .header(EgressHeaders.PASS, TICKET)
-                        .content("once"))
-                .andExpect(status().isOk());
+                        .content("once")),
+                status().isOk());
         assertEquals(1, upstream.calls);
         assertEquals(1, office.redeems);
         assertFalse(headerNamed(upstream.lastHeaders, EgressHeaders.PASS));
@@ -207,17 +239,17 @@ class SidecarEgressTest {
     @Test
     void sameTicketIsRejectedTheSecondTime() throws Exception {
         String url = "https://example.com/once";
-        mvc.perform(post(EgressPaths.FORWARD)
+        expect(completed(post(EgressPaths.FORWARD)
                         .header(EgressHeaders.URL, url)
                         .header(EgressHeaders.TICKET, TICKET)
-                        .content("first"))
-                .andExpect(status().isOk());
-        mvc.perform(post(EgressPaths.FORWARD)
+                        .content("first")),
+                status().isOk());
+        expect(completed(post(EgressPaths.FORWARD)
                         .header(EgressHeaders.URL, url)
                         .header(EgressHeaders.TICKET, TICKET)
-                        .content("second"))
-                .andExpect(status().isForbidden())
-                .andExpect(content().json("{\"admitted\":false,\"reason\":\"used\"}"));
+                        .content("second")),
+                status().isForbidden(),
+                content().json("{\"admitted\":false,\"reason\":\"used\"}"));
         assertEquals(1, upstream.calls);
         assertEquals("first", new String(upstream.lastBody, StandardCharsets.UTF_8));
         assertTrue(office.verifies >= 2);
@@ -229,23 +261,23 @@ class SidecarEgressTest {
     @Test
     void forgedExpiredAndMismatchedTicketsAreNotForwarded() throws Exception {
         office.preset = TicketVerdict.invalid(EgressReasons.PROOF_INVALID);
-        mvc.perform(post(EgressPaths.FORWARD)
+        expect(completed(post(EgressPaths.FORWARD)
                         .header(EgressHeaders.URL, "https://example.com/forged")
-                        .header(EgressHeaders.TICKET, "forged"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(content().json("{\"admitted\":false,\"reason\":\"proof-invalid\"}"));
+                        .header(EgressHeaders.TICKET, "forged")),
+                status().isUnauthorized(),
+                content().json("{\"admitted\":false,\"reason\":\"proof-invalid\"}"));
         office.preset = new TicketVerdict(true, false, true, true, true, true, true, true, false, "expired");
-        mvc.perform(post(EgressPaths.FORWARD)
+        expect(completed(post(EgressPaths.FORWARD)
                         .header(EgressHeaders.URL, "https://example.com/expired")
-                        .header(EgressHeaders.TICKET, "expired"))
-                .andExpect(status().isForbidden())
-                .andExpect(content().json("{\"admitted\":false,\"reason\":\"expired\"}"));
+                        .header(EgressHeaders.TICKET, "expired")),
+                status().isForbidden(),
+                content().json("{\"admitted\":false,\"reason\":\"expired\"}"));
         office.preset = new TicketVerdict(true, false, false, true, false, true, true, true, false, "target-mismatch");
-        mvc.perform(post(EgressPaths.FORWARD)
+        expect(completed(post(EgressPaths.FORWARD)
                         .header(EgressHeaders.URL, "https://example.com/mismatch")
-                        .header(EgressHeaders.TICKET, "mismatch"))
-                .andExpect(status().isForbidden())
-                .andExpect(content().json("{\"admitted\":false,\"reason\":\"target-mismatch\"}"));
+                        .header(EgressHeaders.TICKET, "mismatch")),
+                status().isForbidden(),
+                content().json("{\"admitted\":false,\"reason\":\"target-mismatch\"}"));
         assertEquals(0, upstream.calls);
     }
 
@@ -254,11 +286,11 @@ class SidecarEgressTest {
      */
     @Test
     void modelHostDoesNotRedeemPresentedTicket() throws Exception {
-        mvc.perform(post(EgressPaths.FORWARD)
+        expect(completed(post(EgressPaths.FORWARD)
                         .header(EgressHeaders.URL, "https://api.deepseek.com/chat/completions")
                         .header(EgressHeaders.TICKET, TICKET)
-                        .content("model"))
-                .andExpect(status().isOk());
+                        .content("model")),
+                status().isOk());
         assertEquals(1, upstream.calls);
         assertEquals(0, office.verifies);
         assertEquals(0, office.redeems);

@@ -1,0 +1,4 @@
+2026-11-18T19:55:43+0800	T-006	本轮未改 app 和 llm	12	通过
+2026-11-18T19:55:48+0800	T-006	模块测试 SidecarEgressTest,SidecarHealthTest,SidecarContractTest,SidecarStreamTest,TicketWireTest,LlmAllowlistTest	4592	退出码 0
+2026-11-18T19:55:48+0800	T-006	018 白名单、票据、流式和健康检查	4605	通过
+2026-11-18T19:55:48+0800	T-006	出站仍经 sidecar 且本机脚本仍拉起 sidecar	4663	通过

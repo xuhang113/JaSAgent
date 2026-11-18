@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-003"
+result_text='在第 2 条的并发长流式进行期间，`/health` 和新的 `/v1/forward` 仍要在超时内可用。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-sidecar" "SidecarPlatformThreadTest#longStreamsExceedPlatformWorkers"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "长流期间健康检查和新的转发可用" "通过" >> "${ATDD_LOG}"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

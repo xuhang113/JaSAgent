@@ -46,6 +46,7 @@ class SidecarContractTest {
         String text = Files.readString(properties);
         assertTrue(text.contains("JASAGENT_LLM_ALLOWLIST"));
         assertTrue(text.contains("server.port=8080"));
+        assertTrue(text.contains("jasagent.sidecar.tomcat-platform-workers=0"));
         assertFalse(text.contains("BEGIN PRIVATE KEY"));
         assertEquals(LlmAllowlist.ALLOWLIST_ENV, "JASAGENT_LLM_ALLOWLIST");
     }

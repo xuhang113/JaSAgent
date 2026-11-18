@@ -13,6 +13,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 /**
  * 用 JDK HTTP 客户端调用已有 agentpass 的校验和核销接口。
@@ -99,7 +100,7 @@ public final class HttpTicketOffice implements TicketOffice, AutoCloseable {
 
     /**
      * 向通行证服务发送 JSON。证明文只出现在请求体，不出现在地址或日志里。
-     * 连接失败、超时或根地址为空时返回空。
+     * 等待响应使用异步 get，虚拟线程会卸下载体。连接失败、超时或根地址为空时返回空。
      *
      * @param path {@link EgressPaths#VERIFY} 或 {@link EgressPaths#REDEEM}
      * @param call 绑定字段
@@ -124,11 +125,16 @@ public final class HttpTicketOffice implements TicketOffice, AutoCloseable {
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(payload)))
                     .build();
-            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            // get 会让虚拟线程卸下载体，等待通行证时不占 Tomcat 平台工作线程。
+            HttpResponse<String> response = http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).get();
             return new Exchange(response.statusCode(), response.body() == null ? "" : response.body());
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             log.info("agentpass call interrupted kind={}", ex.getClass().getSimpleName());
+            return null;
+        } catch (ExecutionException ex) {
+            Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+            log.info("agentpass call failed kind={}", cause.getClass().getSimpleName());
             return null;
         } catch (Exception ex) {
             log.info("agentpass call failed kind={}", ex.getClass().getSimpleName());

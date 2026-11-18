@@ -24,6 +24,11 @@ public class SidecarProperties {
      * {@code JASAGENT_LLM_ALLOWLIST} 的内容。逗号或空白分隔的额外主机，和内置大模型主机一起免证放行。
      */
     private String llmAllowlist = "";
+    /**
+     * 验收时 Tomcat 操作系统平台工作线程的上限。小于 1 表示不替换 Tomcat 自己的线程池，生产默认不压低。
+     * 这不是 {@code server.tomcat.threads.max}；开启虚拟线程时后者往往只是请求槽位。
+     */
+    private int tomcatPlatformWorkers;
 
     /**
      * 返回通行证服务根地址。
@@ -95,5 +100,23 @@ public class SidecarProperties {
      */
     public void setLlmAllowlist(String llmAllowlist) {
         this.llmAllowlist = llmAllowlist;
+    }
+
+    /**
+     * 返回验收用的 Tomcat 平台工作线程上限。
+     *
+     * @return 小于 1 表示沿用 Tomcat 默认池
+     */
+    public int getTomcatPlatformWorkers() {
+        return tomcatPlatformWorkers;
+    }
+
+    /**
+     * 写入验收用的 Tomcat 平台工作线程上限。生产配置保持小于 1，不把线程池改小。
+     *
+     * @param tomcatPlatformWorkers 平台线程数；小于 1 时不安装专用池
+     */
+    public void setTomcatPlatformWorkers(int tomcatPlatformWorkers) {
+        this.tomcatPlatformWorkers = tomcatPlatformWorkers;
     }
 }

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-005"
+result_text='`/v1/forward` 的 HTTP 约定不变，且不再整包缓冲。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+
+  if grep -q 'spring-boot-starter-webflux' "${REPO_ROOT}/jasagent-sidecar/pom.xml"; then
+    echo "sidecar 被改成了 WebFlux。" >&2
+    exit 1
+  fi
+  if grep -R -n -E 'readAllBytes|ofByteArray' "${REPO_ROOT}/jasagent-sidecar/src/main" >/dev/null; then
+    echo "sidecar 仍在整包读取正文。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "未改成 WebFlux 且无整包读取" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-sidecar" "SidecarContractTest#forwardPathDoesNotBufferTheWholeBody,SidecarStreamTest,SidecarEgressTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "HTTP 约定与流式转发" "通过" >> "${ATDD_LOG}"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

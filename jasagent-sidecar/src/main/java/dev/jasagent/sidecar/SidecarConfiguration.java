@@ -1,5 +1,7 @@
 package dev.jasagent.sidecar;
 
+import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
+import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -53,5 +55,17 @@ public class SidecarConfiguration {
     @Bean
     public EgressService egressService(LlmAllowlist allowlist, TicketOffice office, UpstreamClient upstream) {
         return new EgressService(allowlist, office, upstream);
+    }
+
+    /**
+     * 验收需要把 Tomcat 的操作系统平台工作线程压低时，安装固定大小的平台线程池。
+     * 配置小于 1 时定制器不替换线程池，生产默认因此保持 Tomcat 原样。
+     *
+     * @param properties 含平台线程上限的配置
+     * @return 只在上限至少为 1 时改执行器的定制器
+     */
+    @Bean
+    public WebServerFactoryCustomizer<TomcatServletWebServerFactory> tomcatPlatformWorkers(SidecarProperties properties) {
+        return new TomcatPlatformWorkerCustomizer(properties);
     }
 }
