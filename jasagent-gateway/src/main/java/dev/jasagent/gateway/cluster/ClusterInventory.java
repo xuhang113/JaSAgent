@@ -9,7 +9,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -44,16 +46,35 @@ public final class ClusterInventory {
     }
 
     /**
-     * 生成集群正文。没有人粘着时 stickyUsers 是空数组，从未连上时 lastHeartbeat 是空串。
+     * 生成一个租户的集群正文。没有人粘着时 stickyUsers 是空数组，从未连上时 lastHeartbeat 是空串。
      * 缺省不算在线：连接不在时 online 和 connectionAlive 都是假。
      *
      * @param tenantId 只统计这个租户的粘性用户
      * @return 含 agents 数组的映射
      */
     public Map<String, Object> snapshot(String tenantId) {
-        Map<String, List<String>> users = new LinkedHashMap<>();
-        for (AffinityStore.AffinityRow row : store.list(tenantId)) {
-            users.computeIfAbsent(row.instanceId(), ignored -> new ArrayList<>()).add(row.userId());
+        List<String> tenants = tenantId == null || tenantId.isBlank() ? List.of() : List.of(tenantId);
+        return snapshotAll(tenants);
+    }
+
+    /**
+     * 把多个租户的粘性用户并到同一份集群清单。admin 看全集群时用它。
+     * 空白或超过 64 字符的租户跳过，避免粘性库拒绝整次查询。同一实例上的登录名按出现顺序去重。
+     *
+     * @param tenantIds 要合并的租户；为空时粘性用户都是空数组
+     * @return 含 agents 数组的映射
+     */
+    public Map<String, Object> snapshotAll(Collection<String> tenantIds) {
+        Map<String, LinkedHashSet<String>> users = new LinkedHashMap<>();
+        if (tenantIds != null) {
+            for (String tenantId : tenantIds) {
+                if (tenantId == null || tenantId.isBlank() || tenantId.length() > 64) {
+                    continue;
+                }
+                for (AffinityStore.AffinityRow row : store.list(tenantId)) {
+                    users.computeIfAbsent(row.instanceId(), ignored -> new LinkedHashSet<>()).add(row.userId());
+                }
+            }
         }
         List<AgentInstance> catalog;
         try {
@@ -70,7 +91,7 @@ public final class ClusterInventory {
             row.put("address", instance.address());
             row.put("online", alive);
             row.put("connectionAlive", alive);
-            row.put("stickyUsers", users.getOrDefault(instance.instanceId(), List.of()));
+            row.put("stickyUsers", List.copyOf(users.getOrDefault(instance.instanceId(), new LinkedHashSet<>())));
             row.put("lastHeartbeat", liveness.lastHeartbeat(instance).map(ClusterInventory::format).orElse(""));
             agents.add(row);
         }

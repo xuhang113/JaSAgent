@@ -1,0 +1,3 @@
+2026-11-18T14:24:54+0800	T-007	模块测试 CEndTenantImTest#gatewayRejectsForeignSessionsBeforeForwarding	5564	退出码 0
+2026-11-18T14:24:56+0800	T-007	前端测试 src/views/ConsoleView.spec.js src/views/RegisterView.spec.js	7405	退出码 0
+2026-11-18T14:24:56+0800	T-007	会话壳可新建会话并在列表中看到	7418	通过

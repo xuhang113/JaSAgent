@@ -71,6 +71,8 @@ function declaresVisualChrome(body) {
 
 /** 把接口替身恢复成一条挂起的会话，避免用例之间串数据。 */
 function resetState() {
+  state.role = 'admin'
+  state.tenantId = 't-admin'
   state.sessions = [{ sessionId: 's1', title: '检查会话', model: 'deepseek-flash', modelProvider: 'deepseek' }]
   state.models = [
     { id: 'deepseek-flash', provider: 'deepseek', label: 'deepseek-flash' },
@@ -121,7 +123,7 @@ beforeEach(() => {
   api.mockImplementation(async (path, options = {}) => {
     const method = options.method || 'GET'
     if (path === '/api/me') {
-      return { login: 'admin', workspace: '/ws' }
+      return { login: 'admin', workspace: '/ws', role: state.role, tenantId: state.tenantId }
     }
     if (path === '/api/workspaces') {
       return { workspaces: ['/ws'], workspace: '/ws' }
@@ -151,7 +153,9 @@ beforeEach(() => {
       return { role: 'user', text: '请给出时间', executionId: 'exec-1' }
     }
     if (path === '/api/sessions' && method === 'POST') {
-      return { sessionId: 's-new', title: '新会话' }
+      const created = { sessionId: 's-new', title: '新会话' }
+      state.sessions = state.sessions.concat([created])
+      return created
     }
     if (path === '/api/sessions') {
       return state.sessions
@@ -1021,6 +1025,23 @@ describe('会话标题', () => {
     expect(api).toHaveBeenCalledWith('/api/sessions', { method: 'POST', body: { title: '新会话' } })
     const bodies = api.mock.calls.map((call) => JSON.stringify(call[1] && call[1].body))
     expect(bodies.some((body) => body && body.includes('会话 1'))).toBe(false)
+    expect(wrapper.text()).toContain('新会话')
+    wrapper.unmount()
+  })
+
+  it('普通用户看不到集群入口，会话壳仍然列出自己的会话', async () => {
+    state.role = 'user'
+    state.tenantId = 't-user'
+    const wrapper = await mountConsole()
+    expect(wrapper.get('[data-im-shell]').exists()).toBe(true)
+    expect(wrapper.find('[data-cluster-entry]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('检查会话')
+    wrapper.unmount()
+  })
+
+  it('admin 仍能看到集群入口', async () => {
+    const wrapper = await mountConsole()
+    expect(wrapper.find('[data-cluster-entry]').exists()).toBe(true)
     wrapper.unmount()
   })
 

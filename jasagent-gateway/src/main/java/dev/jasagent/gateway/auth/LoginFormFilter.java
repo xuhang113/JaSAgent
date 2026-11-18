@@ -29,7 +29,7 @@ import java.util.Map;
 /**
  * 在网关的表单过滤器改写正文之前，把登录表单收成可重复读取的参数。
  * 网关自带的表单过滤器会先读参数再换一层请求。登录接口如果赶在正文被读掉之后才取参数，登录名和口令都会是空的。
- * 这个过滤器只处理 POST /login，不记录口令。
+ * 这个过滤器只处理 POST /login 和 POST /register，不记录口令。
  * 它晚于转发头过滤器，仍早于 Spring 自带的表单过滤器，避免正文被提前读掉。
  */
 @Component
@@ -59,7 +59,7 @@ public class LoginFormFilter extends OncePerRequestFilter implements Ordered {
     }
 
     /**
-     * 只缓存登录表单。其它请求原样交给后面的过滤器。
+     * 只缓存登录和注册表单。其它请求原样交给后面的过滤器。
      *
      * @param request 当前请求
      * @param response 当前响应
@@ -68,7 +68,7 @@ public class LoginFormFilter extends OncePerRequestFilter implements Ordered {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (!"POST".equalsIgnoreCase(request.getMethod()) || !"/login".equals(request.getRequestURI())) {
+        if (!credentialForm(request)) {
             chain.doFilter(request, response);
             return;
         }
@@ -77,6 +77,20 @@ public class LoginFormFilter extends OncePerRequestFilter implements Ordered {
         request.setAttribute(USER, first(fields, "user"));
         request.setAttribute(PASSWORD, first(fields, "password").toCharArray());
         chain.doFilter(new LoginRequest(request, body, fields), response);
+    }
+
+    /**
+     * 登录和注册都用同一份表单。其它路径不读正文，避免把口令留在别的接口上。
+     *
+     * @param request 当前请求
+     * @return 是 POST /login 或 POST /register 时为真
+     */
+    private static boolean credentialForm(HttpServletRequest request) {
+        if (!"POST".equalsIgnoreCase(request.getMethod())) {
+            return false;
+        }
+        String path = request.getRequestURI();
+        return "/login".equals(path) || "/register".equals(path);
     }
 
     /**

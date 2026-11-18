@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-008"
+result_text='未登录不能进入控制台；访问需要登录的页面或 `/api/me`、会话接口时被拒绝或被带到登录/注册，不能读到业务数据。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-gateway" \
+    "CEndTenantImTest#anonymousCallsDoNotLeakBusinessData"
+  atdd_npm_test "src/router.spec.js"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "未登录不能进入控制台或读到业务数据" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

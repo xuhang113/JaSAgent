@@ -1,5 +1,5 @@
 <template>
-  <div class="console-layout" :class="{ 'is-resizing': resizing }" data-layout="three-column" :data-panels-open="railOpen ? 'true' : 'false'" :style="layoutStyle">
+  <div class="console-layout" data-im-shell :class="{ 'is-resizing': resizing }" data-layout="three-column" :data-panels-open="railOpen ? 'true' : 'false'" :style="layoutStyle">
     <aside class="session-column">
       <div class="sidebar-top chrome-bar">
         <div class="sidebar-user">
@@ -21,7 +21,7 @@
       </div>
       <div class="session-head">
         <h2>会话</h2>
-        <router-link class="rail-tool" to="/cluster">集群</router-link>
+        <router-link v-if="isAdmin" class="rail-tool" data-cluster-entry to="/cluster">集群</router-link>
         <el-button size="small" type="primary" class="cursor-btn-primary" @click="createSession">新建</el-button>
       </div>
       <div class="session-list">
@@ -401,6 +401,8 @@ const router = useRouter()
 const route = useRoute()
 /** 当前登录名，显示在左上角。 */
 const loginName = ref('')
+/** 只有 admin 才显示集群入口。普通用户留在会话壳里。 */
+const isAdmin = ref(false)
 /** 正在编辑的工作区路径。 */
 const workspace = ref('')
 /** 可选工作区路径。 */
@@ -1250,10 +1252,11 @@ function turnReply(message) {
   return ''
 }
 
-/** 读取登录名和可选工作区，并填上当前工作区。 */
+/** 读取登录名、角色和可选工作区，并填上当前工作区。 */
 async function loadProfile() {
   const me = await api('/api/me')
   loginName.value = me.login
+  isAdmin.value = me.role === 'admin'
   const listed = await api('/api/workspaces')
   workspaceOptions.value = listed.workspaces || []
   workspace.value = me.workspace || listed.workspace || workspaceOptions.value[0] || ''

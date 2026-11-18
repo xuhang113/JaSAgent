@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-004"
+result_text='两个普通用户各自登录后，只能看见和操作自己的会话，不能列出或读取对方的会话。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-persist,jasagent-gateway" \
+    "SessionLedgerMysqlTest#ownershipStaysInMysqlAndFollowsTheUserTenant,CEndTenantImTest#gatewayRejectsForeignSessionsBeforeForwarding"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "两名普通用户只能看见和操作自己的会话" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

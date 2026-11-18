@@ -1,0 +1,3 @@
+2026-11-18T14:23:10+0800	T-001	模块测试 CEndTenantImTest#registerCreatesAnOrdinaryTenantAndCanEnterTheConsole	13984	退出码 0
+2026-11-18T14:23:11+0800	T-001	前端测试 src/views/RegisterView.spec.js	14955	退出码 0
+2026-11-18T14:23:11+0800	T-001	未登录可注册，注册后可登录并进入控制台	14971	通过

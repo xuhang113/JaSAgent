@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-013"
+result_text='现有运维账号在存储切换后仍可登录，并仍是 admin，可以调用集群接口；该能力不得被新注册用户获得。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-auth,jasagent-gateway" \
+    "MysqlAccountAuthTest#importedOperatorStaysAdminAndDoesNotPromoteARegisteredUser,CEndTenantImTest#clusterIsAdminOnlyAndImportedOperatorKeepsAdmin"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "运维账号仍是 admin，新注册用户没有集群权限" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

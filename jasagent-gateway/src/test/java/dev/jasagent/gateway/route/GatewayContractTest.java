@@ -77,7 +77,7 @@ class GatewayContractTest {
     }
 
     /**
-     * 登录页、控制台和集群不转发给 agent。业务接口才转发。自助注册没有本地入口。
+     * 登录页、注册、控制台和集群不转发给 agent。业务接口才转发。
      */
     @Test
     void pagesStayOnTheGatewayAndApisProxy() {
@@ -88,7 +88,8 @@ class GatewayContractTest {
         assertTrue(GatewayPaths.local(HttpMethod.GET, "/api/me"));
         assertFalse(GatewayPaths.proxied(HttpMethod.POST, "/login"));
         assertFalse(GatewayPaths.proxied(HttpMethod.POST, "/register"));
-        assertFalse(GatewayPaths.local(HttpMethod.POST, "/register"));
+        assertTrue(GatewayPaths.local(HttpMethod.POST, "/register"));
+        assertTrue(GatewayPaths.local(HttpMethod.GET, "/register"));
         assertTrue(GatewayPaths.proxied(HttpMethod.GET, "/api/sessions"));
         assertTrue(GatewayPaths.models(HttpMethod.GET, "/api/models"));
         assertTrue(GatewayPaths.execution(HttpMethod.GET, "/api/executions/exec-1"));
@@ -96,7 +97,7 @@ class GatewayContractTest {
     }
 
     /**
-     * 未登录只放行健康检查、登录、退出、登录页和登录页静态资源。控制台业务页和 /api 必须有会话。
+     * 未登录只放行健康检查、登录、注册、退出、登录页、注册页和登录页静态资源。控制台业务页和 /api 必须有会话。
      */
     @Test
     void anonymousPathsStayOnLoginAndHealth() {
@@ -104,8 +105,11 @@ class GatewayContractTest {
         assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/"));
         assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/login"));
         assertTrue(GatewayPaths.anonymous(HttpMethod.POST, "/login"));
+        assertTrue(GatewayPaths.anonymous(HttpMethod.POST, "/register"));
+        assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/register"));
         assertTrue(GatewayPaths.anonymous(HttpMethod.POST, "/logout"));
         assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/admin/login"));
+        assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/admin/register"));
         assertTrue(GatewayPaths.anonymous(HttpMethod.GET, "/admin/assets/login.js"));
         assertFalse(GatewayPaths.anonymous(HttpMethod.GET, "/admin/"));
         assertFalse(GatewayPaths.anonymous(HttpMethod.GET, "/admin"));

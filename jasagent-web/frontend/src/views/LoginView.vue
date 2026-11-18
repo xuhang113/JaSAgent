@@ -11,6 +11,7 @@
           <el-input v-model="password" name="password" type="password" autocomplete="current-password" show-password />
         </el-form-item>
         <el-button type="primary" native-type="submit" :loading="pending">登录</el-button>
+        <p class="muted"><router-link data-register-entry to="/register">注册账号</router-link></p>
         <p v-if="error" class="muted">{{ error }}</p>
       </el-form>
     </el-card>

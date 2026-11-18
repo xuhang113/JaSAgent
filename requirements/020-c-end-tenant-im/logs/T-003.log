@@ -1,0 +1,2 @@
+2026-11-18T14:23:25+0800	T-003	模块测试 MysqlAccountAuthTest#registrationIsOrdinaryAndSurvivesReopen,CEndTenantImTest#registerCreatesAnOrdinaryTenantAndCanEnterTheConsole,CEndTenantImTest#clusterIsAdminOnlyAndImportedOperatorKeepsAdmin	7848	退出码 0
+2026-11-18T14:23:25+0800	T-003	/api/me 能区分角色并带上自己的租户	7862	通过

@@ -14,8 +14,8 @@ import org.springframework.web.servlet.function.ServerResponse;
 @Configuration
 public class GatewayProxyRoutes {
     /**
-     * 先匹配要改写 JSON 的接口，其余 /api 原样转发。
-     * 两条路由都先经过粘性选择，再由网关的 HTTP 客户端发到选中的实例。
+     * 先匹配要改写 JSON 的接口，会话列表单独滤掉他人会话，其余 /api 原样转发。
+     * 这些路由都先经过粘性选择，再由网关的 HTTP 客户端发到选中的实例。
      *
      * @param proxy 粘性转发和响应改写
      * @return 合并后的路由
@@ -31,6 +31,11 @@ public class GatewayProxyRoutes {
                         .route(proxy::creates, HandlerFunctions.http())
                         .filter(proxy::forward)
                         .after(proxy.rememberAfter())
+                        .build())
+                .and(GatewayRouterFunctions.route("agent-session-list")
+                        .route(proxy::sessionList, HandlerFunctions.http())
+                        .filter(proxy::forward)
+                        .after(proxy.keepOwnedListAfter())
                         .build())
                 .and(GatewayRouterFunctions.route("agent-proxy")
                         .route(proxy::plain, HandlerFunctions.http())

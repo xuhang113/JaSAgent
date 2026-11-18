@@ -1,0 +1,2 @@
+2026-11-18T14:25:09+0800	T-009	模块测试 MysqlAccountAuthTest#registrationIsOrdinaryAndSurvivesReopen,CEndTenantImTest#clusterIsAdminOnlyAndImportedOperatorKeepsAdmin	6957	退出码 0
+2026-11-18T14:25:09+0800	T-009	账号和登录会话在 MySQL，重启后仍可登录	6973	通过

@@ -15,7 +15,7 @@ public class ConsolePages {
     public static final String INDEX = "forward:/admin/index.html";
 
     /**
-     * 登录页、控制台、集群和执行详情都回到单页入口。
+     * 登录页、注册页、控制台、集群和执行详情都回到单页入口。
      *
      * @return 指向 /admin/index.html 的转发
      */
@@ -23,6 +23,7 @@ public class ConsolePages {
             "/admin",
             "/admin/",
             "/admin/login",
+            "/admin/register",
             "/admin/cluster",
             "/admin/run",
             "/admin/executions/{id}"
