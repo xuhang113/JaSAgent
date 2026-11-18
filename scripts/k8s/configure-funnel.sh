@@ -26,8 +26,39 @@ fi
 
 # 开启 serve/funnel，把稳定的 *.ts.net HTTPS 指到本机 Ingress-nginx NodePort。
 # Funnel 终止 TLS，以 HTTP 转到 Ingress；Ingress 再补 X-Forwarded-Proto: https。
-tailscale serve --bg "${LOCAL_URL}"
-tailscale funnel --bg 443
+# 若 tailnet 尚未在控制台开启 Serve / Funnel / HTTPS，`tailscale serve --bg` 会打印
+# login.tailscale.com/f/serve 链接并一直等待。这里限时执行，遇到该提示即以状态码 2 退出，
+# 不发起 login / up，也不在本机替操作员点击控制台。
+run_tailscale_bg() {
+  local label="$1"
+  shift
+  local log
+  log="$(mktemp)"
+  set +e
+  timeout 20 "$@" >"${log}" 2>&1
+  local rc=$?
+  set -e
+  if grep -q 'Serve is not enabled' "${log}"; then
+    cat "${log}" >&2
+    say "本机 Tailscale 已登录，但该 tailnet 尚未在控制台开启 Serve / Funnel / HTTPS。" >&2
+    say "请由 Hang 用已登录的 Tailscale 账号打开上面打印的 login.tailscale.com/f/serve 链接并开启，然后再执行 bash scripts/k8s/configure-funnel.sh。不要在本机执行 tailscale up 或 login。" >&2
+    rm -f "${log}"
+    exit 2
+  fi
+  if [[ "${rc}" -ne 0 ]]; then
+    cat "${log}" >&2
+    say "${label} 未能完成（exit=${rc}）。" >&2
+    rm -f "${log}"
+    exit 1
+  fi
+  if [[ -s "${log}" ]]; then
+    cat "${log}"
+  fi
+  rm -f "${log}"
+}
+
+run_tailscale_bg "tailscale serve" tailscale serve --bg "${LOCAL_URL}"
+run_tailscale_bg "tailscale funnel" tailscale funnel --bg 443
 
 host="$(tailscale status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("Self") or {}).get("DNSName") or "")' | sed 's/\.$//')"
 if [[ -z "${host}" || "${host}" != *.ts.net ]]; then
