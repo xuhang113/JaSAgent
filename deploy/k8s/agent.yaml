@@ -7,6 +7,9 @@
 # 直接出网由 agent 容器的 LD_PRELOAD 进程级过滤拦住；sidecar 不加载该库，可以代表它出站。
 # 本机内核没有 xt_owner，gVisor 同 Pod 还共用 hostinet sandbox（插座在宿主机上显示为 UID 0），
 # 不能再用按 Pod IP 或 sandbox cgroup 的兜底，否则会误伤 sidecar。RuntimeClass 是 gvisor。
+# 聊天会话表 agent_session 和执行库走 JASAGENT_JDBC_*，检查点走 JASAGENT_CHECKPOINT_JDBC_*。
+# 两者的地址都是 Secret jasagent-mysql 的 jdbc-url，账号是 username，口令是 password。地址里没有 password=。
+# volume home 的 emptyDir 不是聊天会话的权威存储。会话在集群里已有的 MySQL。
 apiVersion: v1
 kind: Service
 metadata:
@@ -88,6 +91,7 @@ spec:
                 secretKeyRef:
                   name: jasagent-mysql
                   key: password
+            # 聊天会话 agent_session 与执行库。与网关账号库同一条 jdbc-url，不是 Pod 里的 emptyDir。
             - name: JASAGENT_JDBC_URL
               valueFrom:
                 secretKeyRef:
@@ -215,6 +219,7 @@ spec:
             - name: sidecar-tmp
               mountPath: /tmp
       volumes:
+        # 其它家目录文件。聊天会话不写在这块 emptyDir 里。
         - name: home
           emptyDir: {}
         - name: tmp

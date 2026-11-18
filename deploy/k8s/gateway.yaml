@@ -1,7 +1,16 @@
 # 网关对外端口 18721。业务容器使用 gVisor。
 # 登录会话和存活探测都在网关进程内，本轮网关按单副本运行。
 # 只从 Nacos 发现 agent 实例，不再使用静态目录或 jasagent-agent-0 / jasagent-agent-1。
-# 控制台请求反代到 jasagent-web。粘性库通过可配置的 JDBC 地址直连集群 MySQL，口令仍只从仓库外的口令文件读取。
+# 控制台请求反代到 jasagent-web。JASAGENT_GATEWAY_WEB_ORIGIN 保持集群内地址，不写成公网主机名。
+# 账号表 jasagent_account、登录会话表 jasagent_login_session、聊天会话表 agent_session
+# 和粘性表 jasagent_gateway_affinity 共用集群里已有的 MySQL。
+# 020 的网关把这四张表都接到 jasagent.gateway.affinity.jdbc-url / username / password-file，
+# 对应环境变量仍是 JASAGENT_GATEWAY_AFFINITY_JDBC_URL、JASAGENT_GATEWAY_AFFINITY_USERNAME
+# 和 JASAGENT_GATEWAY_AFFINITY_PASSWORD_FILE。地址和账号来自 Secret jasagent-mysql 的
+# jdbc-url、username。口令只从该 Secret 挂进的文件读取。JDBC 地址里不能有 password=。
+# volume home 仍是 emptyDir，只放其它家目录文件（含一次性迁入运维账号时要读的目录）。
+# 它不是账号或会话的权威存储。删掉或重启本 Pod 后，账号和聊天会话仍在上述 MySQL 里。
+# JASAGENT_GATEWAY_FORWARDED_TRUSTED 只信任 Ingress 这一跳，禁止 0.0.0.0/0 或 ::/0。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -47,6 +56,7 @@ spec:
                   name: jasagent-gateway-forwarded
                   key: trusted
                   optional: true
+            # 账号、登录会话、聊天会话账本和粘性库共用这一条 JDBC。值来自 Secret，不能含 password=。
             - name: JASAGENT_GATEWAY_AFFINITY_JDBC_URL
               valueFrom:
                 secretKeyRef:
@@ -57,6 +67,9 @@ spec:
                 secretKeyRef:
                   name: jasagent-mysql
                   key: username
+            # 与上面同一套库的口令文件。文件由下方 Secret 挂载，不把口令写进环境变量或 JDBC 地址。
+            - name: JASAGENT_GATEWAY_AFFINITY_PASSWORD_FILE
+              value: /var/lib/jasagent/.config/urag-mysql-root.password
             - name: JASAGENT_GATEWAY_REPLICAS
               value: "1"
             - name: JASAGENT_INTERNAL_TOKEN
@@ -93,19 +106,23 @@ spec:
             runAsUser: 10001
             allowPrivilegeEscalation: false
           volumeMounts:
+            # 家目录。账号和会话不写在这里，只给其它家目录文件和下面的口令文件挂载点使用。
             - name: home
               mountPath: /var/lib/jasagent
             - name: tmp
               mountPath: /tmp
+            # 口令文件盖在家目录上。账号库、会话账本和粘性库都读这个路径。
             - name: mysql-password
               mountPath: /var/lib/jasagent/.config/urag-mysql-root.password
               subPath: urag-mysql-root.password
               readOnly: true
       volumes:
+        # 不是账号或会话的权威存储。权威数据在集群 MySQL 的 jasagent 库。
         - name: home
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        # Secret jasagent-mysql 的 password。清单里不写口令原文。
         - name: mysql-password
           secret:
             secretName: jasagent-mysql
