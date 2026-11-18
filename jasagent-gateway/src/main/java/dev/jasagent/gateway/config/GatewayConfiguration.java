@@ -1,6 +1,7 @@
 package dev.jasagent.gateway.config;
 
 import dev.jasagent.auth.LocalAuthService;
+import dev.jasagent.auth.MysqlAccountAuth;
 import dev.jasagent.gateway.agent.AgentDiscovery;
 import dev.jasagent.gateway.agent.AgentLinkSupervisor;
 import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
@@ -15,14 +16,20 @@ import dev.jasagent.gateway.route.StickyAgentRouter;
 import dev.jasagent.gateway.ingress.TrustedProxyList;
 import dev.jasagent.gateway.proxy.WebConsoleProxy;
 import dev.jasagent.gateway.store.MysqlAffinityStore;
+import dev.jasagent.gateway.store.UragPassword;
 import dev.jasagent.gateway.token.InternalToken;
+import dev.jasagent.persist.ExecutionDatabase;
+import dev.jasagent.persist.SessionLedger;
 import dev.jasagent.trace.lineage.RequestLineage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 组装网关运行时需要的登录、令牌、粘性、集群、长连接和控制台上游。
@@ -33,14 +40,61 @@ import java.nio.file.Path;
 @Configuration
 public class GatewayConfiguration {
     /**
-     * 用家目录建立本机登录服务。口令仍在用户目录里，本配置不创建用户。
+     * 用家目录建立文件登录服务。它只负责读出尚未迁入的运维账号，不再作为网关登录的权威存储。
      *
      * @param home 用户数据根目录，缺省是运行用户的主目录
-     * @return 绑定该目录的登录服务
+     * @return 绑定该目录的文件登录服务
      */
     @Bean
     public LocalAuthService localAuthService(@Value("${jasagent.home:${user.home}}") String home) {
         return new LocalAuthService(Path.of(home));
+    }
+
+    /**
+     * 打开和粘性库同一套 JDBC 的会话账本。聊天会话仍在 agent_session，不另建一份。
+     * 口令只从仓库外文件读入内存，不写进地址或这个对象的说明。
+     *
+     * @param url JDBC 地址，不能包含 password=
+     * @param username 数据库账号
+     * @param passwordFile 仓库外的口令文件
+     * @param home 工作区根，只在地址不是 MySQL 时用来放 H2
+     * @return 已建表的会话账本
+     */
+    @Bean
+    public SessionLedger sessionLedger(
+            @Value("${" + MysqlAffinityStore.URL_PROPERTY + "}") String url,
+            @Value("${" + MysqlAffinityStore.USER_PROPERTY + "}") String username,
+            @Value("${" + MysqlAffinityStore.PASSWORD_FILE_PROPERTY + "}") String passwordFile,
+            @Value("${jasagent.home:${user.home}}") String home) {
+        Map<String, String> environment = new LinkedHashMap<>();
+        environment.put("JASAGENT_JDBC_URL", url);
+        environment.put("JASAGENT_JDBC_USER", username);
+        environment.put("JASAGENT_JDBC_PASSWORD", UragPassword.read(Path.of(passwordFile)));
+        return SessionLedger.open(ExecutionDatabase.open(Path.of(home), environment));
+    }
+
+    /**
+     * 打开 MySQL 账号库，并把家目录里还没有的运维账号迁入为 admin。
+     * 自助注册不走这个方法。已经在库里的登录名不会被文件目录改成 admin。
+     *
+     * @param url JDBC 地址，不能包含 password=
+     * @param username 数据库账号
+     * @param passwordFile 仓库外的口令文件
+     * @param home 运维账号文件所在的家目录
+     * @param sessions 用来把旧的 local 聊天会话改到该用户自己的租户
+     * @return 网关登录、注册和会话校验使用的账号服务
+     */
+    @Bean
+    @Primary
+    public MysqlAccountAuth mysqlAccountAuth(
+            @Value("${" + MysqlAffinityStore.URL_PROPERTY + "}") String url,
+            @Value("${" + MysqlAffinityStore.USER_PROPERTY + "}") String username,
+            @Value("${" + MysqlAffinityStore.PASSWORD_FILE_PROPERTY + "}") String passwordFile,
+            @Value("${jasagent.home:${user.home}}") String home,
+            SessionLedger sessions) {
+        MysqlAccountAuth accounts = MysqlAccountAuth.open(url, username, UragPassword.read(Path.of(passwordFile)));
+        accounts.importOperators(Path.of(home), (login, fromTenant, toTenant) -> sessions.moveUser(fromTenant, login, toTenant));
+        return accounts;
     }
 
     /**
@@ -178,18 +232,22 @@ public class GatewayConfiguration {
     }
 
     /**
-     * 转发时使用的粘性代理。租户空白时用 local。
+     * 转发时使用的粘性代理。账号上有租户时用那个租户；配置的租户只在没有账号时兜底。
+     * 转发前用同一份会话账本拒绝他人的会话。
      *
      * @param stickyAgentRouter 路由器
      * @param internalToken 内部令牌
-     * @param tenantId 配置的租户 id
+     * @param requestLineage 请求溯源
+     * @param sessions 会话账本
+     * @param tenantId 配置的缺省租户 id
      * @return 粘性代理
      */
     @Bean
     public StickyProxy stickyProxy(StickyAgentRouter stickyAgentRouter, InternalToken internalToken, RequestLineage requestLineage,
+                                   SessionLedger sessions,
                                    @Value("${jasagent.gateway.tenant-id:local}") String tenantId) {
         String tenant = tenantId == null || tenantId.isBlank() ? AgentCallHeaders.TENANT_LOCAL : tenantId;
-        return new StickyProxy(stickyAgentRouter, internalToken, tenant, requestLineage);
+        return new StickyProxy(stickyAgentRouter, internalToken, tenant, requestLineage, sessions);
     }
 
     /**

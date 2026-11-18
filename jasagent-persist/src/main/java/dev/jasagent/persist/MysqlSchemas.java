@@ -169,6 +169,24 @@ public final class MysqlSchemas {
             for (String sql : STATEMENTS) {
                 statement.execute(sql);
             }
+            ensureSessionIndex(statement);
+        }
+    }
+
+    /**
+     * 给会话编号补索引，让网关能按 session_id 核对所有者，不必先知道租户。
+     * 索引已经存在时忽略重复键名，不删已有数据。
+     *
+     * @param statement 当前连接上的语句
+     * @throws SQLException 不是“索引已存在”的失败继续抛出
+     */
+    private static void ensureSessionIndex(Statement statement) throws SQLException {
+        try {
+            statement.execute("CREATE INDEX idx_agent_session_id ON agent_session (session_id)");
+        } catch (SQLException ex) {
+            if (ex.getErrorCode() != 1061) {
+                throw ex;
+            }
         }
     }
 }

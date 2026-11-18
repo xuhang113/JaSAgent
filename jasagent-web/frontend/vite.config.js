@@ -20,6 +20,7 @@ export default defineConfig({
     proxy: {
       '/api': { target: GATEWAY_ORIGIN },
       '/login': { target: GATEWAY_ORIGIN },
+      '/register': { target: GATEWAY_ORIGIN },
       '/logout': { target: GATEWAY_ORIGIN },
       '/health': { target: GATEWAY_ORIGIN }
     }

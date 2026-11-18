@@ -15,6 +15,10 @@ public final class GatewayPaths {
      */
     public static final String ADMIN_LOGIN = "/admin/login";
     /**
+     * 注册页。未登录可以打开，网关再把它反代到控制台上游。
+     */
+    public static final String ADMIN_REGISTER = "/admin/register";
+    /**
      * 登录页脚本和样式的前缀。未登录可以读取这一段，不能读取其它控制台页面。
      */
     public static final String ADMIN_ASSETS = "/admin/assets/";
@@ -38,7 +42,7 @@ public final class GatewayPaths {
     }
 
     /**
-     * 未登录也能访问的路径。只有健康检查、首页和登录跳转、登录和退出接口、登录页，以及登录页的静态资源。
+     * 未登录也能访问的路径。健康检查、首页、登录和注册的跳转与接口、登录页、注册页，以及登录页的静态资源。
      * 控制台业务页、当前用户、集群和要转发给 agent 的 /api 都不在这里。
      *
      * @param method 请求方法
@@ -52,10 +56,10 @@ public final class GatewayPaths {
         if (HttpMethod.GET.equals(method) && ("/health".equals(path) || "/".equals(path) || "/login".equals(path))) {
             return true;
         }
-        if (HttpMethod.POST.equals(method) && ("/login".equals(path) || "/logout".equals(path))) {
+        if (HttpMethod.POST.equals(method) && ("/login".equals(path) || "/logout".equals(path) || "/register".equals(path))) {
             return true;
         }
-        if (HttpMethod.GET.equals(method) && ADMIN_LOGIN.equals(path)) {
+        if (HttpMethod.GET.equals(method) && ("/register".equals(path) || ADMIN_LOGIN.equals(path) || ADMIN_REGISTER.equals(path))) {
             return true;
         }
         return HttpMethod.GET.equals(method) && (ADMIN_ASSETS.equals(path) || path.startsWith(ADMIN_ASSETS));
@@ -81,6 +85,9 @@ public final class GatewayPaths {
             return true;
         }
         if ("/login".equals(path) && (HttpMethod.GET.equals(method) || HttpMethod.POST.equals(method))) {
+            return true;
+        }
+        if ("/register".equals(path) && (HttpMethod.GET.equals(method) || HttpMethod.POST.equals(method))) {
             return true;
         }
         if ("/logout".equals(path) && HttpMethod.POST.equals(method)) {

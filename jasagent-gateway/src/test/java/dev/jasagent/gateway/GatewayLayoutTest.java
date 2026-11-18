@@ -94,6 +94,8 @@ class GatewayLayoutTest {
                 Path.of("src/main/java/dev/jasagent/gateway/nacos/UnavailableAgentDiscovery.java"),
                 Path.of("src/main/java/dev/jasagent/gateway/route/StickyAgentRouter.java"),
                 Path.of("src/main/java/dev/jasagent/gateway/cluster/ClusterInventory.java"),
+                Path.of("src/main/java/dev/jasagent/gateway/cluster/ClusterAccessFilter.java"),
+                Path.of("src/main/java/dev/jasagent/gateway/proxy/ChatSessionGate.java"),
                 Path.of("../jasagent-web/src/main/java/dev/jasagent/web/upstream/WebUpstream.java"),
                 Path.of("../jasagent-web/src/main/java/dev/jasagent/web/upstream/WebUpstreamApplication.java"),
                 Path.of("../jasagent-web/src/main/java/dev/jasagent/web/upstream/ConsolePages.java"),

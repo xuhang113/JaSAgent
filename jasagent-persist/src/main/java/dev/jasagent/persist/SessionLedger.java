@@ -258,6 +258,86 @@ public final class SessionLedger {
     }
 
     /**
+     * 按会话编号查出全部租户下的身份行。网关在转发前用它判断当前用户是不是所有者。
+     * 不另建会话表。没有这场会话时是空列表，调用方可以继续转给当前用户自己的 agent。
+     *
+     * @param sessionId 会话编号
+     * @return 身份行；编号空白或没有行时是空列表
+     */
+    public List<Row> findBySessionId(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return List.of();
+        }
+        String sql = """
+                SELECT tenant_id, session_id, user_id, title, model_name, model_provider, title_custom, created_at, updated_at
+                FROM agent_session WHERE session_id = ?
+                """;
+        try (Connection connection = database.connect();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, sessionId);
+            try (ResultSet rows = statement.executeQuery()) {
+                List<Row> found = new ArrayList<>();
+                while (rows.next()) {
+                    found.add(readIdentity(rows));
+                }
+                return found;
+            }
+        } catch (SQLException ex) {
+            throw new AgentException(ErrorCode.PERSIST, "会话无法读取", null, null);
+        }
+    }
+
+    /**
+     * 把一个用户在旧租户下的聊天会话、工作区和工作执行改到他自己的租户。
+     * 只改归属列，不复制一份账本。旧租户和新租户相同、或任一键空白时什么都不做。
+     * 副作用：更新已有行，并清掉内存缓存。
+     *
+     * @param fromTenant 迁出的租户，历史数据是 local
+     * @param userId 所有者登录名
+     * @param toTenant 该用户自己的租户
+     */
+    public void moveUser(String fromTenant, String userId, String toTenant) {
+        if (fromTenant == null || userId == null || toTenant == null) {
+            return;
+        }
+        if (fromTenant.isBlank() || userId.isBlank() || toTenant.isBlank() || fromTenant.equals(toTenant)) {
+            return;
+        }
+        try (Connection connection = database.connect()) {
+            moveRows(connection, "UPDATE agent_session SET tenant_id = ? WHERE tenant_id = ? AND user_id = ?", toTenant, fromTenant, userId);
+            moveRows(connection, "UPDATE agent_workspace SET tenant_id = ? WHERE tenant_id = ? AND user_id = ?", toTenant, fromTenant, userId);
+            moveRows(connection, "UPDATE execution SET tenant_id = ? WHERE tenant_id = ? AND user_id = ?", toTenant, fromTenant, userId);
+        } catch (SQLException ex) {
+            throw new AgentException(ErrorCode.PERSIST, "会话归属无法对齐", null, null);
+        }
+        cache.clear();
+    }
+
+    /**
+     * 执行一条只改租户的更新。表或列还不存在时跳过，其它失败继续抛出，消息由调用方改写。
+     *
+     * @param connection 当前连接
+     * @param sql 带三个占位符的更新：新租户、旧租户、用户
+     * @param toTenant 新租户
+     * @param fromTenant 旧租户
+     * @param userId 用户
+     * @throws SQLException 不是缺表或缺列的失败
+     */
+    private static void moveRows(Connection connection, String sql, String toTenant, String fromTenant, String userId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, toTenant);
+            statement.setString(2, fromTenant);
+            statement.setString(3, userId);
+            statement.executeUpdate();
+        } catch (SQLException ex) {
+            if (ex.getErrorCode() == 1054 || ex.getErrorCode() == 1146) {
+                return;
+            }
+            throw ex;
+        }
+    }
+
+    /**
      * 读出身份并确认请求者就是所有者。不存在时按无权读取拒绝，所有者不同则返回明确的不一致错误。两种情况都不写库。
      *
      * @param tenantId 租户 id

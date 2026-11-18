@@ -3,6 +3,7 @@ package dev.jasagent.gateway.ingress;
 import dev.jasagent.api.auth.AddUser;
 import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.gateway.store.MysqlAffinityStore;
+import dev.jasagent.gateway.store.UragPassword;
 import org.springframework.test.context.DynamicPropertyRegistry;
 
 import java.nio.file.Files;
@@ -20,10 +21,6 @@ final class IngressFixtures {
      * 测试用户口令。不是部署口令。
      */
     static final String PASSWORD = "test-password-1";
-    /**
-     * 测试用的数据库口令文件内容。粘性库在这些测试里不会真正连上去。
-     */
-    static final String DATABASE_PASSWORD = "gw019-db-password";
 
     /**
      * 禁止实例化。准备动作只通过静态方法做。
@@ -38,11 +35,12 @@ final class IngressFixtures {
      */
     static void register(DynamicPropertyRegistry registry) throws Exception {
         Path home = Files.createTempDirectory("gw019-home");
-        Path passwordFile = Files.createTempFile("gw019-db", ".password");
-        Files.writeString(passwordFile, DATABASE_PASSWORD + "\n");
+        if (UragPassword.read().isBlank()) {
+            throw new IllegalStateException("没有找到本机 MySQL 口令");
+        }
         new LocalAuthService(home).addUser(new AddUser(LOGIN, PASSWORD.toCharArray(), null, false)).toCompletableFuture().join();
         registry.add("jasagent.home", home::toString);
         registry.add("jasagent.gateway.links.enabled", () -> "false");
-        registry.add(MysqlAffinityStore.PASSWORD_FILE_PROPERTY, passwordFile::toString);
+        registry.add(MysqlAffinityStore.PASSWORD_FILE_PROPERTY, () -> UragPassword.defaultFile().toString());
     }
 }

@@ -3,7 +3,9 @@ package dev.jasagent.gateway;
 import com.sun.net.httpserver.HttpServer;
 import dev.jasagent.api.auth.AddUser;
 import dev.jasagent.api.auth.Session;
+import dev.jasagent.auth.AccountProfile;
 import dev.jasagent.auth.LocalAuthService;
+import dev.jasagent.auth.MysqlAccountAuth;
 import dev.jasagent.gateway.agent.AgentDiscovery;
 import dev.jasagent.gateway.agent.AgentInstance;
 import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
@@ -70,7 +72,7 @@ public class GatewayForwardTest {
     @Autowired
     private MysqlAffinityStore store;
     @Autowired
-    private LocalAuthService auth;
+    private MysqlAccountAuth auth;
 
     /**
      * 拉起两台桩 agent，并在上下文创建前放好测试令牌。
@@ -98,6 +100,7 @@ public class GatewayForwardTest {
     void bothAlive() {
         hits.clear();
         store.deleteTenant(TENANT);
+        store.deleteTenant(auth.profile(USER).tenantId());
         for (AgentInstance agent : discovered.healthyNow()) {
             liveness.markUp(agent);
         }
@@ -131,14 +134,15 @@ public class GatewayForwardTest {
                 .andExpect(status().isOk());
         assertEquals(2, hits.size());
         assertEquals(hits.get(0).port, hits.get(1).port);
-        assertHeaders(hits.get(0), session.sessionId(), cookie);
+        String tenant = tenantOf(session.login());
+        assertHeaders(hits.get(0), session.sessionId(), cookie, tenant);
         MvcResult pathed = mvc.perform(get("/api/sessions/path-session-1").cookie(new Cookie("JASAGENT_SESSION", cookie)))
                 .andExpect(status().isOk())
                 .andReturn();
         assertEquals("path-session-1", header(hits.get(2), "x-jasagent-session"));
         assertFalse(pathed.getResponse().getContentAsString().contains(TOKEN));
         assertFalse(String.valueOf(pathed.getResponse().getHeader("X-Jasagent-Token")).contains(TOKEN));
-        String saved = store.find(TENANT, USER).orElseThrow();
+        String saved = store.find(tenant, USER).orElseThrow();
         assertEquals("agent-" + hits.get(0).port, saved);
     }
 
@@ -148,6 +152,7 @@ public class GatewayForwardTest {
     @Test
     void offlineAgentReroutesAndBothDownKeepsTheRow() throws Exception {
         String cookie = login();
+        String tenant = tenantOf(USER);
         mvc.perform(get("/api/sessions").cookie(new Cookie("JASAGENT_SESSION", cookie))).andExpect(status().isOk());
         AgentInstance current = agent(hits.get(0).port);
         liveness.markDown(current);
@@ -155,14 +160,14 @@ public class GatewayForwardTest {
         mvc.perform(get("/api/sessions").cookie(new Cookie("JASAGENT_SESSION", cookie))).andExpect(status().isOk());
         assertEquals(1, hits.size());
         assertNotEquals(current.port(), hits.get(0).port);
-        assertEquals("agent-" + hits.get(0).port, store.find(TENANT, USER).orElseThrow());
-        String kept = store.find(TENANT, USER).orElseThrow();
+        assertEquals("agent-" + hits.get(0).port, store.find(tenant, USER).orElseThrow());
+        String kept = store.find(tenant, USER).orElseThrow();
         for (AgentInstance agent : discovered.healthyNow()) {
             liveness.markDown(agent);
         }
         mvc.perform(get("/api/sessions").cookie(new Cookie("JASAGENT_SESSION", cookie)))
                 .andExpect(status().isServiceUnavailable());
-        assertEquals(kept, store.find(TENANT, USER).orElseThrow());
+        assertEquals(kept, store.find(tenant, USER).orElseThrow());
     }
 
     /**
@@ -171,8 +176,9 @@ public class GatewayForwardTest {
     @Test
     void emptyDiscoveryFailsWithoutStaticFallback() throws Exception {
         String cookie = login();
+        String tenant = tenantOf(USER);
         mvc.perform(get("/api/sessions").cookie(new Cookie("JASAGENT_SESSION", cookie))).andExpect(status().isOk());
-        String kept = store.find(TENANT, USER).orElseThrow();
+        String kept = store.find(tenant, USER).orElseThrow();
         List<AgentInstance> previous = List.copyOf(discovered.healthyNow());
         discovered.set(List.of());
         try {
@@ -183,7 +189,7 @@ public class GatewayForwardTest {
             assertFalse(body.contains("127.0.0.1:18731"));
             assertFalse(body.contains("127.0.0.1:18732"));
             assertFalse(body.contains(TOKEN));
-            assertEquals(kept, store.find(TENANT, USER).orElseThrow());
+            assertEquals(kept, store.find(tenant, USER).orElseThrow());
         } finally {
             discovered.set(previous);
         }
@@ -195,10 +201,12 @@ public class GatewayForwardTest {
      * @param hit 桩收到的请求
      * @param sessionId 期望的会话编号
      * @param cookie 登录令牌，不能出现在会话头里
+     * @param tenant 当前账号自己的租户
      */
-    private static void assertHeaders(Hit hit, String sessionId, String cookie) {
+    private static void assertHeaders(Hit hit, String sessionId, String cookie, String tenant) {
         assertEquals(TOKEN, header(hit, "x-jasagent-token"));
-        assertEquals(TENANT, header(hit, "x-jasagent-tenant"));
+        assertEquals(tenant, header(hit, "x-jasagent-tenant"));
+        assertNotEquals(TENANT, tenant);
         assertEquals(USER, header(hit, "x-jasagent-user"));
         assertEquals(sessionId, header(hit, "x-jasagent-session"));
         assertNotEquals(cookie, header(hit, "x-jasagent-session"));
@@ -253,6 +261,17 @@ public class GatewayForwardTest {
         String value = header.substring("JASAGENT_SESSION=".length(), end < 0 ? header.length() : end);
         assertFalse(result.getResponse().getContentAsString().contains(PASSWORD));
         return value;
+    }
+
+    /**
+     * 当前测试用户被迁入后的租户。粘性键和转发头都用它，不用配置里的缺省租户。
+     *
+     * @param login 登录名
+     * @return 该用户自己的租户
+     */
+    private String tenantOf(String login) {
+        AccountProfile profile = auth.profile(login);
+        return profile.tenantId();
     }
 
     /**

@@ -4,6 +4,11 @@ import dev.jasagent.api.auth.AuthService;
 import dev.jasagent.api.auth.Session;
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
+import dev.jasagent.auth.AccountDirectory;
+import dev.jasagent.auth.AccountProfile;
+import dev.jasagent.auth.AccountRoles;
+import dev.jasagent.auth.MysqlAccountAuth;
+import dev.jasagent.gateway.route.GatewayPaths;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,20 +27,20 @@ import java.util.Map;
 import java.util.concurrent.CompletionException;
 
 /**
- * 网关自己的登录、退出、当前用户、健康检查和页面入口。
- * 不提供自助注册。第一个用户仍由本机命令创建，口令规则仍是用户目录里的 PBKDF2。
+ * 网关自己的注册、登录、退出、当前用户、健康检查和页面入口。
+ * 自助注册创建普通用户和独立租户，不授予 admin。口令只以 PBKDF2 摘要进 MySQL。
  * agent 不再提供登录页和控制台，所以这里的页面只跳到 /admin/。
  * 会话 Cookie 的 Secure 跟随请求是否已被认定成 HTTPS：只有受信任的上一跳声明 https，或网关自己终止了 TLS，才会加上。
- * 站点根和登录页的 Location 保持相对路径。
+ * 站点根、登录页和注册页的 Location 保持相对路径。
  */
 @RestController
 public class GatewayLocalController {
     private final AuthService auth;
 
     /**
-     * 注入本机登录服务。本控制器只调用登录、退出和会话查询，不调用建用户。
+     * 注入登录服务。生产环境是 MySQL 账号库，测试里也可以是只实现 {@link AuthService} 的服务。
      *
-     * @param auth 用户目录里的登录服务
+     * @param auth 登录、退出和会话查询；实现了 {@link AccountDirectory} 时还能注册并读出角色
      */
     public GatewayLocalController(AuthService auth) {
         this.auth = auth;
@@ -72,6 +77,41 @@ public class GatewayLocalController {
     }
 
     /**
+     * 未登录即可注册。只接受登录名和口令，租户由服务端分配，角色固定为普通用户。
+     * 口令用完清掉，失败正文里也不出现口令。用户已存在时是 409，其它认证失败是 400。
+     *
+     * @param request 带登录表单属性的请求
+     * @return 成功时含 login、role 和 tenantId；失败时只有错误码
+     */
+    @PostMapping(path = "/register", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public ResponseEntity<Map<String, Object>> register(HttpServletRequest request) {
+        String user = request.getAttribute(LoginFormFilter.USER) instanceof String value ? value : "";
+        char[] chars = request.getAttribute(LoginFormFilter.PASSWORD) instanceof char[] value ? value : new char[0];
+        try {
+            if (!(auth instanceof AccountDirectory accounts)) {
+                return status(HttpStatus.SERVICE_UNAVAILABLE, "INTERNAL");
+            }
+            AccountProfile created = accounts.register(user, chars).toCompletableFuture().join();
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("login", created.login());
+            body.put(AccountRoles.FIELD, created.role());
+            body.put(AccountRoles.TENANT_FIELD, created.tenantId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(body);
+        } catch (CompletionException ex) {
+            Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+            if (cause instanceof AgentException agent && agent.code() == ErrorCode.AUTH) {
+                HttpStatus status = MysqlAccountAuth.ALREADY_EXISTS.equals(agent.getMessage())
+                        ? HttpStatus.CONFLICT
+                        : HttpStatus.BAD_REQUEST;
+                return status(status, "AUTH");
+            }
+            return status(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL");
+        } finally {
+            Arrays.fill(chars, '\0');
+        }
+    }
+
+    /**
      * 注销当前会话并清掉 Cookie。没有会话时也清 Cookie，避免浏览器留下旧令牌。
      * 清除时的 Secure 与签发时一致，都看当前请求是不是 HTTPS。
      *
@@ -94,17 +134,22 @@ public class GatewayLocalController {
     }
 
     /**
-     * 返回当前登录名和工作区。工作区还没选时是空串。
+     * 返回当前登录名、工作区、角色和租户。工作区还没选时是空串。
+     * 角色字段是 {@link AccountRoles#FIELD}，租户字段是 {@link AccountRoles#TENANT_FIELD}。
+     * 没有账号目录时角色按普通用户，避免误把缺省当成 admin。
      *
      * @param request 已经通过会话过滤的请求
-     * @return 含 login 和 workspace 的正文
+     * @return 含 login、workspace、role 和 tenantId 的正文
      */
     @GetMapping("/api/me")
     public Map<String, Object> me(HttpServletRequest request) {
         Session session = (Session) request.getAttribute(GatewaySessionFilter.SESSION);
+        AccountProfile profile = profile(request, session);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("login", session.login());
         body.put("workspace", session.workspace() == null ? "" : session.workspace());
+        body.put(AccountRoles.FIELD, profile.role());
+        body.put(AccountRoles.TENANT_FIELD, profile.tenantId());
         return body;
     }
 
@@ -136,6 +181,34 @@ public class GatewayLocalController {
     @GetMapping("/login")
     public ResponseEntity<Void> loginPage() {
         return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, "/admin/login").build();
+    }
+
+    /**
+     * 把 /register 转到控制台注册页。POST /register 仍是接口，不走这里。
+     *
+     * @return 302，Location 为相对路径 /admin/register，不写主机，也不写 http://
+     */
+    @GetMapping("/register")
+    public ResponseEntity<Void> registerPage() {
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, GatewayPaths.ADMIN_REGISTER).build();
+    }
+
+    /**
+     * 取出当前用户的角色和租户。过滤器用请求属性放好时直接用，否则再问账号目录。
+     * 两边都没有时按普通用户，租户留空，不把缺省提升成 admin。
+     *
+     * @param request 当前请求
+     * @param session 已登录会话
+     * @return 角色和租户
+     */
+    private AccountProfile profile(HttpServletRequest request, Session session) {
+        if (request.getAttribute(GatewaySessionFilter.ACCOUNT) instanceof AccountProfile profile) {
+            return profile;
+        }
+        if (auth instanceof AccountDirectory accounts) {
+            return accounts.profile(session.login());
+        }
+        return new AccountProfile(session.login(), AccountRoles.USER, "");
     }
 
     /**
