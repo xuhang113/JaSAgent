@@ -106,7 +106,8 @@ public final class LangChain4jLlmClient implements LlmClient {
      */
     @Override
     public CompletionStage<LlmChatResponse> chat(LlmChatRequest request) {
-        return VirtualIo.supply(() -> invokeChat(request));
+        CallerCarry.Snapshot caller = CallerCarry.capture();
+        return VirtualIo.supply(() -> caller.call(() -> invokeChat(request)));
     }
 
     /**
@@ -117,7 +118,8 @@ public final class LangChain4jLlmClient implements LlmClient {
      */
     @Override
     public CompletionStage<LlmEmbedResponse> embed(LlmEmbedRequest request) {
-        return VirtualIo.supply(() -> invokeEmbed(request));
+        CallerCarry.Snapshot caller = CallerCarry.capture();
+        return VirtualIo.supply(() -> caller.call(() -> invokeEmbed(request)));
     }
 
     /**
@@ -131,7 +133,7 @@ public final class LangChain4jLlmClient implements LlmClient {
             throw new AgentException(ErrorCode.LLM, "没有聊天模型", request.executionId(), null);
         }
         try {
-            if (streamingModel != null && ThinkingLive.active()) {
+            if (streamingModel != null && (ThinkingLive.active() || OutputLive.active())) {
                 return invokeStreaming(request);
             }
             return toResponse(chatModel.chat(toRequest(request)), "", request.executionId(), false);
@@ -141,7 +143,7 @@ public final class LangChain4jLlmClient implements LlmClient {
     }
 
     /**
-     * 用流式模型聊天，边收思考边推给当前出口，流结束后再整理成聊天结果。
+     * 用流式模型聊天。思考推给思考出口，正文推给正文出口，上游结束前就能看到首块。流结束后再整理成聊天结果。
      *
      * @param request 聊天请求，执行编号用于推送思考增量
      * @return 含流式思考和最终正文的聊天结果
@@ -150,6 +152,19 @@ public final class LangChain4jLlmClient implements LlmClient {
         CompletableFuture<ChatResponse> done = new CompletableFuture<>();
         StringBuilder streamed = new StringBuilder();
         streamingModel.chat(toRequest(request), new StreamingChatResponseHandler() {
+            /**
+             * 收到一段正文增量时立刻推给这次执行的正文出口。空片段直接忽略，不写入思考字段。
+             *
+             * @param partialResponse 本次流式返回的正文片段；空文本时不推送
+             */
+            @Override
+            public void onPartialResponse(String partialResponse) {
+                if (partialResponse == null || partialResponse.isEmpty()) {
+                    return;
+                }
+                OutputLive.delta(request.executionId(), partialResponse);
+            }
+
             /**
              * 收到一段思考增量时把它拼进缓冲，并立刻推给这次执行的实时出口。空片段直接忽略。
              *

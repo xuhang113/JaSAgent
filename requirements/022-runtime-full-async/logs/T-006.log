@@ -1,0 +1,7 @@
+2026-11-19T11:29:44+0800	T-006	模块测试 CallerCarryTest,RuntimeIsolationTest,WorkflowReactTest#modelCallSeesCallerScope	8746	退出码 0
+2026-11-19T11:29:44+0800	T-006	上下文携带与租户隔离模块测试	8761	通过
+baselineTasks=73
+pin-blocks own=0 sqlite-loader=0
+ATDD-022 workers=2 tomcatMax=64 streams=6 hold=12 pinned=0
+PASS 平台线程、恢复、首块、并发可用和租户隔离
+2026-11-19T11:30:01+0800	T-006	不同租户并发时上下文未丢失或串用	25530	通过

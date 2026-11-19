@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-004"
+result_text='第 2 条的压低不得只调 `server.tomcat.threads.max`。启用虚拟线程时，该值往往是请求槽位而不是操作系统平台线程，只调它可能反而限制并发，测不出「等待和恢复时不占平台线程」。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  python3 - "${REPO_ROOT}" <<'CHK'
+from pathlib import Path
+import sys
+
+repo = Path(sys.argv[1])
+props = (repo / "jasagent-app/src/main/resources/application.properties").read_text(encoding="utf-8")
+if "jasagent.app.tomcat-platform-workers=0" not in props.splitlines():
+    raise SystemExit("生产默认没有把 tomcat-platform-workers 留在 0。")
+script = (repo / "scripts/test-022-runtime-full-async.sh").read_text(encoding="utf-8")
+need = (
+    "platform_cap=2",
+    "streams=6",
+    "tomcat_max=64",
+    'jasagent.app.tomcat-platform-workers="${platform_cap}"',
+    'server.tomcat.threads.max="${tomcat_max}"',
+)
+for item in need:
+    if item not in script:
+        raise SystemExit("验收脚本没有按平台线程压低，缺少：" + item)
+if "不把 server.tomcat.threads.max 当成平台线程数" not in script:
+    raise SystemExit("验收脚本没有写明不把 threads.max 当成平台线程数。")
+test = (repo / "jasagent-app/src/test/java/dev/jasagent/app/AppPlatformWorkersTest.java").read_text(encoding="utf-8")
+if "jasagent.app.tomcat-platform-workers" not in test:
+    raise SystemExit("模块测试没有覆盖平台工作线程参数。")
+CHK
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "压低用平台工作线程参数且 threads.max 保持较高" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-app" "AppPlatformWorkersTest"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

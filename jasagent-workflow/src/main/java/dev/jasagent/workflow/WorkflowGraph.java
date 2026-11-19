@@ -2,6 +2,8 @@ package dev.jasagent.workflow;
 
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
+import dev.jasagent.api.runtime.AssignedExecution;
+import dev.jasagent.api.runtime.CallerScope;
 import dev.jasagent.workflow.ChatModel.ChatMessage;
 import dev.jasagent.workflow.ChatModel.ModelReply;
 import dev.jasagent.workflow.ChatModel.ModelRequest;
@@ -33,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
@@ -195,16 +198,45 @@ final class WorkflowGraph {
     private void addNode(StateGraph<WorkflowState> graph, NodeSpec node) throws GraphStateException {
         switch (node.type()) {
             case "react" -> {
-                graph.addNode(modelId(node.id()), (state, config) -> reactModel(state, node));
-                graph.addNode(toolsId(node.id()), (state, config) -> reactTools(state, node));
+                graph.addNode(modelId(node.id()), (state, config) -> carrying(state, () -> reactModel(state, node)));
+                graph.addNode(toolsId(node.id()), (state, config) -> carrying(state, () -> reactTools(state, node)));
             }
-            case "tool" -> graph.addNode(node.id(), (state, config) -> toolNode(state, node));
-            case "plugin" -> graph.addNode(node.id(), (state, config) -> pluginNode(state, node));
-            case "retrieve" -> graph.addNode(node.id(), (state, config) -> retrieveNode(state, node));
-            case "evaluate" -> graph.addNode(node.id(), (state, config) -> evaluateNode(state, node));
-            case "subagents" -> graph.addNode(node.id(), (state, config) -> subagentNode(state, node));
-            case "interrupt", "end", "condition" -> graph.addNode(node.id(), (state, config) -> passThrough(state, node));
+            case "tool" -> graph.addNode(node.id(), (state, config) -> carrying(state, () -> toolNode(state, node)));
+            case "plugin" -> graph.addNode(node.id(), (state, config) -> carrying(state, () -> pluginNode(state, node)));
+            case "retrieve" -> graph.addNode(node.id(), (state, config) -> carrying(state, () -> retrieveNode(state, node)));
+            case "evaluate" -> graph.addNode(node.id(), (state, config) -> carrying(state, () -> evaluateNode(state, node)));
+            case "subagents" -> graph.addNode(node.id(), (state, config) -> carrying(state, () -> subagentNode(state, node)));
+            case "interrupt", "end", "condition" -> graph.addNode(node.id(), (state, config) -> carrying(state, () -> passThrough(state, node)));
             default -> throw new AgentException(ErrorCode.WORKFLOW, "不支持的节点类型");
+        }
+    }
+
+    /**
+     * 进节点前按执行编号绑上租户、用户和会话，节点方法返回后恢复调度线程原来的值。
+     * 异步阶段如果在返回前就抄走了身份，恢复不会把它从工作线程上拿掉。
+     *
+     * @param state 当前图状态，里面有执行编号
+     * @param action 真正的节点动作
+     * @return 节点动作的阶段
+     */
+    private static CompletableFuture<Map<String, Object>> carrying(
+            WorkflowState state, Supplier<CompletableFuture<Map<String, Object>>> action) {
+        CallerScope previous = CallerScope.current();
+        String previousId = AssignedExecution.current();
+        ActiveCaller.install(StateValues.text(state, "executionId"));
+        try {
+            return action.get();
+        } finally {
+            if (previous == null) {
+                CallerScope.clear();
+            } else {
+                CallerScope.bind(previous);
+            }
+            if (previousId == null || previousId.isBlank()) {
+                AssignedExecution.clear();
+            } else {
+                AssignedExecution.bind(previousId);
+            }
         }
     }
 

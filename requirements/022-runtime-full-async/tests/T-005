@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-005"
+result_text='`/v1/forward` 的 HTTP 约定不变。018 的出站范围、流式、白名单、票据和回环约定仍然成立。021 sidecar「等待或抄写期间不占用 Tomcat 平台工作线程」的验收继续成立。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+
+  if git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- jasagent-sidecar | grep -q .; then
+    echo "sidecar 有差异，021 的产品行为不能视为未改。" >&2
+    git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- jasagent-sidecar >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "sidecar 相对规格提交未改" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-sidecar,jasagent-llm" "SidecarEgressTest,SidecarHealthTest,SidecarContractTest,SidecarStreamTest,TicketWireTest,LlmAllowlistTest,SidecarPlatformThreadTest,SidecarLlmTransportTest,CarrierFreeReadTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "018 出站、票据、白名单与 021 平台线程模块测试" "通过" >> "${ATDD_LOG}"
+  if ! grep -R -n -E '/v1/forward' "${REPO_ROOT}/jasagent-llm/src/main" >/dev/null; then
+    echo "agent 侧不再经 /v1/forward 出站。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "出站仍经 /v1/forward" "通过" >> "${ATDD_LOG}"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

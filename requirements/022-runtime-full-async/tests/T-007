@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-007"
+result_text='实现改动只覆盖运行时相关模块（`jasagent-llm`、`jasagent-app`，以及接线所需的 `jasagent-workflow` / `jasagent-controller`；若调度器等运行时模块在等待时仍占用 agent 的操作系统平台线程，也留在本轮）以及对应测试和脚本。不改 sidecar、网关和 `jasagent-web`。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'CHK'
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+cmd = "cd %s && { git diff --name-only %s HEAD; git ls-files --others --exclude-standard; } | sed '/^$/d' | sort -u" % (repo, base)
+names = subprocess.check_output(["bash", "-lc", cmd], text=True).splitlines()
+allowed_prefix = (
+    "jasagent-llm/",
+    "jasagent-app/",
+    "jasagent-workflow/",
+    "jasagent-controller/",
+    "jasagent-interrupt/",
+    "requirements/022-runtime-full-async/",
+)
+allowed_exact = {
+    "scripts/test-022-runtime-full-async.sh",
+    "changelog/2026-11-19-runtime-full-async.md",
+}
+bad = []
+for name in names:
+    if name in allowed_exact or name.startswith(allowed_prefix):
+        continue
+    bad.append(name)
+if not names:
+    raise SystemExit("相对规格提交没有改动。")
+if bad:
+    print("改动超出 022 允许范围：", file=sys.stderr)
+    print("\n".join(bad), file=sys.stderr)
+    raise SystemExit(1)
+print("\n".join(names))
+CHK
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "改动只在运行时模块、本轮脚本、变更记录和 ATDD" "通过" >> "${ATDD_LOG}"
+  for forbidden in jasagent-sidecar jasagent-gateway jasagent-web; do
+    if git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- "${forbidden}" | grep -q .; then
+      echo "碰到了禁止修改的路径：${forbidden}" >&2
+      exit 1
+    fi
+  done
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "未改 sidecar、网关和 jasagent-web" "通过" >> "${ATDD_LOG}"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

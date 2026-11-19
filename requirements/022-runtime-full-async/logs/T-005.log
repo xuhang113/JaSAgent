@@ -1,0 +1,4 @@
+2026-11-19T11:26:27+0800	T-005	sidecar 相对规格提交未改	12	通过
+2026-11-19T11:26:34+0800	T-005	模块测试 SidecarEgressTest,SidecarHealthTest,SidecarContractTest,SidecarStreamTest,TicketWireTest,LlmAllowlistTest,SidecarPlatformThreadTest,SidecarLlmTransportTest,CarrierFreeReadTest	7071	退出码 0
+2026-11-19T11:26:34+0800	T-005	018 出站、票据、白名单与 021 平台线程模块测试	7085	通过
+2026-11-19T11:26:34+0800	T-005	出站仍经 /v1/forward	7097	通过

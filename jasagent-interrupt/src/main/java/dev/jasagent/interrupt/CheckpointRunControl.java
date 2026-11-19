@@ -37,6 +37,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 
 /**
  * 用检查点驱动一条节点序列：开始时写入运行状态并逐步执行，中断时取消正在跑的阶段并记为挂起，恢复时从下一节点继续。
@@ -54,7 +56,8 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
     private final List<NodeTask> nodes;
     private final AgentTracer tracer;
     private final TraceWriter trace;
-    private final Map<String, Object> locks = new ConcurrentHashMap<>();
+    /** 每条执行一把可重入锁。不用 synchronized，避免等检查点存储器时钉住虚拟线程的载体。 */
+    private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<?>> inflight = new ConcurrentHashMap<>();
     private final Set<String> cancelRequested = ConcurrentHashMap.newKeySet();
 
@@ -140,7 +143,7 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
         return VirtualIo.supply(() -> {
             AgentSpan root = await(tracer.startRoot(executionId));
             await(tracer.end(root));
-            synchronized (lock(executionId)) {
+            locked(executionId, () -> {
                 if (find(executionId).isPresent()) {
                     throw new AgentException(ErrorCode.INTERNAL, "执行已经存在", executionId, null);
                 }
@@ -154,7 +157,8 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
                 state.put("output", "");
                 state.put("errorCode", "");
                 put(executionId, START_NODE, nodes.get(0).id(), state);
-            }
+                return null;
+            });
             return execute(executionId, 0);
         });
     }
@@ -168,22 +172,20 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
      */
     @Override
     public CompletionStage<ExecutionSnapshot> interrupt(String executionId, String userId) {
-        return VirtualIo.supply(() -> {
-            synchronized (lock(executionId)) {
-                Checkpoint checkpoint = required(executionId);
-                ExecutionSnapshot current = toSnapshot(executionId, checkpoint);
-                authorize(current, userId);
-                if (current.status() != ExecutionStatus.RUNNING) {
-                    return current;
-                }
-                cancelRequested.add(executionId);
-                CompletableFuture<?> future = inflight.get(executionId);
-                if (future != null) {
-                    future.cancel(true);
-                }
-                return suspend(executionId, required(executionId));
+        return VirtualIo.supply(() -> locked(executionId, () -> {
+            Checkpoint checkpoint = required(executionId);
+            ExecutionSnapshot current = toSnapshot(executionId, checkpoint);
+            authorize(current, userId);
+            if (current.status() != ExecutionStatus.RUNNING) {
+                return current;
             }
-        });
+            cancelRequested.add(executionId);
+            CompletableFuture<?> future = inflight.get(executionId);
+            if (future != null) {
+                future.cancel(true);
+            }
+            return suspend(executionId, required(executionId));
+        }));
     }
 
     /**
@@ -196,17 +198,22 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
     @Override
     public CompletionStage<ExecutionSnapshot> resume(String executionId, String userId) {
         return VirtualIo.supply(() -> {
-            int index;
-            synchronized (lock(executionId)) {
+            ExecutionSnapshot[] unchanged = new ExecutionSnapshot[1];
+            int index = locked(executionId, () -> {
                 Checkpoint checkpoint = required(executionId);
                 ExecutionSnapshot current = toSnapshot(executionId, checkpoint);
                 authorize(current, userId);
                 if (current.status() != ExecutionStatus.SUSPENDED) {
-                    return current;
+                    unchanged[0] = current;
+                    return -1;
                 }
-                index = indexOf(executionId, checkpoint.getNextNodeId());
+                int next = indexOf(executionId, checkpoint.getNextNodeId());
                 Checkpoint running = markRunning(executionId, checkpoint);
                 emit(executionId, running, "RESUME", "恢复");
+                return next;
+            });
+            if (unchanged[0] != null) {
+                return unchanged[0];
             }
             return execute(executionId, index);
         });
@@ -250,9 +257,7 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
                     return stopped.get();
                 }
             }
-            synchronized (lock(executionId)) {
-                return toSnapshot(executionId, required(executionId));
-            }
+            return locked(executionId, () -> toSnapshot(executionId, required(executionId)));
         } finally {
             cancelRequested.remove(executionId);
             inflight.remove(executionId);
@@ -269,8 +274,10 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
     private Optional<ExecutionSnapshot> step(String executionId, int index) {
         AgentSpan span = null;
         try {
+            ReentrantLock gate = lock(executionId);
             CompletableFuture<String> future;
-            synchronized (lock(executionId)) {
+            gate.lock();
+            try {
                 Checkpoint checkpoint = required(executionId);
                 ExecutionSnapshot current = toSnapshot(executionId, checkpoint);
                 if (current.status() != ExecutionStatus.RUNNING || cancelRequested.contains(executionId)) {
@@ -296,10 +303,13 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
                 }
                 future = stage.toCompletableFuture();
                 inflight.put(executionId, future);
+            } finally {
+                gate.unlock();
             }
             try {
                 String value = future.join();
-                synchronized (lock(executionId)) {
+                gate.lock();
+                try {
                     inflight.remove(executionId, future);
                     if (future.isCancelled() || cancelRequested.contains(executionId)) {
                         return Optional.of(suspend(executionId, required(executionId)));
@@ -307,14 +317,19 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
                     String next = index + 1 < nodes.size() ? nodes.get(index + 1).id() : END_NODE;
                     advance(executionId, nodes.get(index).id(), next, value);
                     return Optional.empty();
+                } finally {
+                    gate.unlock();
                 }
             } catch (CompletionException | CancellationException ex) {
-                synchronized (lock(executionId)) {
+                gate.lock();
+                try {
                     inflight.remove(executionId, future);
                     if (future.isCancelled() || cancelled(ex) || cancelRequested.contains(executionId)) {
                         return Optional.of(suspend(executionId, required(executionId)));
                     }
                     return Optional.of(fail(executionId, ex));
+                } finally {
+                    gate.unlock();
                 }
             }
         } finally {
@@ -488,13 +503,32 @@ public final class CheckpointRunControl implements RunControl, AutoCloseable {
     }
 
     /**
-     * 返回这条执行专用的锁，没有则创建，用来串行化同一条执行的检查点读写。
+     * 返回这条执行专用的可重入锁，没有则创建，用来串行化同一条执行的检查点读写。
+     * 用锁而不用监视器，是为了等存储器自己的锁时不把虚拟线程钉在载体上。
      *
      * @param executionId 执行编号
-     * @return 该执行的锁对象
+     * @return 该执行的可重入锁
      */
-    private Object lock(String executionId) {
-        return locks.computeIfAbsent(executionId, key -> new Object());
+    private ReentrantLock lock(String executionId) {
+        return locks.computeIfAbsent(executionId, key -> new ReentrantLock());
+    }
+
+    /**
+     * 持有这条执行的锁跑完一段逻辑再放开。提前返回和抛出异常都会放开锁。
+     *
+     * @param executionId 执行编号
+     * @param action 持锁期间要做的事
+     * @param <T> 结果类型
+     * @return 这段逻辑的结果
+     */
+    private <T> T locked(String executionId, Supplier<T> action) {
+        ReentrantLock gate = lock(executionId);
+        gate.lock();
+        try {
+            return action.get();
+        } finally {
+            gate.unlock();
+        }
     }
 
     /**

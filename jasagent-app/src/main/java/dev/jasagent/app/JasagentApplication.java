@@ -11,6 +11,7 @@ import dev.jasagent.core.ContextWindow;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
 import java.nio.file.Path;
@@ -24,6 +25,7 @@ import java.util.Map;
  * 不扫描 dev.jasagent.web，避免把控制台页面再提供出来。登录页和控制台只在 jasagent-web，由网关反代。
  */
 @SpringBootApplication(scanBasePackages = {"dev.jasagent.app", "dev.jasagent.controller"})
+@EnableConfigurationProperties(AppRuntimeProperties.class)
 public class JasagentApplication {
     /**
      * 第一个参数是子命令时执行命令行并用退出码结束进程；否则绑定本机 18731 端口启动 agent。

@@ -79,7 +79,8 @@ public final class GrokLlmClient implements LlmClient {
      */
     @Override
     public CompletionStage<LlmChatResponse> chat(LlmChatRequest request) {
-        return VirtualIo.supply(() -> invoke(request));
+        CallerCarry.Snapshot caller = CallerCarry.capture();
+        return VirtualIo.supply(() -> caller.call(() -> invoke(request)));
     }
 
     /**

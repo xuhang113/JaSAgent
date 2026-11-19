@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-006"
+result_text='异步移交时，会话、租户和权限上下文不得丢失，也不得串到别人的请求上。020 的租户隔离仍须成立。本条验收必须用不同租户并发覆盖。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-llm,jasagent-app,jasagent-workflow" "CallerCarryTest,RuntimeIsolationTest,WorkflowReactTest#modelCallSeesCallerScope"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "上下文携带与租户隔离模块测试" "通过" >> "${ATDD_LOG}"
+  "${HERE}/live.sh"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "不同租户并发时上下文未丢失或串用" "通过" >> "${ATDD_LOG}"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

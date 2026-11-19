@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-001"
+result_text='等待 sidecar、模型流或工具，以及恢复执行期间，agent（`jasagent-app` 进程）不占用操作系统平台工作线程（不是虚拟线程或请求槽位）。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-app" "AppPlatformWorkersTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "平台线程上限模块测试" "通过" >> "${ATDD_LOG}"
+  "${HERE}/live.sh"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "等待和恢复不占平台工作线程" "通过" >> "${ATDD_LOG}"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

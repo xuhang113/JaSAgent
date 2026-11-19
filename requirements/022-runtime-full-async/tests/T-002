@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-002"
+result_text='把 agent 的 Tomcat 平台工作线程故意压低后，仍能同时扛住超过该上限的长 ReAct / 流式调用，并且必须覆盖恢复路径。这些调用的思考或首块须在上游结束前到达。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  "${HERE}/live.sh"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "压低平台线程后并发长 ReAct 含恢复且首块先到" "通过" >> "${ATDD_LOG}"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

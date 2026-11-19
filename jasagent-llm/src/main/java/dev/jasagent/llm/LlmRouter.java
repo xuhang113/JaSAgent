@@ -67,31 +67,35 @@ public final class LlmRouter implements LlmClient {
     }
 
     /**
-     * 在虚拟线程上完成一次聊天路由。超时收成带执行编号、且说明已脱敏的模型错误。
+     * 在虚拟线程上完成一次聊天路由。进入虚拟线程前先抄下租户、用户和会话，避免新线程看不见调用方的身份。
+     * 超时收成带执行编号、且说明已脱敏的模型错误。
      *
      * @param request 含任务、供应方、消息和剩余步数的聊天请求
      * @return 完成后给出实际供应方和模型名的聊天结果
      */
     @Override
     public CompletionStage<LlmChatResponse> chat(LlmChatRequest request) {
-        return VirtualIo.supply(() -> {
+        CallerCarry.Snapshot caller = CallerCarry.capture();
+        return VirtualIo.supply(() -> caller.call(() -> {
             try {
                 return chatBlocking(request);
             } catch (LlmTimeoutException ex) {
                 throw new AgentException(ErrorCode.LLM, AuthorizationRedactor.redact(ex.getMessage()), request.executionId(), ex);
             }
-        });
+        }));
     }
 
     /**
-     * 在虚拟线程上完成一次嵌入。网关嵌入可用时走网关，否则用本地哈希向量。
+     * 在虚拟线程上完成一次嵌入。进入虚拟线程前先抄下租户、用户和会话。
+     * 网关嵌入可用时走网关，否则用本地哈希向量。
      *
      * @param request 含执行编号和待嵌入文本的请求
      * @return 完成后给出来源名称和向量的阶段
      */
     @Override
     public CompletionStage<LlmEmbedResponse> embed(LlmEmbedRequest request) {
-        return VirtualIo.supply(() -> embedBlocking(request));
+        CallerCarry.Snapshot caller = CallerCarry.capture();
+        return VirtualIo.supply(() -> caller.call(() -> embedBlocking(request)));
     }
 
     /**
@@ -128,12 +132,6 @@ public final class LlmRouter implements LlmClient {
     }
 
     /**
-     * 按请求里的模型名调用对应供应方。供应方空白时当作 DeepSeek。不认识的供应方直接失败，不改走另一边。
-     *
-     * @param request 已经写了模型名的聊天请求
-     * @return 该模型的聊天结果
-     */
-    /**
      * 调用方点名 grok，或没点供应方但模型是 grok-4.7 时走 Grok。点名 deepseek 时不因为模型名改道。
      *
      * @param request 聊天请求
@@ -160,6 +158,12 @@ public final class LlmRouter implements LlmClient {
         return invokeWithTimeoutRetry(request, grok, "grok", model, false);
     }
 
+    /**
+     * 按请求里的模型名调用对应供应方。供应方空白时当作 DeepSeek。不认识的供应方直接失败，不改走另一边。
+     *
+     * @param request 已经写了模型名的聊天请求
+     * @return 该模型的聊天结果
+     */
     private LlmChatResponse chatChosen(LlmChatRequest request) {
         String provider = isBlank(request.provider()) ? "deepseek" : request.provider();
         if ("deepseek".equals(provider)) {
