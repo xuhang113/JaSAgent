@@ -1,0 +1,5 @@
+baselineTasks=74
+pin-blocks own=0 sqlite-loader=0
+ATDD-022 workers=2 tomcatMax=64 streams=6 hold=12 pinned=0
+PASS 平台线程、恢复、首块、并发可用和租户隔离
+2026-11-19T11:29:18+0800	T-002	压低平台线程后并发长 ReAct 含恢复且首块先到	17537	通过

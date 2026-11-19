@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-003"
+result_text='在第 2 条的并发长调用进行期间，`/health` 和新的提交、发消息仍要在超时内可用。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  "${HERE}/live.sh"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "长调用期间健康检查、新的提交和发消息可用" "通过" >> "${ATDD_LOG}"
+
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"
