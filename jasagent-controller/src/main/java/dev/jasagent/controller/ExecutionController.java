@@ -4,6 +4,7 @@ import dev.jasagent.api.exec.ExecutionApi;
 import dev.jasagent.api.runtime.AssignedExecution;
 import dev.jasagent.api.runtime.CallerScope;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -93,27 +94,29 @@ public class ExecutionController {
     }
 
     /**
-     * 中断当前用户的这条执行。
+     * 中断当前用户的这条执行。容器线程只把等待交给虚拟线程就返回，不在平台线程上 join。
      *
      * @param id 执行编号
      * @param request 带当前会话的请求
-     * @return 中断后的执行
+     * @param response 异步写回中断后的执行
      */
     @PostMapping("/api/executions/{id}/interrupt")
-    public Map<String, Object> interrupt(@PathVariable("id") String id, HttpServletRequest request) {
-        return executions.interrupt(caller(request).userId(), id);
+    public void interrupt(@PathVariable("id") String id, HttpServletRequest request, HttpServletResponse response) {
+        String userId = caller(request).userId();
+        AsyncHandoff.start(request, response, () -> executions.interrupt(userId, id));
     }
 
     /**
-     * 恢复当前用户的这条执行。
+     * 恢复当前用户的这条执行。容器线程只把剩余执行交给虚拟线程就返回，不在平台线程上 join。
      *
      * @param id 执行编号
      * @param request 带当前会话的请求
-     * @return 恢复后的执行
+     * @param response 异步写回恢复后的执行
      */
     @PostMapping("/api/executions/{id}/resume")
-    public Map<String, Object> resume(@PathVariable("id") String id, HttpServletRequest request) {
-        return executions.resume(caller(request).userId(), id);
+    public void resume(@PathVariable("id") String id, HttpServletRequest request, HttpServletResponse response) {
+        String userId = caller(request).userId();
+        AsyncHandoff.start(request, response, () -> executions.resume(userId, id));
     }
 
     /**
@@ -131,7 +134,8 @@ public class ExecutionController {
         emitter.onCompletion(() -> open.set(false));
         emitter.onTimeout(() -> open.set(false));
         emitter.onError(ignored -> open.set(false));
-        Thread.ofVirtual().start(() -> {
+        CallerCarry.Snapshot caller = CallerCarry.capture();
+        Thread.ofVirtual().name(AsyncHandoff.THREAD, 0).start(() -> caller.run(() -> {
             try {
                 String previous = "";
                 String previousThinking = null;
@@ -162,7 +166,7 @@ public class ExecutionController {
             } catch (RuntimeException ex) {
                 emitter.completeWithError(ex);
             }
-        });
+        }));
         return emitter;
     }
 

@@ -2,7 +2,6 @@ package dev.jasagent.llm.egress;
 
 import dev.langchain4j.http.client.HttpClient;
 import dev.langchain4j.http.client.HttpClientBuilder;
-import dev.langchain4j.http.client.HttpClientBuilderLoader;
 
 import java.time.Duration;
 
@@ -58,19 +57,12 @@ public final class SidecarLlmTransportBuilder implements HttpClientBuilder {
     }
 
     /**
-     * 建出带 sidecar 改写的客户端。底层仍用 LangChain4j 找到的 JDK 客户端来拨号和读事件流。此时不拨号。
+     * 建出带 sidecar 改写的客户端。流式正文由本传输按块读出，不交给会钉住载体的 JDK 输入流。此时不拨号。
      *
      * @return 大模型请求使用的传输
      */
     @Override
     public HttpClient build() {
-        HttpClientBuilder builder = HttpClientBuilderLoader.loadHttpClientBuilder();
-        if (connectTimeout != null) {
-            builder.connectTimeout(connectTimeout);
-        }
-        if (readTimeout != null) {
-            builder.readTimeout(readTimeout);
-        }
-        return new SidecarLlmTransport(builder.build());
+        return new SidecarLlmTransport(connectTimeout, readTimeout);
     }
 }

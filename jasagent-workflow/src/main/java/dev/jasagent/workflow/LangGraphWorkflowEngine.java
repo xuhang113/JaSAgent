@@ -3,6 +3,8 @@ package dev.jasagent.workflow;
 import dev.jasagent.api.concurrent.VirtualIo;
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
+import dev.jasagent.api.runtime.AssignedExecution;
+import dev.jasagent.api.runtime.CallerScope;
 import dev.jasagent.workflow.PromptContext.CorrectionNote;
 import dev.jasagent.workflow.PromptContext.Turn;
 import org.bsc.langgraph4j.GraphInput;
@@ -57,27 +59,31 @@ public final class LangGraphWorkflowEngine {
     }
 
     /**
-     * 在虚拟线程上从头执行一份工作流请求。
+     * 在虚拟线程上从头执行一份工作流请求。调用线程上的租户、用户和会话会带进这条虚拟线程。
+     * {@code invokeSync} 的等待也停在这条虚拟线程上，不占用 Tomcat 平台线程。
      *
      * @param request 含定义、输入、检查点和提示的请求
      * @return 完成后给出运行结果的阶段
      */
     public CompletionStage<WorkflowRun> execute(WorkflowRequest request) {
-        return VirtualIo.supply(() -> run(request, false));
+        CallerCarry.Snapshot caller = CallerCarry.capture();
+        return VirtualIo.supply(() -> caller.call(() -> run(request, false)));
     }
 
     /**
-     * 在虚拟线程上从该执行已有的检查点继续。
+     * 在虚拟线程上从该执行已有的检查点继续。身份和 {@code invokeSync} 的等待都留在这条虚拟线程上。
      *
      * @param request 与暂停时同一执行编号的请求
      * @return 完成后给出继续运行结果的阶段
      */
     public CompletionStage<WorkflowRun> resume(WorkflowRequest request) {
-        return VirtualIo.supply(() -> run(request, true));
+        CallerCarry.Snapshot caller = CallerCarry.capture();
+        return VirtualIo.supply(() -> caller.call(() -> run(request, true)));
     }
 
     /**
      * 打开检查点并编译图，然后从头输入或从中断处恢复。中断收成暂停，正常状态收成成功，异常收成失败。
+     * {@code invokeSync} 在当前虚拟线程上等待图结束，join 不会把载体钉在平台线程上。
      *
      * @param request 工作流请求
      * @param resume 为 true 时从检查点继续，而不是重新写入初始状态
@@ -86,6 +92,7 @@ public final class LangGraphWorkflowEngine {
     private WorkflowRun run(WorkflowRequest request, boolean resume) {
         BaseCheckpointSaver saver = null;
         String dsl = "";
+        ActiveCaller.remember(request.executionId(), CallerScope.current(), AssignedExecution.current());
         try {
             saver = saver(request);
             WorkflowGraph.Compiled compiled = graph.compiled(request.workflow(), saver);
@@ -109,6 +116,8 @@ public final class LangGraphWorkflowEngine {
             return failed(request, new AgentException(ErrorCode.WORKFLOW, "图没有返回状态"), dsl, saver);
         } catch (Throwable error) {
             return failed(request, error, dsl, saver);
+        } finally {
+            ActiveCaller.forget(request.executionId());
         }
     }
 

@@ -2,6 +2,8 @@ package dev.jasagent.workflow;
 
 import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
+import dev.jasagent.api.runtime.AssignedExecution;
+import dev.jasagent.api.runtime.CallerScope;
 import dev.jasagent.workflow.ChatModel.ChatMessage;
 import dev.jasagent.workflow.ChatModel.ModelReply;
 import dev.jasagent.workflow.ChatModel.ModelRequest;
@@ -740,6 +742,35 @@ class WorkflowReactTest {
         } finally {
             provider.close();
             GlobalOpenTelemetry.resetForTest();
+        }
+    }
+
+    /**
+     * 调用线程上的租户、用户和会话要出现在模型被调用的那条线程上，不能在交给虚拟线程后丢掉。
+     */
+    @Test
+    void modelCallSeesCallerScope() {
+        CallerScope.bind(new CallerScope("tenant-a", "user-a", "sess-a"));
+        AssignedExecution.bind("exec-scope");
+        AtomicReference<String> seen = new AtomicReference<>("");
+        ChatModel chat = request -> {
+            CallerScope scope = CallerScope.current();
+            seen.set(scope == null ? "" : scope.tenantId() + " " + scope.userId() + " " + scope.sessionId()
+                    + " " + AssignedExecution.current());
+            return CompletableFuture.completedFuture(new ModelReply("ok", List.of(), ""));
+        };
+        try {
+            WorkflowRun run = join(engine(chat, null, null, null, null, null).execute(request("""
+                    {"id":"scope-run","nodes":[
+                      {"id":"act","type":"react","maxSteps":1,"tools":[],"grounding":false},
+                      {"id":"done","type":"end"}
+                    ]}
+                    """, "你好", blank())));
+            assertEquals("SUCCEEDED", run.status());
+            assertEquals("tenant-a user-a sess-a exec-scope", seen.get());
+        } finally {
+            CallerScope.clear();
+            AssignedExecution.clear();
         }
     }
 

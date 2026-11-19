@@ -1,6 +1,5 @@
 package dev.jasagent.llm.egress;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -12,6 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 
 /**
  * 代理进程里的 HTTP。离开集群的请求改送到 sidecar 的 {@code /v1/forward}，正文和响应都按流传递。
@@ -47,7 +48,7 @@ public final class SidecarForward implements AutoCloseable {
 
     /**
      * 发送一次请求。离开集群时改打 sidecar，并把原地址放进 {@code X-Jasagent-Url}。
-     * 响应体是流，调用方用完要关闭返回值。
+     * 响应体是流，调用方用完要关闭返回值。等到响应头发生在 {@code Future.get}，读正文发生在队列上，都不进入会钉住载体的 {@code synchronized}。
      *
      * @param method HTTP 方法
      * @param uri 真正要访问的地址
@@ -83,12 +84,13 @@ public final class SidecarForward implements AutoCloseable {
         builder.method(method, publisher(payload));
         try {
             HttpResponse<InputStream> response = (viaSidecar ? sidecar : direct)
-                    .send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
+                    .sendAsync(builder.build(), CarrierFreeResponse.handler())
+                    .get();
             return new Call(response.statusCode(), response.headers(), response.body(), viaSidecar);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw ex;
-        } catch (IOException ex) {
+        } catch (ExecutionException ex) {
             throw new IOException("出站失败");
         }
     }
@@ -112,7 +114,7 @@ public final class SidecarForward implements AutoCloseable {
     }
 
     /**
-     * 按连接超时和是否跟随重定向建一个 HTTP/1.1 客户端。
+     * 按连接超时和是否跟随重定向建一个 HTTP/1.1 客户端。回调放在虚拟线程上，避免复制正文块时占住平台线程。
      *
      * @param connectTimeout 连接超时
      * @param follow 为真时跟随重定向
@@ -125,11 +127,12 @@ public final class SidecarForward implements AutoCloseable {
                 .connectTimeout(timeout)
                 .followRedirects(follow ? HttpClient.Redirect.NORMAL : HttpClient.Redirect.NEVER)
                 .version(HttpClient.Version.HTTP_1_1)
+                .executor(Executors.newVirtualThreadPerTaskExecutor())
                 .build();
     }
 
     /**
-     * 空正文不带体；有内容时按流写出去，不再复制成另一份数组发布器。
+     * 空正文不带体。调用方已经持有完整字节时直接发布这份数组，不再套一层会在同步方法里读的输入流。
      *
      * @param payload 调用方已经持有的正文，不会是空引用
      * @return JDK 客户端使用的发布器
@@ -138,7 +141,7 @@ public final class SidecarForward implements AutoCloseable {
         if (payload.length == 0) {
             return HttpRequest.BodyPublishers.noBody();
         }
-        return HttpRequest.BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(payload));
+        return HttpRequest.BodyPublishers.ofByteArray(payload);
     }
 
     /**

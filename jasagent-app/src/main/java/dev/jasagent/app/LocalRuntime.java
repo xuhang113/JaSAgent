@@ -49,6 +49,8 @@ import dev.jasagent.persist.ExecutionRow;
 import dev.jasagent.persist.SessionLedger;
 import dev.jasagent.persist.UragMysql;
 import dev.jasagent.plugin.PluginToolCatalog;
+import dev.jasagent.llm.CallerCarry;
+import dev.jasagent.llm.OutputLive;
 import dev.jasagent.llm.ThinkingLive;
 import dev.jasagent.tool.WorkspaceTools;
 import dev.jasagent.workflow.ChatModel;
@@ -78,6 +80,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -110,6 +113,10 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      * 按租户、用户、会话记下的工具参数。只作同进程缓存，归属以 MySQL 里的会话行为准。
      */
     private final Map<String, List<String>> toolNotes = new ConcurrentHashMap<>();
+    /**
+     * 没有 MySQL 账本时，按租户和用户记住已选工作区。只活在本进程，不写新表，两个租户不共用一条路径。
+     */
+    private final Map<String, String> rememberedWorkspaces = new ConcurrentHashMap<>();
     private final SavedTraceTracer traces = new SavedTraceTracer();
     private final Map<String, String> environment;
     private final Map<String, CheckpointRunControl> controls = new ConcurrentHashMap<>();
@@ -166,9 +173,14 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             }
             long started = System.nanoTime();
             int start = mark;
-            return delegated.complete(request).whenComplete((reply, error) -> noteModelReply(current, reply, start, elapsed(started)));
+            CallerCarry.Snapshot caller = current == null
+                    ? CallerCarry.capture()
+                    : CallerCarry.hold(scopeOf(current), current.executionId);
+            return caller.call(() -> delegated.complete(request)
+                    .whenComplete((reply, error) -> noteModelReply(current, reply, start, elapsed(started))));
         };
         ThinkingLive.bind(this::acceptThinking);
+        OutputLive.bind(this::acceptOutput);
         this.environment = environment(configuration);
         ExecutionJournal opened = null;
         try {
@@ -280,6 +292,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         requireJournal();
         String workspace;
         String keptToken;
+        String callerSession = "";
         CallerScope scope = CallerScope.current();
         if (scope != null || token == null || token.isBlank()) {
             if (scope != null && !userId.equals(scope.userId())) {
@@ -287,6 +300,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             }
             String tenant = scope == null ? GatewayHeaders.TENANT_LOCAL : scope.tenantId();
             String chosen = sessionId == null || sessionId.isBlank() ? "" : sessionId;
+            callerSession = scope == null ? "" : scope.sessionId();
             if (scope != null && !scope.sessionId().isBlank() && !chosen.isBlank() && !scope.sessionId().equals(chosen)) {
                 throw new AgentException(ErrorCode.AUTH, "网关会话与请求会话不一致");
             }
@@ -309,6 +323,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         String id = assignedExecutionId();
         Exec exec = new Exec(id, userId, workspace, keptToken);
         exec.tenantId = scope == null ? GatewayHeaders.TENANT_LOCAL : scope.tenantId();
+        exec.callerSession = callerSession;
         String sessionKey = sessionId == null || sessionId.isBlank() ? id : sessionId;
         exec.sessionId = sessionKey;
         exec.selectedProvider = provider == null ? "" : provider;
@@ -351,7 +366,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         }
         journal.insert(new ExecutionRow(id, userId, sessionKey, workspace, "ACCEPTED", exec.traceId, exec.rootSpanId));
         save(exec, false);
-        workers.execute(() -> start(exec));
+        workers.execute(() -> withExec(exec, () -> start(exec)));
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("executionId", id);
         body.put("status", "ACCEPTED");
@@ -412,19 +427,25 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     @Override
     public Map<String, Object> interrupt(String userId, String executionId) {
         Exec exec = owned(userId, executionId);
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             exec.append("interrupt");
             save(exec, false);
+        } finally {
+            exec.gate.unlock();
         }
         try {
             ExecutionSnapshot snapshot = controlFor(exec).interrupt(exec.executionId, exec.userId).toCompletableFuture().join();
             applySnapshot(exec, snapshot);
         } catch (RuntimeException ex) {
-            synchronized (exec) {
+            exec.gate.lock();
+            try {
                 if (!terminalStatus(exec.status)) {
                     finishSuspended(exec, exec.output);
                     save(exec, true);
                 }
+            } finally {
+                exec.gate.unlock();
             }
         }
         return view(owned(userId, executionId));
@@ -441,14 +462,18 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     @Override
     public Map<String, Object> resume(String userId, String executionId) {
         Exec exec = owned(userId, executionId);
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             if (!"SUSPENDED".equals(exec.status)) {
                 return view(exec);
             }
+        } finally {
+            exec.gate.unlock();
         }
         try {
             CheckpointRunControl control = controlFor(exec);
-            synchronized (exec) {
+            exec.gate.lock();
+            try {
                 if (!"SUSPENDED".equals(exec.status)) {
                     return view(exec);
                 }
@@ -458,16 +483,21 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 exec.errorCode = "";
                 exec.append("resume");
                 save(exec, true);
+            } finally {
+                exec.gate.unlock();
             }
             ExecutionSnapshot snapshot = control.resume(exec.executionId, exec.userId).toCompletableFuture().join();
             applySnapshot(exec, snapshot);
         } catch (RuntimeException ex) {
-            synchronized (exec) {
+            exec.gate.lock();
+            try {
                 exec.suspended = true;
                 exec.status = "SUSPENDED";
                 exec.errorCode = offlineCode(ex);
                 exec.append("resume failed " + exec.errorCode);
                 save(exec, true);
+            } finally {
+                exec.gate.unlock();
             }
         }
         return view(owned(userId, executionId));
@@ -499,7 +529,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     /**
-     * 把工作区记到 MySQL。直接调用且还没有账本时，退回登录会话上的工作区选择，不改口令实现。
+     * 把工作区记到 MySQL。没有账本时只记在本进程，按租户和用户分开，不新建表。
      *
      * @param userId 网关用户 id
      * @param path 请求里的路径
@@ -522,6 +552,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         String tenant = CallerScope.tenantOrLocal();
         if (ledger != null) {
             ledger.saveWorkspace(tenant, userId, selected.toString());
+        } else {
+            rememberedWorkspaces.put(workspaceKey(tenant, userId), selected.toString());
         }
         return Map.of("workspace", selected.toString());
     }
@@ -534,10 +566,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     @Override
     public String workspace(String userId) {
-        if (ledger == null) {
-            return "";
-        }
-        return ledger.workspace(CallerScope.tenantOrLocal(), userId);
+        return workspaceOf(CallerScope.tenantOrLocal(), userId);
     }
 
     /**
@@ -585,9 +614,12 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                     .join();
             applySnapshot(exec, snapshot);
         } catch (RuntimeException ex) {
-            synchronized (exec) {
+            exec.gate.lock();
+            try {
                 recordFailure(exec, ex);
                 save(exec, true);
+            } finally {
+                exec.gate.unlock();
             }
         }
     }
@@ -613,18 +645,33 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     private void runWorkflow(String executionId, CompletableFuture<String> future) {
         Exec exec = requireExec(executionId);
+        withExec(exec, () -> runWorkflowBound(exec, future));
+    }
+
+    /**
+     * 在已经绑上执行身份的线程上跑完工作流并完成节点阶段。
+     * 副作用：可能把失败写入执行和数据库，并完成或异常完成 future。
+     *
+     * @param exec 要运行的执行
+     * @param future 交给检查点节点的完成口
+     */
+    private void runWorkflowBound(Exec exec, CompletableFuture<String> future) {
         try {
             executeWorkflow(exec);
         } catch (RuntimeException ex) {
-            synchronized (exec) {
+            exec.gate.lock();
+            try {
                 recordFailure(exec, ex);
                 save(exec, true);
+            } finally {
+                exec.gate.unlock();
             }
         }
         if (future.isDone()) {
             return;
         }
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             save(exec, false);
             boolean hold = exec.suspended || pending(exec);
             if (!"FAILED".equals(exec.status) && hold) {
@@ -637,6 +684,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 return;
             }
             future.complete(exec.output == null ? "" : exec.output);
+        } finally {
+            exec.gate.unlock();
         }
     }
 
@@ -648,11 +697,14 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     private void executeWorkflow(Exec exec) {
         Path database = checkpoint(exec);
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             exec.pendingWorkflow = exec.pendingWorkflow == null ? "" : exec.pendingWorkflow;
             exec.status = "RUNNING";
             exec.suspended = false;
             save(exec, true);
+        } finally {
+            exec.gate.unlock();
         }
         WorkflowDefinition definition = loadDefinition(exec.workspace, exec.pendingWorkflow);
         boolean usesModel = false;
@@ -682,10 +734,13 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         } catch (RuntimeException ignored) {
             // 目录读不到时时间线仍保留 system 和 human。
         }
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             if (!hasSystem(exec)) {
                 recordOpening(exec, rules, skills, exec.pendingInput);
             }
+        } finally {
+            exec.gate.unlock();
         }
         LangGraphWorkflowEngine engine = new LangGraphWorkflowEngine(
                 workflowChat,
@@ -711,9 +766,22 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 definition,
                 new PromptContext("assistant", ruleLines, skillLines, List.of(), "", List.of(), List.of()),
                 CheckpointStores.workflowJdbc(environment, database));
-        WorkflowRun result = engine.execute(request).toCompletableFuture().join();
-        synchronized (exec) {
-            boolean hold = exec.suspended || pending(exec);
+        boolean resumeGraph;
+        exec.gate.lock();
+        try {
+            resumeGraph = exec.graphPaused;
+            exec.graphPaused = false;
+        } finally {
+            exec.gate.unlock();
+        }
+        WorkflowRun result = (resumeGraph ? engine.resume(request) : engine.execute(request)).toCompletableFuture().join();
+        exec.gate.lock();
+        try {
+            boolean graphHold = "SUSPENDED".equals(result.status());
+            boolean hold = exec.suspended || pending(exec) || graphHold;
+            if (graphHold) {
+                exec.graphPaused = true;
+            }
             if (hold) {
                 if (result.output() != null && !result.output().isBlank()) {
                     exec.output = result.output();
@@ -744,6 +812,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 exec.queue.clear();
                 exec.queue.add("sub-1: done");
             }
+        } finally {
+            exec.gate.unlock();
         }
     }
 
@@ -818,8 +888,42 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         if (exec == null) {
             return;
         }
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             exec.thinking = exec.thinking == null || exec.thinking.isEmpty() ? delta : exec.thinking + delta;
+        } finally {
+            exec.gate.unlock();
+        }
+    }
+
+    /**
+     * 把模型流式吐出的正文增量接到对应执行上，并在第一次增量时记下当前线程的租户、用户和会话。
+     * 执行编号或增量是空时忽略。正文不写入思考字段。
+     * 副作用：拼接该执行的输出，并可能追加一行不含令牌的 caller-scope 日志。
+     *
+     * @param executionId 正在生成的执行
+     * @param delta 这一小段正文，可以是空
+     */
+    private void acceptOutput(String executionId, String delta) {
+        if (executionId == null || delta == null || delta.isEmpty()) {
+            return;
+        }
+        Exec exec = executions.get(executionId);
+        if (exec == null) {
+            return;
+        }
+        exec.gate.lock();
+        try {
+            String logs = exec.logs.toString();
+            if (!logs.contains("\ncaller-scope ") && !logs.startsWith("caller-scope ")) {
+                CallerScope scope = CallerScope.current();
+                if (scope != null) {
+                    exec.append("caller-scope " + scope.tenantId() + " " + scope.userId() + " " + scope.sessionId());
+                }
+            }
+            exec.output = exec.output == null || exec.output.isEmpty() ? delta : exec.output + delta;
+        } finally {
+            exec.gate.unlock();
         }
     }
 
@@ -837,7 +941,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             return;
         }
         String thought = reply.thinking().trim();
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             String current = exec.thinking == null ? "" : exec.thinking;
             int cut = Math.min(Math.max(mark, 0), current.length());
             String prior = current.substring(0, cut);
@@ -848,6 +953,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 exec.thinking = joinThought(current, thought);
             }
             recordThinking(exec, thought, elapsedMs);
+        } finally {
+            exec.gate.unlock();
         }
     }
 
@@ -938,18 +1045,22 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     /**
-     * 为这一趟运行在工作区数据目录准备一个新的检查点库路径，打不开目录时抛出持久化异常。
-     * 副作用：该执行的运行次数加一，并创建数据目录。
+     * 为这一趟运行准备检查点库路径。图还停在中断上时沿用上一趟的文件。打不开目录时抛出持久化异常。
+     * 副作用：新开一趟时运行次数加一，并创建数据目录。
      *
      * @param exec 需要检查点的执行
      * @return 形如执行编号加序号的 db 路径
      */
     private static Path checkpoint(Exec exec) {
         try {
+            if (exec.graphPaused && exec.checkpointFile != null) {
+                return exec.checkpointFile;
+            }
             Path directory = DataDirectory.of(Path.of(exec.workspace));
             Files.createDirectories(directory);
             exec.runs += 1;
-            return directory.resolve(exec.executionId + "-" + exec.runs + ".db");
+            exec.checkpointFile = directory.resolve(exec.executionId + "-" + exec.runs + ".db");
+            return exec.checkpointFile;
         } catch (Exception ex) {
             throw new AgentException(ErrorCode.PERSIST, "检查点存储器无法打开", exec.executionId, ex);
         }
@@ -1191,7 +1302,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      * @return 输出、思考、错误码、队列、日志、检索、通行证、评估、工具、插件和 trace
      */
     private Map<String, Object> view(Exec exec) {
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             Map<String, Object> row = summary(exec);
             row.put("output", exec.output);
             row.put("thinking", exec.thinking == null ? "" : exec.thinking);
@@ -1205,6 +1317,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             row.put("plugins", List.copyOf(exec.plugins));
             row.put("traceId", exec.traceId);
             return row;
+        } finally {
+            exec.gate.unlock();
         }
     }
 
@@ -1737,7 +1851,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 }
                 save(exec, true);
                 if (resume) {
-                    workers.execute(() -> continueRun(exec));
+                    workers.execute(() -> withExec(exec, () -> continueRun(exec)));
                 }
                 return view(exec);
             }
@@ -1888,18 +2002,56 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     /**
-     * 读取该租户用户已经写入 MySQL 的工作区。没有账本时是空串。
+     * 读取该租户用户的工作区。有账本时读 MySQL，没有账本时读本进程里按租户和用户记下的路径。
      *
      * @param tenantId 租户 id
      * @param userId 用户 id
-     * @return 工作区路径
+     * @return 工作区路径；没有时是空串
      */
     private String workspaceOf(String tenantId, String userId) {
         if (ledger == null) {
-            return "";
+            String path = rememberedWorkspaces.get(workspaceKey(tenantId, userId));
+            return path == null ? "" : path;
         }
         String path = ledger.workspace(tenantId, userId);
         return path == null ? "" : path;
+    }
+
+    /**
+     * 工作区记忆的键。租户和用户用空字符隔开，避免两个租户拼出同一个键。
+     *
+     * @param tenantId 租户 id
+     * @param userId 用户 id
+     * @return 本进程工作区表的键
+     */
+    private static String workspaceKey(String tenantId, String userId) {
+        String tenant = tenantId == null || tenantId.isBlank() ? GatewayHeaders.TENANT_LOCAL : tenantId;
+        return tenant + "\u0000" + (userId == null ? "" : userId);
+    }
+
+    /**
+     * 用执行上已经记下的租户、用户和会话做一份可绑定的身份。网关会话优先，没有时用本执行的会话编号。
+     *
+     * @param exec 已经写上身份的执行
+     * @return 不含令牌的身份
+     */
+    private static CallerScope scopeOf(Exec exec) {
+        String tenant = exec.tenantId == null || exec.tenantId.isBlank() ? GatewayHeaders.TENANT_LOCAL : exec.tenantId;
+        String session = exec.callerSession != null && !exec.callerSession.isBlank()
+                ? exec.callerSession
+                : (exec.sessionId == null ? "" : exec.sessionId);
+        return new CallerScope(tenant, exec.userId, session);
+    }
+
+    /**
+     * 在当前线程上绑上执行的身份，跑完任务后恢复进入前的值。
+     * 副作用：暂时改写当前线程的租户、用户、会话和执行编号。
+     *
+     * @param exec 提供身份的执行
+     * @param task 要在这份身份下运行的任务
+     */
+    private static void withExec(Exec exec, Runnable task) {
+        CallerCarry.hold(scopeOf(exec), exec.executionId).run(task);
     }
 
     /**
@@ -2317,13 +2469,13 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     private CompletionStage<String> hang(Exec exec) {
         CompletableFuture<String> hanging = new CompletableFuture<>();
-        Thread.ofVirtual().start(() -> {
+        Thread.ofVirtual().name("jasagent-runtime-", 0).start(() -> withExec(exec, () -> {
             try {
                 controlFor(exec).interrupt(exec.executionId, exec.userId).toCompletableFuture().join();
             } catch (RuntimeException ex) {
                 hanging.completeExceptionally(ex);
             }
-        });
+        }));
         return hanging;
     }
 
@@ -2336,21 +2488,27 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     private void continueRun(Exec exec) {
         try {
             CheckpointRunControl control = controlFor(exec);
-            synchronized (exec) {
+            exec.gate.lock();
+            try {
                 exec.suspended = false;
                 exec.status = "RUNNING";
                 exec.errorCode = "";
                 save(exec, true);
+            } finally {
+                exec.gate.unlock();
             }
             ExecutionSnapshot snapshot = control.resume(exec.executionId, exec.userId).toCompletableFuture().join();
             applySnapshot(exec, snapshot);
         } catch (RuntimeException ex) {
-            synchronized (exec) {
+            exec.gate.lock();
+            try {
                 exec.suspended = true;
                 exec.status = "SUSPENDED";
                 exec.errorCode = offlineCode(ex);
                 exec.append("resume failed " + exec.errorCode);
                 save(exec, true);
+            } finally {
+                exec.gate.unlock();
             }
         }
     }
@@ -2363,7 +2521,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      * @param snapshot 检查点控制器给出的快照
      */
     private void applySnapshot(Exec exec, ExecutionSnapshot snapshot) {
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             String code = snapshot.errorCode() == null ? "" : snapshot.errorCode();
             if (!modelReady && snapshot.status() == ExecutionStatus.FAILED && ("LLM".equals(code) || "OFFLINE".equals(exec.errorCode))) {
                 exec.status = "FAILED";
@@ -2388,6 +2547,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 exec.output = snapshot.output();
             }
             save(exec, true);
+        } finally {
+            exec.gate.unlock();
         }
     }
 
@@ -2420,7 +2581,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         if (row == null) {
             return;
         }
-        synchronized (exec) {
+        exec.gate.lock();
+        try {
             exec.status = row.status();
             exec.suspended = "SUSPENDED".equals(row.status());
             if (row.otelTraceId() != null && !row.otelTraceId().isBlank()) {
@@ -2429,6 +2591,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             if (row.otelRootSpanId() != null && !row.otelRootSpanId().isBlank()) {
                 exec.rootSpanId = row.otelRootSpanId();
             }
+        } finally {
+            exec.gate.unlock();
         }
     }
 
@@ -2640,9 +2804,12 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         for (Exec exec : executions.values()) {
             String status;
             String sessionId;
-            synchronized (exec) {
+            exec.gate.lock();
+            try {
                 status = exec.status;
                 sessionId = exec.sessionId;
+            } finally {
+                exec.gate.unlock();
             }
             if (!"ACCEPTED".equals(status) && !"RUNNING".equals(status)) {
                 continue;
@@ -2686,6 +2853,10 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
         private final List<String> evaluations = new ArrayList<>();
         private final List<Map<String, Object>> agents = new ArrayList<>();
         private final List<Map<String, Object>> timeline = new ArrayList<>();
+        /**
+         * 保护这条执行的内存状态。用可重入锁，避免在等日志写入时把虚拟线程钉在载体上。
+         */
+        private final ReentrantLock gate = new ReentrantLock();
         private final AtomicInteger toolSequence = new AtomicInteger();
         private String traceId = "";
         private String rootSpanId = "";
@@ -2694,6 +2865,18 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
          * 这条执行所属的租户。空时按本地租户。另一台 agent 从文档里读回它。
          */
         private String tenantId = GatewayHeaders.TENANT_LOCAL;
+        /**
+         * 提交时请求线程上的网关会话。空白时后台改用本执行的会话编号。不保存令牌。
+         */
+        private String callerSession = "";
+        /**
+         * 这一趟图使用的检查点文件。图还停在中断上时继续用同一个文件，避免换库后找不到检查点。
+         */
+        private Path checkpointFile;
+        /**
+         * 上一趟图执行停在 LangGraph 中断上。下一次应从图的检查点继续，而不是从头再跑到同一个中断。
+         */
+        private boolean graphPaused;
         private String selectedProvider = "";
         private String selectedModel = "";
         private volatile String status = "ACCEPTED";
@@ -2746,6 +2929,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             body.put("token", token);
             body.put("sessionId", sessionId);
             body.put("tenantId", tenantId);
+            body.put("callerSession", callerSession == null ? "" : callerSession);
+            body.put("graphPaused", graphPaused);
             body.put("selectedProvider", selectedProvider);
             body.put("selectedModel", selectedModel);
             body.put("traceId", traceId);
@@ -2790,6 +2975,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             exec.sessionId = row.sessionId();
             String tenant = text(state.get("tenantId"));
             exec.tenantId = tenant.isBlank() ? GatewayHeaders.TENANT_LOCAL : tenant;
+            exec.callerSession = text(state.get("callerSession"));
+            exec.graphPaused = Boolean.TRUE.equals(state.get("graphPaused"));
             exec.selectedProvider = text(state.get("selectedProvider"));
             exec.selectedModel = text(state.get("selectedModel"));
             exec.traceId = row.otelTraceId() == null ? text(state.get("traceId")) : row.otelTraceId();
