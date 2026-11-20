@@ -1,4 +1,7 @@
 # 通行证服务。容器端口 18741。业务容器使用 gVisor。
+# 生产环境必须有 Secret jasagent-agentpass 的 signing-key，缺失则无法启动。
+# JASAGENT_AGENTPASS_SIGNING_KEY 只从该 Secret 注入，不写进 Git、日志或文档。
+# JDBC 与 agent 相同，引用 Secret jasagent-mysql 的 jdbc-url、username、password；地址里不能有 password=。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,6 +38,26 @@ spec:
               value: "18741"
             - name: JAVA_TOOL_OPTIONS
               value: -Duser.home=/var/lib/jasagent
+            - name: JASAGENT_AGENTPASS_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-agentpass
+                  key: signing-key
+            - name: JASAGENT_JDBC_URL
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-mysql
+                  key: jdbc-url
+            - name: JASAGENT_JDBC_USER
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-mysql
+                  key: username
+            - name: JASAGENT_JDBC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: jasagent-mysql
+                  key: password
           startupProbe:
             tcpSocket:
               port: http

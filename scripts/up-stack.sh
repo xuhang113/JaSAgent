@@ -32,6 +32,9 @@ JASAGENT_LLM_ENV_FILE="${JASAGENT_LLM_ENV_FILE:-${HOME}/.config/jasagent/llm.env
 # 内部令牌只放在运行用户的目录，不进仓库。文件不存在时由脚本生成。
 JASAGENT_INTERNAL_TOKEN_FILE="${JASAGENT_INTERNAL_TOKEN_FILE:-${HOME}/.jasagent/sandbox/k8s-internal.token}"
 
+# 仓库外的 agentpass 签名密钥文件。生产环境必须提供，脚本不会静默生成。
+JASAGENT_AGENTPASS_SIGNING_KEY_FILE="${JASAGENT_AGENTPASS_SIGNING_KEY_FILE:-${HOME}/.config/jasagent/agentpass-signing.key}"
+
 # 集群内 MySQL 主机。JDBC 地址按它拼出来，地址里不放口令。
 JASAGENT_MYSQL_HOST="${JASAGENT_MYSQL_HOST:-jasagent-mysql.jasagent.svc.cluster.local}"
 
@@ -138,6 +141,7 @@ usage() {
   JASAGENT_MYSQL_PASSWORD_FILE    仓库外的 MySQL 口令文件
   JASAGENT_MYSQL_PASSWORD         口令也可以只放在环境里
   JASAGENT_LLM_ENV_FILE           仓库外的模型密钥文件，其中一行是 XAI_API_KEY
+  JASAGENT_AGENTPASS_SIGNING_KEY_FILE  仓库外的 agentpass 签名密钥文件，生产环境必须提供
   XAI_API_KEY                     模型密钥也可以只放在环境里
   JASAGENT_MYSQL_HOST             集群内 MySQL 主机名
   JASAGENT_JDBC_URL               覆盖 JDBC 地址；不能包含 password=
@@ -834,10 +838,18 @@ write_secrets() {
   kctl create secret generic jasagent-llm -n "${NS}" \
     --from-file=xai-api-key="${WORK}/xai-api-key" \
     --dry-run=client -o yaml > "${WORK}/llm.yaml"
+  if [[ ! -s "${JASAGENT_AGENTPASS_SIGNING_KEY_FILE}" ]]; then
+    say "生产环境必须提供 agentpass 签名密钥文件，不会静默生成。" >&2
+    exit 1
+  fi
+  kctl create secret generic jasagent-agentpass -n "${NS}" \
+    --from-file=signing-key="${JASAGENT_AGENTPASS_SIGNING_KEY_FILE}" \
+    --dry-run=client -o yaml > "${WORK}/agentpass-signing.yaml"
   kctl apply -f "${WORK}/mysql.yaml" >/dev/null
   kctl apply -f "${WORK}/internal.yaml" >/dev/null
   kctl apply -f "${WORK}/llm.yaml" >/dev/null
-  say "Secret 已写入集群：jasagent-mysql jasagent-internal jasagent-llm"
+  kctl apply -f "${WORK}/agentpass-signing.yaml" >/dev/null
+  say "Secret 已写入集群：jasagent-mysql jasagent-internal jasagent-llm jasagent-agentpass"
   rm -rf "${WORK}"
   WORK=""
 }
