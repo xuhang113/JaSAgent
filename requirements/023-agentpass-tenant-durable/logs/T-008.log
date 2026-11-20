@@ -1,0 +1,86 @@
+changelog/2026-11-20-agentpass-tenant-durable.md
+jasagent-agentpass-server/pom.xml
+jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server/AgentPassServerConfiguration.java
+jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server/AgentPassServerProperties.java
+jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server/AuditLog.java
+jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server/HumanAccess.java
+jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server/IssuePassRequest.java
+jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server/PassController.java
+jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server/PassSigner.java
+jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server/PassStore.java
+jasagent-agentpass-server/src/main/resources/application.properties
+jasagent-agentpass-server/src/test/java/dev/jasagent/agentpass/server/DurableTicketRestartTest.java
+jasagent-agentpass-server/src/test/java/dev/jasagent/agentpass/server/ExpiredPassTest.java
+jasagent-agentpass-server/src/test/java/dev/jasagent/agentpass/server/OneTimePassHttpTest.java
+jasagent-agentpass-server/src/test/java/dev/jasagent/agentpass/server/SigningKeyRequiredTest.java
+jasagent-agentpass/pom.xml
+jasagent-agentpass/src/main/java/dev/jasagent/agentpass/PassSettings.java
+jasagent-agentpass/src/main/java/dev/jasagent/agentpass/durable/AgentPassLedger.java
+jasagent-agentpass/src/main/java/dev/jasagent/agentpass/durable/AgentPassTables.java
+jasagent-agentpass/src/main/java/dev/jasagent/agentpass/durable/DurablePassGate.java
+jasagent-agentpass/src/main/java/dev/jasagent/agentpass/durable/TenantPassPolicy.java
+jasagent-agentpass/src/test/java/dev/jasagent/agentpass/durable/DurablePassGateTest.java
+jasagent-app/src/main/java/dev/jasagent/app/JasagentApplication.java
+jasagent-app/src/main/java/dev/jasagent/app/LocalRuntime.java
+jasagent-app/src/test/java/dev/jasagent/app/DurablePassResumeTest.java
+requirements/023-agentpass-tenant-durable/tdd.md
+requirements/023-agentpass-tenant-durable/tests/023-agentpass-tenant-durable.sh
+requirements/023-agentpass-tenant-durable/tests/T-001
+requirements/023-agentpass-tenant-durable/tests/T-002
+requirements/023-agentpass-tenant-durable/tests/T-003
+requirements/023-agentpass-tenant-durable/tests/T-004
+requirements/023-agentpass-tenant-durable/tests/T-005
+requirements/023-agentpass-tenant-durable/tests/T-006
+requirements/023-agentpass-tenant-durable/tests/T-007
+requirements/023-agentpass-tenant-durable/tests/T-008
+requirements/023-agentpass-tenant-durable/tests/T-009
+requirements/023-agentpass-tenant-durable/tests/lib.sh
+requirements/023-agentpass-tenant-durable/tests/live.py
+requirements/023-agentpass-tenant-durable/tests/live.sh
+scripts/test-023-agentpass-tenant-durable.sh
+2026-11-20T10:31:09+0800	T-008	改动只在允许的接线模块、本轮脚本、变更记录和 ATDD	38	通过
+2026-11-20T10:31:09+0800	T-008	未改 sidecar	50	通过
+2026-11-20T10:31:09+0800	T-008	启动类仍绑定 127.0.0.1	61	通过
+PASS listen-127.0.0.1
+PASS listen-present
+PASS file-session-rejected
+PASS mysql-session-ignores-yaml
+PASS issued-has-no-token
+PASS policy-miss-403
+PASS policy-miss-row
+PASS fresh-issued
+PASS bob-issued
+PASS cannot-claim-other-tenant
+PASS cannot-use-other-session
+PASS verify-other-tenant-rejected
+PASS redeem-other-tenant-rejected
+PASS blank-binding-still-matches
+PASS owner-redeem-after-cross-attempt
+PASS concurrent-tenants-issue
+PASS concurrent-redeem-isolated
+PASS audit-unauthenticated
+PASS audit-query-ignored
+PASS audit-alice-only
+PASS audit-bob-cookie
+PASS redeem-before-restart
+PASS listen-127.0.0.1
+PASS listen-present
+PASS pending-survives-restart
+PASS used-flag-survives-restart
+PASS replay-after-restart
+PASS unused-redeem-after-restart
+PASS missing-key-refuses-start
+PASS missing-key-log-clean
+PASS listen-127.0.0.1
+PASS listen-present
+PASS execution-accepted
+PASS approval-required
+PASS no-home-pending
+PASS execution-pending-row
+PASS other-user-cannot-approve
+PASS pending-unchanged
+PASS owner-approves-existing-path
+PASS same-execution-resumes
+PASS approved-row
+PASS process-tenant-restart-audit-approval
+2026-11-20T10:31:09+0800	T-008	验收进程只在回环地址监听	80	通过

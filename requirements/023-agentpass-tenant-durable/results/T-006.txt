@@ -1,0 +1,1 @@
+T-006	通过	未命中策略须留下待批，不能只测领证 403。同一用户经 `jasagent-web`、走网关批准或拒绝；批准后走已有 resume 路径，用原来的 `executionId` 继续完成该次调用；他人代批须被拒绝。验收接上已有的 `POST /api/executions/{id}/passes/{passId}`，不另做一套审批接口。	12982	logs/T-006.log

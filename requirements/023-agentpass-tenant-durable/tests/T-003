@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-003"
+result_text='不同租户须并发覆盖：A 不能领、验、核销 B 的证；流水按租户隔离，不得串到别的租户。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-agentpass-server" "OneTimePassHttpTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "领证隔离模块测试" "通过" >> "${ATDD_LOG}"
+  "${HERE}/live.sh"
+  atdd_require_live_pass "cannot-claim-other-tenant"
+  atdd_require_live_pass "cannot-use-other-session"
+  atdd_require_live_pass "verify-other-tenant-rejected"
+  atdd_require_live_pass "redeem-other-tenant-rejected"
+  atdd_require_live_pass "concurrent-tenants-issue"
+  atdd_require_live_pass "concurrent-redeem-isolated"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "并发租户不能领验核销对方的证" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

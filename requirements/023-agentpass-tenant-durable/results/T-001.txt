@@ -1,0 +1,1 @@
+T-001	通过	发证前的会话、租户和权限以 020 的 MySQL 为准，不以 emptyDir 上的会话文件或 `policies.yaml` 为真相来源。策略和待批不能再只靠 emptyDir 上的文件。	30588	logs/T-001.log

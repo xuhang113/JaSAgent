@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-008"
+result_text='实现改动只覆盖 agentpass 及相关接线模块（`jasagent-agentpass`、`jasagent-agentpass-server`、`jasagent-agentpass-starter`，以及接线所需的 `jasagent-api` / `jasagent-auth` / `jasagent-persist`；要把发证前的会话和权限改走 020 的 MySQL，以及 PENDING 挂起、控制台审批后用原 executionId 继续，已经在这条链上的模块也可以改，尤其是 `jasagent-app`、`jasagent-controller` 和 `jasagent-web`；审批或待批查询的现有网关路由接不上时，也可改 `jasagent-gateway` 的接线）。不改 sidecar。不把 agentpass 暴露到公网。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'CHK'
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+cmd = "cd %s && { git diff --name-only %s HEAD; git ls-files --others --exclude-standard; } | sed '/^$/d' | sort -u" % (repo, base)
+names = subprocess.check_output(["bash", "-lc", cmd], text=True).splitlines()
+allowed_prefix = (
+    "jasagent-agentpass/",
+    "jasagent-agentpass-server/",
+    "jasagent-agentpass-starter/",
+    "jasagent-api/",
+    "jasagent-auth/",
+    "jasagent-persist/",
+    "jasagent-app/",
+    "jasagent-controller/",
+    "jasagent-web/",
+    "jasagent-gateway/",
+    "requirements/023-agentpass-tenant-durable/",
+)
+allowed_exact = {
+    "scripts/test-023-agentpass-tenant-durable.sh",
+    "changelog/2026-11-20-agentpass-tenant-durable.md",
+}
+bad = []
+for name in names:
+    if name in allowed_exact or name.startswith(allowed_prefix):
+        continue
+    bad.append(name)
+if not names:
+    raise SystemExit("相对规格提交没有改动。")
+if bad:
+    print("改动超出 023 允许范围：", file=sys.stderr)
+    print("\n".join(bad), file=sys.stderr)
+    raise SystemExit(1)
+print("\n".join(names))
+CHK
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "改动只在允许的接线模块、本轮脚本、变更记录和 ATDD" "通过" >> "${ATDD_LOG}"
+  if git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- jasagent-sidecar | grep -q .; then
+    echo "碰到了禁止修改的路径：jasagent-sidecar" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "未改 sidecar" "通过" >> "${ATDD_LOG}"
+  if ! grep -q "127.0.0.1" "${REPO_ROOT}/jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server/AgentPassServerApplication.java"; then
+    echo "agentpass 启动类不再写明回环地址。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "启动类仍绑定 127.0.0.1" "通过" >> "${ATDD_LOG}"
+  "${HERE}/live.sh"
+  atdd_require_live_pass "listen-127.0.0.1"
+  atdd_require_live_pass "listen-present"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "验收进程只在回环地址监听" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

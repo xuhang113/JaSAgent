@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-006"
+result_text='未命中策略须留下待批，不能只测领证 403。同一用户经 `jasagent-web`、走网关批准或拒绝；批准后走已有 resume 路径，用原来的 `executionId` 继续完成该次调用；他人代批须被拒绝。验收接上已有的 `POST /api/executions/{id}/passes/{passId}`，不另做一套审批接口。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'CHK'
+import pathlib
+import subprocess
+import sys
+repo, base = sys.argv[1], sys.argv[2]
+web = pathlib.Path(repo, "jasagent-web/frontend/src/views/ConsoleView.vue").read_text(encoding="utf-8")
+if "/api/executions/" not in web or "/passes/" not in web:
+    raise SystemExit("jasagent-web 不再调用已有审批路径。")
+gateway = pathlib.Path(repo, "jasagent-gateway/src/main/java/dev/jasagent/gateway/route/GatewayPaths.java").read_text(encoding="utf-8")
+if "EXECUTION_PASS" not in gateway:
+    raise SystemExit("网关不再放行已有审批路径。")
+controller = pathlib.Path(repo, "jasagent-controller/src/main/java/dev/jasagent/controller/ConsoleController.java").read_text(encoding="utf-8")
+if "/api/executions/{id}/passes/{passId}" not in controller:
+    raise SystemExit("控制台不再提供已有审批路径。")
+diff = subprocess.check_output(["git", "-C", repo, "diff", "-U0", base, "HEAD"], text=True)
+bad = []
+for line in diff.splitlines():
+    if not line.startswith("+") or line.startswith("+++"):
+        continue
+    if "/v1/approvals" in line or "/api/agentpass" in line:
+        if "grep" in line or "test-023-agentpass-tenant-durable.sh" in line:
+            continue
+        bad.append(line[1:].strip())
+if bad:
+    raise SystemExit("出现了第二套审批接口：\n" + "\n".join(bad))
+print("existing-pass-path")
+CHK
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "web、网关和控制台仍走已有审批路径，没有第二套接口" "通过" >> "${ATDD_LOG}"
+  atdd_mvn_test "jasagent-app" "DurablePassResumeTest,ConsolePageTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "待批恢复和控制台模块测试" "通过" >> "${ATDD_LOG}"
+  "${HERE}/live.sh"
+  atdd_require_live_pass "policy-miss-403"
+  atdd_require_live_pass "policy-miss-row"
+  atdd_require_live_pass "other-user-cannot-approve"
+  atdd_require_live_pass "owner-approves-existing-path"
+  atdd_require_live_pass "same-execution-resumes"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "待批落库，他人代批被拒，同一用户经已有路径批准后用原 executionId 恢复" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

@@ -1,0 +1,859 @@
+2026-11-20T10:25:47+0800	T-001	模块测试 DurablePassGateTest,DurablePassResumeTest	8377	退出码 0
+2026-11-20T10:25:47+0800	T-001	策略来源和恢复模块测试	8395	通过
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] jasagent                                                           [pom]
+[INFO] jasagent-api                                                       [jar]
+[INFO] jasagent-auth                                                      [jar]
+[INFO] jasagent-core                                                      [jar]
+[INFO] jasagent-persist                                                   [jar]
+[INFO] jasagent-workflow                                                  [jar]
+[INFO] jasagent-tool                                                      [jar]
+[INFO] jasagent-llm                                                       [jar]
+[INFO] jasagent-mcp                                                       [jar]
+[INFO] jasagent-plugin                                                    [jar]
+[INFO] jasagent-rag                                                       [jar]
+[INFO] jasagent-interrupt                                                 [jar]
+[INFO] jasagent-exception                                                 [jar]
+[INFO] jasagent-agentpass                                                 [jar]
+[INFO] jasagent-agentpass-server                                          [jar]
+[INFO] jasagent-trace                                                     [jar]
+[INFO] jasagent-otel                                                      [jar]
+[INFO] jasagent-evaluation                                                [jar]
+[INFO] jasagent-controller                                                [jar]
+[INFO] jasagent-web                                                       [jar]
+[INFO] jasagent-cli                                                       [jar]
+[INFO] jasagent-app                                                       [jar]
+[INFO] 
+[INFO] -----------------------< dev.jasagent:jasagent >------------------------
+[INFO] Building jasagent 0.1.0                                           [1/22]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-api >----------------------
+[INFO] Building jasagent-api 0.1.0                                       [2/22]
+[INFO]   from jasagent-api/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-jar-plugin/3.4.1/maven-jar-plugin-3.4.1.pom
+Progress (1): 778 BProgress (1): 838 BProgress (1): 2.3 kBProgress (1): 5.0 kBProgress (1): 6.6 kBProgress (1): 7.8 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-jar-plugin/3.4.1/maven-jar-plugin-3.4.1.pom (7.8 kB at 38 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-plugins/42/maven-plugins-42.pom
+Progress (1): 773 BProgress (1): 831 BProgress (1): 2.5 kBProgress (1): 5.1 kBProgress (1): 6.8 kBProgress (1): 7.7 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-plugins/42/maven-plugins-42.pom (7.7 kB at 452 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-jar-plugin/3.4.1/maven-jar-plugin-3.4.1.jar
+Progress (1): 0.5/34 kBProgress (1): 1.9/34 kBProgress (1): 3.3/34 kBProgress (1): 4.7/34 kBProgress (1): 6.0/34 kBProgress (1): 7.4/34 kBProgress (1): 8.8/34 kBProgress (1): 10/34 kB Progress (1): 11/34 kBProgress (1): 13/34 kBProgress (1): 14/34 kBProgress (1): 15/34 kBProgress (1): 17/34 kBProgress (1): 18/34 kBProgress (1): 20/34 kBProgress (1): 21/34 kBProgress (1): 22/34 kBProgress (1): 24/34 kBProgress (1): 25/34 kBProgress (1): 26/34 kBProgress (1): 28/34 kBProgress (1): 29/34 kBProgress (1): 31/34 kBProgress (1): 32/34 kBProgress (1): 33/34 kBProgress (1): 34 kB                      Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-jar-plugin/3.4.1/maven-jar-plugin-3.4.1.jar (34 kB at 1.3 MB/s)
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-api ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-api ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-api ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-api/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-api ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-api ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-api ---
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/file-management/3.1.0/file-management-3.1.0.pom
+Progress (1): 794 BProgress (1): 854 BProgress (1): 2.3 kBProgress (1): 4.5 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/file-management/3.1.0/file-management-3.1.0.pom (4.5 kB at 264 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-shared-components/36/maven-shared-components-36.pom
+Progress (1): 781 BProgress (1): 847 BProgress (1): 2.4 kBProgress (1): 4.5 kBProgress (1): 4.9 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-shared-components/36/maven-shared-components-36.pom (4.9 kB at 306 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/maven-parent/36/maven-parent-36.pom
+Progress (1): 725 BProgress (1): 767 BProgress (1): 2.0 kBProgress (1): 5.5 kBProgress (1): 9.9 kBProgress (1): 14 kB Progress (1): 19 kBProgress (1): 23 kBProgress (1): 26 kBProgress (1): 28 kBProgress (1): 28 kBProgress (1): 31 kBProgress (1): 36 kBProgress (1): 38 kBProgress (1): 41 kBProgress (1): 45 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/maven-parent/36/maven-parent-36.pom (45 kB at 2.4 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/apache/26/apache-26.pom
+Progress (1): 744 BProgress (1): 2.1 kBProgress (1): 3.9 kBProgress (1): 7.3 kBProgress (1): 12 kB Progress (1): 16 kBProgress (1): 18 kBProgress (1): 20 kBProgress (1): 21 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/apache/26/apache-26.pom (21 kB at 1.2 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/4.0.1/plexus-utils-4.0.1.pom
+Progress (1): 729 BProgress (1): 2.2 kBProgress (1): 4.3 kBProgress (1): 7.8 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/4.0.1/plexus-utils-4.0.1.pom (7.8 kB at 340 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/commons-io/commons-io/2.16.1/commons-io-2.16.1.pom
+Progress (1): 762 BProgress (1): 2.0 kBProgress (1): 4.9 kBProgress (1): 6.7 kBProgress (1): 8.8 kBProgress (1): 12 kB Progress (1): 14 kBProgress (1): 17 kBProgress (1): 20 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/commons-io/commons-io/2.16.1/commons-io-2.16.1.pom (20 kB at 1.4 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/69/commons-parent-69.pom
+Progress (1): 708 BProgress (1): 1.9 kBProgress (1): 3.1 kBProgress (1): 4.7 kBProgress (1): 6.4 kBProgress (1): 8.4 kBProgress (1): 9.3 kBProgress (1): 12 kB Progress (1): 13 kBProgress (1): 16 kBProgress (1): 18 kBProgress (1): 21 kBProgress (1): 24 kBProgress (1): 26 kBProgress (1): 29 kBProgress (1): 31 kBProgress (1): 34 kBProgress (1): 39 kBProgress (1): 42 kBProgress (1): 45 kBProgress (1): 48 kBProgress (1): 50 kBProgress (1): 53 kBProgress (1): 57 kBProgress (1): 57 kBProgress (1): 60 kBProgress (1): 63 kBProgress (1): 67 kBProgress (1): 70 kBProgress (1): 73 kBProgress (1): 75 kBProgress (1): 77 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/69/commons-parent-69.pom (77 kB at 3.9 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/maven-archiver/3.6.2/maven-archiver-3.6.2.pom
+Progress (1): 801 BProgress (1): 2.3 kBProgress (1): 4.4 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/maven-archiver/3.6.2/maven-archiver-3.6.2.pom (4.4 kB at 292 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-shared-components/41/maven-shared-components-41.pom
+Progress (1): 815 BProgress (1): 2.3 kBProgress (1): 3.2 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-shared-components/41/maven-shared-components-41.pom (3.2 kB at 212 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-archiver/4.9.2/plexus-archiver-4.9.2.pom
+Progress (1): 1.3 kBProgress (1): 4.1 kBProgress (1): 6.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-archiver/4.9.2/plexus-archiver-4.9.2.pom (6.0 kB at 374 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-io/3.4.2/plexus-io-3.4.2.pom
+Progress (1): 1.2 kBProgress (1): 3.9 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-io/3.4.2/plexus-io-3.4.2.pom (3.9 kB at 257 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus/16/plexus-16.pom
+Progress (1): 692 BProgress (1): 2.7 kBProgress (1): 6.4 kBProgress (1): 8.9 kBProgress (1): 11 kB Progress (1): 14 kBProgress (1): 17 kBProgress (1): 20 kBProgress (1): 24 kBProgress (1): 28 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus/16/plexus-16.pom (28 kB at 1.5 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.26.1/commons-compress-1.26.1.pom
+Progress (1): 758 BProgress (1): 1.9 kBProgress (1): 3.7 kBProgress (1): 5.9 kBProgress (1): 9.2 kBProgress (1): 12 kB Progress (1): 14 kBProgress (1): 17 kBProgress (1): 21 kBProgress (1): 22 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.26.1/commons-compress-1.26.1.pom (22 kB at 1.4 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/66/commons-parent-66.pom
+Progress (1): 708 BProgress (1): 1.9 kBProgress (1): 3.1 kBProgress (1): 4.7 kBProgress (1): 6.5 kBProgress (1): 8.5 kBProgress (1): 9.3 kBProgress (1): 12 kB Progress (1): 13 kBProgress (1): 16 kBProgress (1): 18 kBProgress (1): 21 kBProgress (1): 24 kBProgress (1): 26 kBProgress (1): 29 kBProgress (1): 31 kBProgress (1): 34 kBProgress (1): 39 kBProgress (1): 42 kBProgress (1): 45 kBProgress (1): 48 kBProgress (1): 50 kBProgress (1): 53 kBProgress (1): 57 kBProgress (1): 57 kBProgress (1): 60 kBProgress (1): 64 kBProgress (1): 67 kBProgress (1): 70 kBProgress (1): 73 kBProgress (1): 75 kBProgress (1): 77 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/66/commons-parent-66.pom (77 kB at 3.2 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.16.1/commons-codec-1.16.1.pom
+Progress (1): 749 BProgress (1): 1.9 kBProgress (1): 3.8 kBProgress (1): 6.3 kBProgress (1): 8.7 kBProgress (1): 11 kB Progress (1): 12 kBProgress (1): 15 kBProgress (1): 16 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.16.1/commons-codec-1.16.1.pom (16 kB at 980 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.pom
+Progress (1): 747 BProgress (1): 2.1 kBProgress (1): 4.7 kBProgress (1): 8.4 kBProgress (1): 12 kB Progress (1): 15 kBProgress (1): 16 kBProgress (1): 18 kBProgress (1): 20 kBProgress (1): 23 kBProgress (1): 27 kBProgress (1): 29 kBProgress (1): 31 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.pom (31 kB at 1.5 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/64/commons-parent-64.pom
+Progress (1): 706 BProgress (1): 1.9 kBProgress (1): 3.1 kBProgress (1): 4.7 kBProgress (1): 6.4 kBProgress (1): 8.4 kBProgress (1): 10 kB Progress (1): 13 kBProgress (1): 15 kBProgress (1): 18 kBProgress (1): 19 kBProgress (1): 23 kBProgress (1): 25 kBProgress (1): 28 kBProgress (1): 30 kBProgress (1): 33 kBProgress (1): 37 kBProgress (1): 41 kBProgress (1): 45 kBProgress (1): 47 kBProgress (1): 50 kBProgress (1): 52 kBProgress (1): 56 kBProgress (1): 58 kBProgress (1): 61 kBProgress (1): 64 kBProgress (1): 69 kBProgress (1): 71 kBProgress (1): 75 kBProgress (1): 77 kBProgress (1): 78 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/64/commons-parent-64.pom (78 kB at 3.7 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/apache/30/apache-30.pom
+Progress (1): 743 BProgress (1): 2.1 kBProgress (1): 4.0 kBProgress (1): 6.3 kBProgress (1): 11 kB Progress (1): 16 kBProgress (1): 20 kBProgress (1): 22 kBProgress (1): 23 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/apache/30/apache-30.pom (23 kB at 430 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/iq80/snappy/snappy/0.4/snappy-0.4.pom
+Progress (1): 1.2 kBProgress (1): 3.7 kBProgress (1): 8.5 kBProgress (1): 12 kB Progress (1): 15 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/iq80/snappy/snappy/0.4/snappy-0.4.pom (15 kB at 692 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/tukaani/xz/1.9/xz-1.9.pom
+Progress (1): 1.1 kBProgress (1): 2.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/tukaani/xz/1.9/xz-1.9.pom (2.0 kB at 114 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.5-11/zstd-jni-1.5.5-11.pom
+Progress (1): 1.1 kBProgress (1): 2.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.5-11/zstd-jni-1.5.5-11.pom (2.0 kB at 100 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.27/plexus-interpolation-1.27.pom
+Progress (1): 1.3 kBProgress (1): 3.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.27/plexus-interpolation-1.27.pom (3.0 kB at 201 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/file-management/3.1.0/file-management-3.1.0.jar
+Progress (1): 7.4/36 kBProgress (1): 11/36 kB Progress (1): 28/36 kBProgress (1): 36 kB                      Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/file-management/3.1.0/file-management-3.1.0.jar (36 kB at 2.3 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/commons-io/commons-io/2.16.1/commons-io-2.16.1.jar
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/maven-archiver/3.6.2/maven-archiver-3.6.2.jar
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.27/plexus-interpolation-1.27.jar
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/4.0.1/plexus-utils-4.0.1.jar
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-archiver/4.9.2/plexus-archiver-4.9.2.jar
+Progress (1): 7.7/509 kBProgress (1): 15/509 kB Progress (1): 32/509 kBProgress (1): 48/509 kBProgress (1): 65/509 kBProgress (1): 81/509 kBProgress (1): 97/509 kBProgress (1): 114/509 kBProgress (1): 130/509 kBProgress (1): 147/509 kBProgress (1): 163/509 kBProgress (1): 179/509 kBProgress (1): 196/509 kBProgress (1): 212/509 kBProgress (1): 217/509 kBProgress (1): 233/509 kBProgress (1): 250/509 kBProgress (1): 266/509 kBProgress (1): 282/509 kBProgress (1): 299/509 kBProgress (1): 315/509 kBProgress (1): 331/509 kBProgress (1): 348/509 kBProgress (1): 364/509 kBProgress (1): 381/509 kBProgress (1): 397/509 kBProgress (1): 413/509 kBProgress (1): 430/509 kBProgress (1): 446/509 kBProgress (1): 463/509 kBProgress (1): 479/509 kBProgress (1): 495/509 kBProgress (1): 509 kB                        Downloaded from central: https://repo.maven.apache.org/maven2/commons-io/commons-io/2.16.1/commons-io-2.16.1.jar (509 kB at 15 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-io/3.4.2/plexus-io-3.4.2.jar
+Progress (1): 0.5/27 kBProgress (1): 1.9/27 kBProgress (1): 3.3/27 kBProgress (1): 4.7/27 kBProgress (1): 6.0/27 kBProgress (1): 7.4/27 kBProgress (1): 7.7/27 kBProgress (1): 9.1/27 kBProgress (1): 10/27 kB Progress (1): 12/27 kBProgress (1): 13/27 kBProgress (1): 15/27 kBProgress (1): 16/27 kBProgress (1): 17/27 kBProgress (1): 19/27 kBProgress (1): 20/27 kBProgress (1): 21/27 kBProgress (1): 23/27 kBProgress (1): 24/27 kBProgress (1): 25/27 kBProgress (1): 27 kB                      Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/maven-archiver/3.6.2/maven-archiver-3.6.2.jar (27 kB at 766 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.26.1/commons-compress-1.26.1.jar
+Progress (1): 0.9/86 kBProgress (1): 2.3/86 kBProgress (1): 3.2/86 kBProgress (1): 4.5/86 kBProgress (1): 5.9/86 kBProgress (1): 7.3/86 kBProgress (1): 8.7/86 kBProgress (1): 10/86 kB Progress (1): 11/86 kBProgress (1): 13/86 kBProgress (1): 14/86 kBProgress (1): 15/86 kBProgress (1): 17/86 kBProgress (1): 18/86 kBProgress (1): 20/86 kBProgress (1): 21/86 kBProgress (1): 22/86 kBProgress (1): 24/86 kBProgress (1): 25/86 kBProgress (1): 26/86 kBProgress (1): 28/86 kBProgress (1): 29/86 kBProgress (1): 30/86 kBProgress (1): 32/86 kBProgress (1): 33/86 kBProgress (1): 35/86 kBProgress (1): 36/86 kBProgress (1): 37/86 kBProgress (1): 39/86 kBProgress (1): 40/86 kBProgress (1): 41/86 kBProgress (1): 43/86 kBProgress (1): 44/86 kBProgress (1): 46/86 kBProgress (1): 47/86 kBProgress (1): 48/86 kBProgress (1): 50/86 kBProgress (1): 51/86 kBProgress (1): 52/86 kBProgress (1): 54/86 kBProgress (1): 55/86 kBProgress (1): 59/86 kBProgress (1): 61/86 kBProgress (1): 65/86 kBProgress (1): 69/86 kBProgress (1): 73/86 kBProgress (1): 77/86 kBProgress (1): 82/86 kBProgress (2): 82/86 kB | 0.9/193 kBProgress (2): 86 kB | 0.9/193 kB   Progress (2): 86 kB | 2.3/193 kBProgress (2): 86 kB | 3.6/193 kBProgress (3): 86 kB | 3.6/193 kB | 0.5/225 kBProgress (3): 86 kB | 5.0/193 kB | 0.5/225 kBProgress (3): 86 kB | 6.4/193 kB | 0.5/225 kBProgress (3): 86 kB | 6.4/193 kB | 1.9/225 kBProgress (3): 86 kB | 7.3/193 kB | 1.9/225 kBProgress (3): 86 kB | 8.6/193 kB | 1.9/225 kBProgress (3): 86 kB | 8.6/193 kB | 3.3/225 kB                                             Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.27/plexus-interpolation-1.27.jar (86 kB at 2.7 MB/s)
+Progress (2): 10/193 kB | 3.3/225 kB                                    Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar
+Progress (2): 10/193 kB | 4.7/225 kBProgress (2): 11/193 kB | 4.7/225 kBProgress (2): 11/193 kB | 6.0/225 kBProgress (2): 13/193 kB | 6.0/225 kBProgress (2): 13/193 kB | 7.4/225 kBProgress (2): 14/193 kB | 7.4/225 kBProgress (2): 15/193 kB | 7.4/225 kBProgress (2): 15/193 kB | 8.8/225 kBProgress (2): 17/193 kB | 8.8/225 kBProgress (2): 17/193 kB | 10/225 kB Progress (2): 18/193 kB | 10/225 kBProgress (2): 18/193 kB | 11/225 kBProgress (2): 20/193 kB | 11/225 kBProgress (2): 20/193 kB | 13/225 kBProgress (2): 21/193 kB | 13/225 kBProgress (2): 21/193 kB | 14/225 kBProgress (2): 22/193 kB | 14/225 kBProgress (2): 22/193 kB | 15/225 kBProgress (2): 24/193 kB | 15/225 kBProgress (2): 24/193 kB | 17/225 kBProgress (2): 25/193 kB | 17/225 kBProgress (2): 25/193 kB | 18/225 kBProgress (2): 26/193 kB | 18/225 kBProgress (2): 26/193 kB | 20/225 kBProgress (2): 28/193 kB | 20/225 kBProgress (2): 28/193 kB | 21/225 kBProgress (2): 28/193 kB | 22/225 kBProgress (2): 29/193 kB | 22/225 kBProgress (2): 29/193 kB | 24/225 kBProgress (2): 31/193 kB | 24/225 kBProgress (2): 31/193 kB | 25/225 kBProgress (2): 32/193 kB | 25/225 kBProgress (2): 32/193 kB | 26/225 kBProgress (2): 33/193 kB | 26/225 kBProgress (2): 33/193 kB | 28/225 kBProgress (2): 35/193 kB | 28/225 kBProgress (2): 35/193 kB | 29/225 kBProgress (2): 36/193 kB | 29/225 kBProgress (2): 36/193 kB | 31/225 kBProgress (2): 37/193 kB | 31/225 kBProgress (2): 37/193 kB | 32/225 kBProgress (2): 37/193 kB | 33/225 kBProgress (2): 39/193 kB | 33/225 kBProgress (2): 39/193 kB | 35/225 kBProgress (2): 40/193 kB | 35/225 kBProgress (2): 40/193 kB | 36/225 kBProgress (2): 41/193 kB | 36/225 kBProgress (2): 41/193 kB | 37/225 kBProgress (2): 43/193 kB | 37/225 kBProgress (2): 43/193 kB | 39/225 kBProgress (2): 44/193 kB | 39/225 kBProgress (2): 44/193 kB | 40/225 kBProgress (2): 46/193 kB | 40/225 kBProgress (2): 46/193 kB | 41/225 kBProgress (2): 47/193 kB | 41/225 kBProgress (2): 47/193 kB | 43/225 kBProgress (2): 48/193 kB | 43/225 kBProgress (2): 48/193 kB | 44/225 kBProgress (2): 50/193 kB | 44/225 kBProgress (2): 50/193 kB | 46/225 kBProgress (2): 51/193 kB | 46/225 kBProgress (2): 51/193 kB | 47/225 kBProgress (2): 52/193 kB | 47/225 kBProgress (2): 52/193 kB | 48/225 kBProgress (2): 54/193 kB | 48/225 kBProgress (2): 54/193 kB | 50/225 kBProgress (2): 55/193 kB | 50/225 kBProgress (2): 55/193 kB | 51/225 kBProgress (2): 55/193 kB | 52/225 kBProgress (2): 55/193 kB | 54/225 kBProgress (2): 59/193 kB | 54/225 kBProgress (2): 59/193 kB | 55/225 kBProgress (2): 64/193 kB | 55/225 kBProgress (2): 64/193 kB | 59/225 kBProgress (2): 65/193 kB | 59/225 kBProgress (2): 65/193 kB | 64/225 kBProgress (2): 69/193 kB | 64/225 kBProgress (2): 69/193 kB | 65/225 kBProgress (2): 73/193 kB | 65/225 kBProgress (2): 73/193 kB | 69/225 kBProgress (2): 77/193 kB | 69/225 kBProgress (2): 82/193 kB | 69/225 kBProgress (2): 82/193 kB | 73/225 kBProgress (2): 86/193 kB | 73/225 kBProgress (2): 86/193 kB | 77/225 kBProgress (2): 90/193 kB | 77/225 kBProgress (2): 90/193 kB | 82/225 kBProgress (2): 94/193 kB | 82/225 kBProgress (2): 94/193 kB | 86/225 kBProgress (2): 94/193 kB | 90/225 kBProgress (2): 94/193 kB | 94/225 kBProgress (2): 98/193 kB | 94/225 kBProgress (2): 98/193 kB | 98/225 kBProgress (2): 103/193 kB | 98/225 kBProgress (2): 103/193 kB | 103/225 kBProgress (2): 107/193 kB | 103/225 kBProgress (2): 107/193 kB | 107/225 kBProgress (2): 111/193 kB | 107/225 kBProgress (2): 111/193 kB | 111/225 kBProgress (2): 115/193 kB | 111/225 kBProgress (2): 115/193 kB | 115/225 kBProgress (2): 119/193 kB | 115/225 kBProgress (2): 123/193 kB | 115/225 kBProgress (2): 123/193 kB | 120/225 kBProgress (2): 127/193 kB | 120/225 kBProgress (2): 127/193 kB | 124/225 kBProgress (2): 132/193 kB | 124/225 kBProgress (2): 132/193 kB | 128/225 kBProgress (2): 132/193 kB | 130/225 kBProgress (2): 136/193 kB | 130/225 kBProgress (2): 136/193 kB | 134/225 kBProgress (2): 140/193 kB | 134/225 kBProgress (2): 140/193 kB | 139/225 kBProgress (2): 144/193 kB | 139/225 kBProgress (2): 144/193 kB | 143/225 kBProgress (2): 149/193 kB | 143/225 kBProgress (2): 149/193 kB | 147/225 kBProgress (2): 153/193 kB | 147/225 kBProgress (2): 153/193 kB | 151/225 kBProgress (2): 157/193 kB | 151/225 kBProgress (2): 157/193 kB | 156/225 kBProgress (2): 161/193 kB | 156/225 kBProgress (2): 161/193 kB | 160/225 kBProgress (2): 165/193 kB | 160/225 kBProgress (2): 165/193 kB | 164/225 kBProgress (2): 170/193 kB | 164/225 kBProgress (2): 170/193 kB | 168/225 kBProgress (2): 174/193 kB | 168/225 kBProgress (2): 174/193 kB | 172/225 kBProgress (2): 178/193 kB | 172/225 kBProgress (2): 178/193 kB | 177/225 kBProgress (2): 182/193 kB | 177/225 kBProgress (2): 187/193 kB | 177/225 kBProgress (2): 187/193 kB | 181/225 kBProgress (2): 191/193 kB | 181/225 kBProgress (2): 191/193 kB | 185/225 kBProgress (2): 193 kB | 185/225 kB    Progress (2): 193 kB | 189/225 kBProgress (2): 193 kB | 194/225 kBProgress (2): 193 kB | 198/225 kB                                 Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/4.0.1/plexus-utils-4.0.1.jar (193 kB at 5.2 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.16.1/commons-codec-1.16.1.jar
+Progress (1): 202/225 kBProgress (1): 206/225 kBProgress (1): 210/225 kBProgress (1): 215/225 kBProgress (1): 219/225 kBProgress (1): 225 kB                        Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-archiver/4.9.2/plexus-archiver-4.9.2.jar (225 kB at 6.1 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/iq80/snappy/snappy/0.4/snappy-0.4.jar
+Progress (1): 7.3/79 kBProgress (1): 15/79 kB Progress (2): 15/79 kB | 0/1.1 MBProgress (2): 15/79 kB | 0/1.1 MBProgress (2): 32/79 kB | 0/1.1 MBProgress (2): 32/79 kB | 0/1.1 MBProgress (2): 32/79 kB | 0/1.1 MBProgress (2): 32/79 kB | 0/1.1 MBProgress (2): 32/79 kB | 0/1.1 MBProgress (2): 48/79 kB | 0/1.1 MBProgress (2): 48/79 kB | 0/1.1 MBProgress (2): 48/79 kB | 0/1.1 MBProgress (2): 48/79 kB | 0/1.1 MBProgress (2): 48/79 kB | 0/1.1 MBProgress (2): 65/79 kB | 0/1.1 MBProgress (2): 65/79 kB | 0/1.1 MBProgress (2): 65/79 kB | 0/1.1 MBProgress (2): 65/79 kB | 0/1.1 MBProgress (2): 65/79 kB | 0/1.1 MBProgress (2): 65/79 kB | 0/1.1 MBProgress (2): 79 kB | 0/1.1 MB   Progress (2): 79 kB | 0/1.1 MBProgress (2): 79 kB | 0/1.1 MBProgress (2): 79 kB | 0/1.1 MBProgress (2): 79 kB | 0/1.1 MBProgress (2): 79 kB | 0/1.1 MB                              Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-io/3.4.2/plexus-io-3.4.2.jar (79 kB at 1.9 MB/s)
+Progress (1): 0/1.1 MB                      Downloading from central: https://repo.maven.apache.org/maven2/org/tukaani/xz/1.9/xz-1.9.jar
+Progress (1): 0/1.1 MBProgress (1): 0/1.1 MBProgress (1): 0/1.1 MBProgress (1): 0/1.1 MBProgress (1): 0/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.2/1.1 MBProgress (1): 0.3/1.1 MBProgress (1): 0.3/1.1 MBProgress (1): 0.3/1.1 MBProgress (1): 0.3/1.1 MBProgress (1): 0.3/1.1 MBProgress (1): 0.3/1.1 MBProgress (1): 0.4/1.1 MBProgress (1): 0.4/1.1 MBProgress (1): 0.4/1.1 MBProgress (1): 0.4/1.1 MBProgress (1): 0.4/1.1 MBProgress (1): 0.4/1.1 MBProgress (1): 0.5/1.1 MBProgress (1): 0.5/1.1 MBProgress (1): 0.5/1.1 MBProgress (1): 0.5/1.1 MBProgress (1): 0.5/1.1 MBProgress (1): 0.5/1.1 MBProgress (1): 0.6/1.1 MBProgress (1): 0.6/1.1 MBProgress (1): 0.6/1.1 MBProgress (2): 0.6/1.1 MB | 7.7/58 kBProgress (2): 0.6/1.1 MB | 7.7/58 kBProgress (2): 0.6/1.1 MB | 16/58 kB Progress (2): 0.6/1.1 MB | 16/58 kBProgress (2): 0.6/1.1 MB | 32/58 kBProgress (2): 0.6/1.1 MB | 32/58 kBProgress (2): 0.6/1.1 MB | 48/58 kBProgress (3): 0.6/1.1 MB | 48/58 kB | 3.4/365 kBProgress (3): 0.6/1.1 MB | 48/58 kB | 3.4/365 kBProgress (3): 0.6/1.1 MB | 48/58 kB | 7.6/365 kBProgress (3): 0.6/1.1 MB | 58 kB | 7.6/365 kB   Progress (3): 0.6/1.1 MB | 58 kB | 12/365 kB Progress (3): 0.6/1.1 MB | 58 kB | 12/365 kBProgress (3): 0.6/1.1 MB | 58 kB | 16/365 kBProgress (3): 0.7/1.1 MB | 58 kB | 16/365 kBProgress (3): 0.7/1.1 MB | 58 kB | 21/365 kB                                            Downloaded from central: https://repo.maven.apache.org/maven2/org/iq80/snappy/snappy/0.4/snappy-0.4.jar (58 kB at 1.1 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.5-11/zstd-jni-1.5.5-11.jar
+Progress (2): 0.7/1.1 MB | 21/365 kBProgress (2): 0.7/1.1 MB | 33/365 kBProgress (2): 0.7/1.1 MB | 33/365 kBProgress (2): 0.7/1.1 MB | 49/365 kBProgress (2): 0.7/1.1 MB | 66/365 kBProgress (2): 0.7/1.1 MB | 66/365 kBProgress (2): 0.7/1.1 MB | 82/365 kBProgress (2): 0.7/1.1 MB | 82/365 kBProgress (2): 0.7/1.1 MB | 98/365 kBProgress (2): 0.7/1.1 MB | 98/365 kBProgress (2): 0.8/1.1 MB | 98/365 kBProgress (2): 0.8/1.1 MB | 98/365 kBProgress (2): 0.8/1.1 MB | 98/365 kBProgress (2): 0.8/1.1 MB | 98/365 kBProgress (2): 0.8/1.1 MB | 98/365 kBProgress (2): 0.8/1.1 MB | 98/365 kBProgress (2): 0.9/1.1 MB | 98/365 kBProgress (2): 0.9/1.1 MB | 98/365 kBProgress (2): 0.9/1.1 MB | 98/365 kBProgress (2): 0.9/1.1 MB | 98/365 kBProgress (2): 0.9/1.1 MB | 98/365 kBProgress (2): 0.9/1.1 MB | 98/365 kBProgress (2): 0.9/1.1 MB | 115/365 kBProgress (2): 0.9/1.1 MB | 115/365 kBProgress (2): 1.0/1.1 MB | 115/365 kBProgress (3): 1.0/1.1 MB | 115/365 kB | 7.7/116 kBProgress (3): 1.0/1.1 MB | 115/365 kB | 16/116 kB Progress (3): 1.0/1.1 MB | 131/365 kB | 16/116 kBProgress (3): 1.0/1.1 MB | 131/365 kB | 16/116 kBProgress (3): 1.0/1.1 MB | 131/365 kB | 32/116 kBProgress (3): 1.0/1.1 MB | 147/365 kB | 32/116 kBProgress (3): 1.0/1.1 MB | 147/365 kB | 32/116 kBProgress (3): 1.0/1.1 MB | 147/365 kB | 49/116 kBProgress (3): 1.0/1.1 MB | 147/365 kB | 65/116 kBProgress (3): 1.0/1.1 MB | 147/365 kB | 65/116 kBProgress (3): 1.0/1.1 MB | 147/365 kB | 81/116 kBProgress (3): 1.0/1.1 MB | 147/365 kB | 81/116 kBProgress (3): 1.0/1.1 MB | 164/365 kB | 81/116 kBProgress (3): 1.0/1.1 MB | 164/365 kB | 97/116 kBProgress (3): 1.0/1.1 MB | 164/365 kB | 97/116 kBProgress (3): 1.0/1.1 MB | 164/365 kB | 114/116 kBProgress (3): 1.1/1.1 MB | 164/365 kB | 114/116 kBProgress (3): 1.1/1.1 MB | 164/365 kB | 116 kB    Progress (3): 1.1/1.1 MB | 164/365 kB | 116 kB                                              Downloaded from central: https://repo.maven.apache.org/maven2/org/tukaani/xz/1.9/xz-1.9.jar (116 kB at 1.9 MB/s)
+Progress (2): 1.1 MB | 164/365 kBProgress (3): 1.1 MB | 164/365 kB | 3.4/658 kBProgress (3): 1.1 MB | 164/365 kB | 4.1/658 kB                                              Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.26.1/commons-compress-1.26.1.jar (1.1 MB at 18 MB/s)
+Progress (2): 164/365 kB | 8.3/658 kBProgress (2): 164/365 kB | 13/658 kB Progress (2): 164/365 kB | 17/658 kBProgress (2): 164/365 kB | 21/658 kBProgress (2): 164/365 kB | 25/658 kBProgress (2): 164/365 kB | 29/658 kBProgress (2): 164/365 kB | 33/658 kBProgress (2): 164/365 kB | 37/658 kBProgress (2): 164/365 kB | 41/658 kBProgress (2): 164/365 kB | 46/658 kBProgress (2): 164/365 kB | 50/658 kBProgress (2): 164/365 kB | 54/658 kBProgress (2): 164/365 kB | 58/658 kBProgress (2): 164/365 kB | 61/658 kBProgress (2): 164/365 kB | 66/658 kBProgress (2): 180/365 kB | 66/658 kBProgress (2): 180/365 kB | 70/658 kBProgress (2): 180/365 kB | 74/658 kBProgress (2): 180/365 kB | 78/658 kBProgress (2): 180/365 kB | 83/658 kBProgress (2): 180/365 kB | 87/658 kBProgress (2): 180/365 kB | 91/658 kBProgress (2): 180/365 kB | 95/658 kBProgress (2): 180/365 kB | 100/658 kBProgress (2): 180/365 kB | 104/658 kBProgress (2): 180/365 kB | 108/658 kBProgress (2): 180/365 kB | 112/658 kBProgress (2): 180/365 kB | 116/658 kBProgress (2): 180/365 kB | 121/658 kBProgress (2): 180/365 kB | 125/658 kBProgress (2): 180/365 kB | 129/658 kBProgress (2): 180/365 kB | 131/658 kBProgress (2): 197/365 kB | 131/658 kBProgress (2): 213/365 kB | 131/658 kBProgress (2): 229/365 kB | 131/658 kBProgress (2): 246/365 kB | 131/658 kBProgress (2): 262/365 kB | 131/658 kBProgress (2): 279/365 kB | 131/658 kBProgress (2): 279/365 kB | 147/658 kBProgress (2): 279/365 kB | 164/658 kBProgress (2): 295/365 kB | 164/658 kBProgress (2): 295/365 kB | 180/658 kBProgress (2): 295/365 kB | 197/658 kBProgress (3): 295/365 kB | 197/658 kB | 0/6.8 MBProgress (3): 295/365 kB | 197/658 kB | 0/6.8 MBProgress (3): 295/365 kB | 213/658 kB | 0/6.8 MBProgress (3): 295/365 kB | 229/658 kB | 0/6.8 MBProgress (3): 295/365 kB | 229/658 kB | 0/6.8 MBProgress (3): 295/365 kB | 246/658 kB | 0/6.8 MBProgress (3): 295/365 kB | 246/658 kB | 0/6.8 MBProgress (3): 295/365 kB | 262/658 kB | 0/6.8 MBProgress (3): 295/365 kB | 262/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 279/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 279/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 295/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 295/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 311/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 311/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 328/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 328/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 344/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 344/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 360/658 kB | 0.1/6.8 MBProgress (3): 295/365 kB | 360/658 kB | 0.2/6.8 MBProgress (3): 295/365 kB | 377/658 kB | 0.2/6.8 MBProgress (3): 311/365 kB | 377/658 kB | 0.2/6.8 MBProgress (3): 311/365 kB | 377/658 kB | 0.2/6.8 MBProgress (3): 311/365 kB | 393/658 kB | 0.2/6.8 MBProgress (3): 328/365 kB | 393/658 kB | 0.2/6.8 MBProgress (3): 328/365 kB | 393/658 kB | 0.2/6.8 MBProgress (3): 328/365 kB | 410/658 kB | 0.2/6.8 MBProgress (3): 328/365 kB | 410/658 kB | 0.2/6.8 MBProgress (3): 328/365 kB | 426/658 kB | 0.2/6.8 MBProgress (3): 328/365 kB | 426/658 kB | 0.2/6.8 MBProgress (3): 344/365 kB | 426/658 kB | 0.2/6.8 MBProgress (3): 344/365 kB | 442/658 kB | 0.2/6.8 MBProgress (3): 344/365 kB | 442/658 kB | 0.2/6.8 MBProgress (3): 344/365 kB | 459/658 kB | 0.2/6.8 MBProgress (3): 344/365 kB | 459/658 kB | 0.2/6.8 MBProgress (3): 344/365 kB | 475/658 kB | 0.2/6.8 MBProgress (3): 344/365 kB | 475/658 kB | 0.3/6.8 MBProgress (3): 344/365 kB | 492/658 kB | 0.3/6.8 MBProgress (3): 360/365 kB | 492/658 kB | 0.3/6.8 MBProgress (3): 360/365 kB | 492/658 kB | 0.3/6.8 MBProgress (3): 365 kB | 492/658 kB | 0.3/6.8 MB    Progress (3): 365 kB | 508/658 kB | 0.3/6.8 MBProgress (3): 365 kB | 508/658 kB | 0.3/6.8 MBProgress (3): 365 kB | 524/658 kB | 0.3/6.8 MB                                              Downloaded from central: https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.16.1/commons-codec-1.16.1.jar (365 kB at 4.9 MB/s)
+Progress (2): 524/658 kB | 0.3/6.8 MBProgress (2): 541/658 kB | 0.3/6.8 MBProgress (2): 541/658 kB | 0.3/6.8 MBProgress (2): 557/658 kB | 0.3/6.8 MBProgress (2): 557/658 kB | 0.3/6.8 MBProgress (2): 557/658 kB | 0.3/6.8 MBProgress (2): 573/658 kB | 0.3/6.8 MBProgress (2): 573/658 kB | 0.4/6.8 MBProgress (2): 590/658 kB | 0.4/6.8 MBProgress (2): 590/658 kB | 0.4/6.8 MBProgress (2): 606/658 kB | 0.4/6.8 MBProgress (2): 606/658 kB | 0.4/6.8 MBProgress (2): 623/658 kB | 0.4/6.8 MBProgress (2): 639/658 kB | 0.4/6.8 MBProgress (2): 639/658 kB | 0.4/6.8 MBProgress (2): 639/658 kB | 0.4/6.8 MBProgress (2): 655/658 kB | 0.4/6.8 MBProgress (2): 658 kB | 0.4/6.8 MB    Progress (2): 658 kB | 0.4/6.8 MB                                 Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar (658 kB at 8.5 MB/s)
+Progress (1): 0.5/6.8 MBProgress (1): 0.5/6.8 MBProgress (1): 0.5/6.8 MBProgress (1): 0.5/6.8 MBProgress (1): 0.5/6.8 MBProgress (1): 0.5/6.8 MBProgress (1): 0.5/6.8 MBProgress (1): 0.6/6.8 MBProgress (1): 0.6/6.8 MBProgress (1): 0.6/6.8 MBProgress (1): 0.6/6.8 MBProgress (1): 0.6/6.8 MBProgress (1): 0.6/6.8 MBProgress (1): 0.7/6.8 MBProgress (1): 0.7/6.8 MBProgress (1): 0.7/6.8 MBProgress (1): 0.7/6.8 MBProgress (1): 0.7/6.8 MBProgress (1): 0.7/6.8 MBProgress (1): 0.7/6.8 MBProgress (1): 0.8/6.8 MBProgress (1): 0.8/6.8 MBProgress (1): 0.8/6.8 MBProgress (1): 0.8/6.8 MBProgress (1): 0.8/6.8 MBProgress (1): 0.8/6.8 MBProgress (1): 0.9/6.8 MBProgress (1): 0.9/6.8 MBProgress (1): 0.9/6.8 MBProgress (1): 0.9/6.8 MBProgress (1): 0.9/6.8 MBProgress (1): 0.9/6.8 MBProgress (1): 1.0/6.8 MBProgress (1): 1.0/6.8 MBProgress (1): 1.0/6.8 MBProgress (1): 1.0/6.8 MBProgress (1): 1.0/6.8 MBProgress (1): 1.0/6.8 MBProgress (1): 1.0/6.8 MBProgress (1): 1.0/6.8 MBProgress (1): 1.1/6.8 MBProgress (1): 1.1/6.8 MBProgress (1): 1.1/6.8 MBProgress (1): 1.1/6.8 MBProgress (1): 1.1/6.8 MBProgress (1): 1.1/6.8 MBProgress (1): 1.1/6.8 MBProgress (1): 1.2/6.8 MBProgress (1): 1.2/6.8 MBProgress (1): 1.2/6.8 MBProgress (1): 1.2/6.8 MBProgress (1): 1.2/6.8 MBProgress (1): 1.2/6.8 MBProgress (1): 1.3/6.8 MBProgress (1): 1.3/6.8 MBProgress (1): 1.3/6.8 MBProgress (1): 1.3/6.8 MBProgress (1): 1.3/6.8 MBProgress (1): 1.3/6.8 MBProgress (1): 1.4/6.8 MBProgress (1): 1.4/6.8 MBProgress (1): 1.4/6.8 MBProgress (1): 1.4/6.8 MBProgress (1): 1.4/6.8 MBProgress (1): 1.4/6.8 MBProgress (1): 1.4/6.8 MBProgress (1): 1.5/6.8 MBProgress (1): 1.5/6.8 MBProgress (1): 1.5/6.8 MBProgress (1): 1.5/6.8 MBProgress (1): 1.5/6.8 MBProgress (1): 1.5/6.8 MBProgress (1): 1.6/6.8 MBProgress (1): 1.6/6.8 MBProgress (1): 1.6/6.8 MBProgress (1): 1.6/6.8 MBProgress (1): 1.6/6.8 MBProgress (1): 1.6/6.8 MBProgress (1): 1.7/6.8 MBProgress (1): 1.7/6.8 MBProgress (1): 1.7/6.8 MBProgress (1): 1.7/6.8 MBProgress (1): 1.7/6.8 MBProgress (1): 1.7/6.8 MBProgress (1): 1.8/6.8 MBProgress (1): 1.8/6.8 MBProgress (1): 1.8/6.8 MBProgress (1): 1.8/6.8 MBProgress (1): 1.8/6.8 MBProgress (1): 1.8/6.8 MBProgress (1): 1.8/6.8 MBProgress (1): 1.9/6.8 MBProgress (1): 1.9/6.8 MBProgress (1): 1.9/6.8 MBProgress (1): 1.9/6.8 MBProgress (1): 1.9/6.8 MBProgress (1): 1.9/6.8 MBProgress (1): 1.9/6.8 MBProgress (1): 2.0/6.8 MBProgress (1): 2.0/6.8 MBProgress (1): 2.0/6.8 MBProgress (1): 2.0/6.8 MBProgress (1): 2.0/6.8 MBProgress (1): 2.0/6.8 MBProgress (1): 2.1/6.8 MBProgress (1): 2.1/6.8 MBProgress (1): 2.1/6.8 MBProgress (1): 2.1/6.8 MBProgress (1): 2.1/6.8 MBProgress (1): 2.1/6.8 MBProgress (1): 2.1/6.8 MBProgress (1): 2.2/6.8 MBProgress (1): 2.2/6.8 MBProgress (1): 2.2/6.8 MBProgress (1): 2.2/6.8 MBProgress (1): 2.2/6.8 MBProgress (1): 2.2/6.8 MBProgress (1): 2.2/6.8 MBProgress (1): 2.3/6.8 MBProgress (1): 2.3/6.8 MBProgress (1): 2.3/6.8 MBProgress (1): 2.3/6.8 MBProgress (1): 2.3/6.8 MBProgress (1): 2.3/6.8 MBProgress (1): 2.3/6.8 MBProgress (1): 2.4/6.8 MBProgress (1): 2.4/6.8 MBProgress (1): 2.4/6.8 MBProgress (1): 2.4/6.8 MBProgress (1): 2.4/6.8 MBProgress (1): 2.4/6.8 MBProgress (1): 2.5/6.8 MBProgress (1): 2.5/6.8 MBProgress (1): 2.5/6.8 MBProgress (1): 2.5/6.8 MBProgress (1): 2.5/6.8 MBProgress (1): 2.5/6.8 MBProgress (1): 2.6/6.8 MBProgress (1): 2.6/6.8 MBProgress (1): 2.6/6.8 MBProgress (1): 2.6/6.8 MBProgress (1): 2.6/6.8 MBProgress (1): 2.6/6.8 MBProgress (1): 2.6/6.8 MBProgress (1): 2.7/6.8 MBProgress (1): 2.7/6.8 MBProgress (1): 2.7/6.8 MBProgress (1): 2.7/6.8 MBProgress (1): 2.7/6.8 MBProgress (1): 2.7/6.8 MBProgress (1): 2.8/6.8 MBProgress (1): 2.8/6.8 MBProgress (1): 2.8/6.8 MBProgress (1): 2.8/6.8 MBProgress (1): 2.8/6.8 MBProgress (1): 2.8/6.8 MBProgress (1): 2.9/6.8 MBProgress (1): 2.9/6.8 MBProgress (1): 2.9/6.8 MBProgress (1): 2.9/6.8 MBProgress (1): 2.9/6.8 MBProgress (1): 2.9/6.8 MBProgress (1): 2.9/6.8 MBProgress (1): 3.0/6.8 MBProgress (1): 3.0/6.8 MBProgress (1): 3.0/6.8 MBProgress (1): 3.0/6.8 MBProgress (1): 3.0/6.8 MBProgress (1): 3.0/6.8 MBProgress (1): 3.1/6.8 MBProgress (1): 3.1/6.8 MBProgress (1): 3.1/6.8 MBProgress (1): 3.1/6.8 MBProgress (1): 3.1/6.8 MBProgress (1): 3.1/6.8 MBProgress (1): 3.1/6.8 MBProgress (1): 3.2/6.8 MBProgress (1): 3.2/6.8 MBProgress (1): 3.2/6.8 MBProgress (1): 3.2/6.8 MBProgress (1): 3.2/6.8 MBProgress (1): 3.2/6.8 MBProgress (1): 3.3/6.8 MBProgress (1): 3.3/6.8 MBProgress (1): 3.3/6.8 MBProgress (1): 3.3/6.8 MBProgress (1): 3.3/6.8 MBProgress (1): 3.3/6.8 MBProgress (1): 3.3/6.8 MBProgress (1): 3.4/6.8 MBProgress (1): 3.4/6.8 MBProgress (1): 3.4/6.8 MBProgress (1): 3.4/6.8 MBProgress (1): 3.4/6.8 MBProgress (1): 3.4/6.8 MBProgress (1): 3.5/6.8 MBProgress (1): 3.5/6.8 MBProgress (1): 3.5/6.8 MBProgress (1): 3.5/6.8 MBProgress (1): 3.5/6.8 MBProgress (1): 3.5/6.8 MBProgress (1): 3.6/6.8 MBProgress (1): 3.6/6.8 MBProgress (1): 3.6/6.8 MBProgress (1): 3.6/6.8 MBProgress (1): 3.6/6.8 MBProgress (1): 3.6/6.8 MBProgress (1): 3.7/6.8 MBProgress (1): 3.7/6.8 MBProgress (1): 3.7/6.8 MBProgress (1): 3.7/6.8 MBProgress (1): 3.7/6.8 MBProgress (1): 3.7/6.8 MBProgress (1): 3.7/6.8 MBProgress (1): 3.8/6.8 MBProgress (1): 3.8/6.8 MBProgress (1): 3.8/6.8 MBProgress (1): 3.8/6.8 MBProgress (1): 3.8/6.8 MBProgress (1): 3.8/6.8 MBProgress (1): 3.9/6.8 MBProgress (1): 3.9/6.8 MBProgress (1): 3.9/6.8 MBProgress (1): 3.9/6.8 MBProgress (1): 3.9/6.8 MBProgress (1): 3.9/6.8 MBProgress (1): 4.0/6.8 MBProgress (1): 4.0/6.8 MBProgress (1): 4.0/6.8 MBProgress (1): 4.0/6.8 MBProgress (1): 4.0/6.8 MBProgress (1): 4.0/6.8 MBProgress (1): 4.0/6.8 MBProgress (1): 4.1/6.8 MBProgress (1): 4.1/6.8 MBProgress (1): 4.1/6.8 MBProgress (1): 4.1/6.8 MBProgress (1): 4.1/6.8 MBProgress (1): 4.1/6.8 MBProgress (1): 4.1/6.8 MBProgress (1): 4.2/6.8 MBProgress (1): 4.2/6.8 MBProgress (1): 4.2/6.8 MBProgress (1): 4.2/6.8 MBProgress (1): 4.2/6.8 MBProgress (1): 4.2/6.8 MBProgress (1): 4.3/6.8 MBProgress (1): 4.3/6.8 MBProgress (1): 4.3/6.8 MBProgress (1): 4.3/6.8 MBProgress (1): 4.3/6.8 MBProgress (1): 4.3/6.8 MBProgress (1): 4.4/6.8 MBProgress (1): 4.4/6.8 MBProgress (1): 4.4/6.8 MBProgress (1): 4.4/6.8 MBProgress (1): 4.4/6.8 MBProgress (1): 4.4/6.8 MBProgress (1): 4.4/6.8 MBProgress (1): 4.5/6.8 MBProgress (1): 4.5/6.8 MBProgress (1): 4.5/6.8 MBProgress (1): 4.5/6.8 MBProgress (1): 4.5/6.8 MBProgress (1): 4.5/6.8 MBProgress (1): 4.6/6.8 MBProgress (1): 4.6/6.8 MBProgress (1): 4.6/6.8 MBProgress (1): 4.6/6.8 MBProgress (1): 4.6/6.8 MBProgress (1): 4.6/6.8 MBProgress (1): 4.7/6.8 MBProgress (1): 4.7/6.8 MBProgress (1): 4.7/6.8 MBProgress (1): 4.7/6.8 MBProgress (1): 4.7/6.8 MBProgress (1): 4.7/6.8 MBProgress (1): 4.7/6.8 MBProgress (1): 4.8/6.8 MBProgress (1): 4.8/6.8 MBProgress (1): 4.8/6.8 MBProgress (1): 4.8/6.8 MBProgress (1): 4.8/6.8 MBProgress (1): 4.8/6.8 MBProgress (1): 4.8/6.8 MBProgress (1): 4.9/6.8 MBProgress (1): 4.9/6.8 MBProgress (1): 4.9/6.8 MBProgress (1): 4.9/6.8 MBProgress (1): 4.9/6.8 MBProgress (1): 4.9/6.8 MBProgress (1): 5.0/6.8 MBProgress (1): 5.0/6.8 MBProgress (1): 5.0/6.8 MBProgress (1): 5.0/6.8 MBProgress (1): 5.0/6.8 MBProgress (1): 5.0/6.8 MBProgress (1): 5.0/6.8 MBProgress (1): 5.1/6.8 MBProgress (1): 5.1/6.8 MBProgress (1): 5.1/6.8 MBProgress (1): 5.1/6.8 MBProgress (1): 5.1/6.8 MBProgress (1): 5.1/6.8 MBProgress (1): 5.2/6.8 MBProgress (1): 5.2/6.8 MBProgress (1): 5.2/6.8 MBProgress (1): 5.2/6.8 MBProgress (1): 5.2/6.8 MBProgress (1): 5.2/6.8 MBProgress (1): 5.3/6.8 MBProgress (1): 5.3/6.8 MBProgress (1): 5.3/6.8 MBProgress (1): 5.3/6.8 MBProgress (1): 5.3/6.8 MBProgress (1): 5.3/6.8 MBProgress (1): 5.4/6.8 MBProgress (1): 5.4/6.8 MBProgress (1): 5.4/6.8 MBProgress (1): 5.4/6.8 MBProgress (1): 5.4/6.8 MBProgress (1): 5.4/6.8 MBProgress (1): 5.5/6.8 MBProgress (1): 5.5/6.8 MBProgress (1): 5.5/6.8 MBProgress (1): 5.5/6.8 MBProgress (1): 5.5/6.8 MBProgress (1): 5.5/6.8 MBProgress (1): 5.5/6.8 MBProgress (1): 5.6/6.8 MBProgress (1): 5.6/6.8 MBProgress (1): 5.6/6.8 MBProgress (1): 5.6/6.8 MBProgress (1): 5.6/6.8 MBProgress (1): 5.6/6.8 MBProgress (1): 5.7/6.8 MBProgress (1): 5.7/6.8 MBProgress (1): 5.7/6.8 MBProgress (1): 5.7/6.8 MBProgress (1): 5.7/6.8 MBProgress (1): 5.7/6.8 MBProgress (1): 5.8/6.8 MBProgress (1): 5.8/6.8 MBProgress (1): 5.8/6.8 MBProgress (1): 5.8/6.8 MBProgress (1): 5.8/6.8 MBProgress (1): 5.8/6.8 MBProgress (1): 5.9/6.8 MBProgress (1): 5.9/6.8 MBProgress (1): 5.9/6.8 MBProgress (1): 5.9/6.8 MBProgress (1): 5.9/6.8 MBProgress (1): 5.9/6.8 MBProgress (1): 6.0/6.8 MBProgress (1): 6.0/6.8 MBProgress (1): 6.0/6.8 MBProgress (1): 6.0/6.8 MBProgress (1): 6.0/6.8 MBProgress (1): 6.0/6.8 MBProgress (1): 6.0/6.8 MBProgress (1): 6.1/6.8 MBProgress (1): 6.1/6.8 MBProgress (1): 6.1/6.8 MBProgress (1): 6.1/6.8 MBProgress (1): 6.1/6.8 MBProgress (1): 6.1/6.8 MBProgress (1): 6.2/6.8 MBProgress (1): 6.2/6.8 MBProgress (1): 6.2/6.8 MBProgress (1): 6.2/6.8 MBProgress (1): 6.2/6.8 MBProgress (1): 6.2/6.8 MBProgress (1): 6.2/6.8 MBProgress (1): 6.3/6.8 MBProgress (1): 6.3/6.8 MBProgress (1): 6.3/6.8 MBProgress (1): 6.3/6.8 MBProgress (1): 6.3/6.8 MBProgress (1): 6.3/6.8 MBProgress (1): 6.4/6.8 MBProgress (1): 6.4/6.8 MBProgress (1): 6.4/6.8 MBProgress (1): 6.4/6.8 MBProgress (1): 6.4/6.8 MBProgress (1): 6.4/6.8 MBProgress (1): 6.5/6.8 MBProgress (1): 6.5/6.8 MBProgress (1): 6.5/6.8 MBProgress (1): 6.5/6.8 MBProgress (1): 6.5/6.8 MBProgress (1): 6.5/6.8 MBProgress (1): 6.6/6.8 MBProgress (1): 6.6/6.8 MBProgress (1): 6.6/6.8 MBProgress (1): 6.6/6.8 MBProgress (1): 6.6/6.8 MBProgress (1): 6.6/6.8 MBProgress (1): 6.6/6.8 MBProgress (1): 6.7/6.8 MBProgress (1): 6.7/6.8 MBProgress (1): 6.7/6.8 MBProgress (1): 6.7/6.8 MBProgress (1): 6.7/6.8 MBProgress (1): 6.7/6.8 MBProgress (1): 6.8/6.8 MBProgress (1): 6.8/6.8 MBProgress (1): 6.8 MB                        Downloaded from central: https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.5-11/zstd-jni-1.5.5-11.jar (6.8 MB at 44 MB/s)
+[INFO] Building jar: /workspace/JaSAgent/jasagent-api/target/jasagent-api-0.1.0.jar
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-auth >---------------------
+[INFO] Building jasagent-auth 0.1.0                                      [3/22]
+[INFO]   from jasagent-auth/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-auth ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 14 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-auth ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-auth ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-auth ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-auth/target/jasagent-auth-0.1.0.jar
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-core >---------------------
+[INFO] Building jasagent-core 0.1.0                                      [4/22]
+[INFO]   from jasagent-core/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-core ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-core/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-core ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 9 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-core ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-core/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-core ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 3 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-core ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-core ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-core/target/jasagent-core-0.1.0.jar
+[INFO] 
+[INFO] -------------------< dev.jasagent:jasagent-persist >--------------------
+[INFO] Building jasagent-persist 0.1.0                                   [5/22]
+[INFO]   from jasagent-persist/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-persist ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-persist ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 14 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-persist ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-persist/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-persist ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [debug release 21] to target/test-classes
+[WARNING] /workspace/JaSAgent/jasagent-persist/src/test/java/dev/jasagent/persist/PersistProcessTest.java:[279,51] invoke(java.util.Map<java.lang.String,java.lang.Object>,org.bsc.langgraph4j.RunnableConfig) in org.bsc.langgraph4j.CompiledGraph has been deprecated and marked for removal
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-persist ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-persist ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-persist/target/jasagent-persist-0.1.0.jar
+[INFO] 
+[INFO] -------------------< dev.jasagent:jasagent-workflow >-------------------
+[INFO] Building jasagent-workflow 0.1.0                                  [6/22]
+[INFO]   from jasagent-workflow/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-workflow ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-workflow ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 20 source files with javac [debug release 21] to target/classes
+[WARNING] /workspace/JaSAgent/jasagent-workflow/src/main/java/dev/jasagent/workflow/LangGraphWorkflowEngine.java:[113,23] isNodeOutput() in org.bsc.langgraph4j.GraphResult has been deprecated and marked for removal
+[WARNING] /workspace/JaSAgent/jasagent-workflow/src/main/java/dev/jasagent/workflow/LangGraphWorkflowEngine.java:[114,64] <State>asNodeOutput() in org.bsc.langgraph4j.GraphResult has been deprecated and marked for removal
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-workflow ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-workflow/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-workflow ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-workflow ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-workflow ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-workflow/target/jasagent-workflow-0.1.0.jar
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-tool >---------------------
+[INFO] Building jasagent-tool 0.1.0                                      [7/22]
+[INFO]   from jasagent-tool/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-tool ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-tool/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-tool ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 6 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-tool ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-tool/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-tool ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 3 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-tool ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-tool ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-tool/target/jasagent-tool-0.1.0.jar
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-llm >----------------------
+[INFO] Building jasagent-llm 0.1.0                                       [8/22]
+[INFO]   from jasagent-llm/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-llm ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-llm/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-llm ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 23 source files with javac [debug release 21] to target/classes
+[INFO] /workspace/JaSAgent/jasagent-llm/src/main/java/dev/jasagent/llm/LangChain4jLlmClient.java: /workspace/JaSAgent/jasagent-llm/src/main/java/dev/jasagent/llm/LangChain4jLlmClient.java uses or overrides a deprecated API.
+[INFO] /workspace/JaSAgent/jasagent-llm/src/main/java/dev/jasagent/llm/LangChain4jLlmClient.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-llm ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-llm/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-llm ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 9 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-llm ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-llm ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-llm/target/jasagent-llm-0.1.0.jar
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-mcp >----------------------
+[INFO] Building jasagent-mcp 0.1.0                                       [9/22]
+[INFO]   from jasagent-mcp/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-mcp ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-mcp/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-mcp ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 7 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-mcp ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-mcp/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-mcp ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 3 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-mcp ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-mcp ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-mcp/target/jasagent-mcp-0.1.0.jar
+[INFO] 
+[INFO] --------------------< dev.jasagent:jasagent-plugin >--------------------
+[INFO] Building jasagent-plugin 0.1.0                                   [10/22]
+[INFO]   from jasagent-plugin/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-plugin ---
+[INFO] Copying 2 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-plugin ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 13 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-plugin ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-plugin/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-plugin ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 3 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-plugin ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-plugin ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-plugin/target/jasagent-plugin-0.1.0.jar
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-rag >----------------------
+[INFO] Building jasagent-rag 0.1.0                                      [11/22]
+[INFO]   from jasagent-rag/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-rag ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-rag/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-rag ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 23 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-rag ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-rag/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-rag ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-rag ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-rag ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-rag/target/jasagent-rag-0.1.0.jar
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-interrupt >-------------------
+[INFO] Building jasagent-interrupt 0.1.0                                [12/22]
+[INFO]   from jasagent-interrupt/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-interrupt ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-interrupt/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-interrupt ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [debug release 21] to target/classes
+[INFO] /workspace/JaSAgent/jasagent-interrupt/src/main/java/dev/jasagent/interrupt/CheckpointRunControl.java: /workspace/JaSAgent/jasagent-interrupt/src/main/java/dev/jasagent/interrupt/CheckpointRunControl.java uses or overrides a deprecated API.
+[INFO] /workspace/JaSAgent/jasagent-interrupt/src/main/java/dev/jasagent/interrupt/CheckpointRunControl.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-interrupt ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-interrupt/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-interrupt ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/test-classes
+[INFO] /workspace/JaSAgent/jasagent-interrupt/src/test/java/dev/jasagent/interrupt/InterruptResumeTest.java: /workspace/JaSAgent/jasagent-interrupt/src/test/java/dev/jasagent/interrupt/InterruptResumeTest.java uses or overrides a deprecated API.
+[INFO] /workspace/JaSAgent/jasagent-interrupt/src/test/java/dev/jasagent/interrupt/InterruptResumeTest.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-interrupt ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-interrupt ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-interrupt/target/jasagent-interrupt-0.1.0.jar
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-exception >-------------------
+[INFO] Building jasagent-exception 0.1.0                                [13/22]
+[INFO]   from jasagent-exception/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-exception ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-exception/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-exception ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 6 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-exception ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-exception/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-exception ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-exception ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-exception ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-exception/target/jasagent-exception-0.1.0.jar
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-agentpass >-------------------
+[INFO] Building jasagent-agentpass 0.1.0                                [14/22]
+[INFO]   from jasagent-agentpass/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-agentpass ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-agentpass/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-agentpass ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 10 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-agentpass ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-agentpass/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-agentpass ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 3 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-agentpass ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-agentpass ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-agentpass/target/jasagent-agentpass-0.1.0.jar
+[INFO] 
+[INFO] ---------------< dev.jasagent:jasagent-agentpass-server >---------------
+[INFO] Building jasagent-agentpass-server 0.1.0                         [15/22]
+[INFO]   from jasagent-agentpass-server/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-agentpass-server ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-agentpass-server ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 22 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-agentpass-server ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-agentpass-server/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-agentpass-server ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 5 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-agentpass-server ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-agentpass-server ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-agentpass-server/target/jasagent-agentpass-server-0.1.0.jar
+[INFO] 
+[INFO] --- spring-boot:3.4.5:repackage (default) @ jasagent-agentpass-server ---
+Downloading from central: https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-buildpack-platform/3.4.5/spring-boot-buildpack-platform-3.4.5.pom
+Progress (1): 971 BProgress (1): 3.2 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-buildpack-platform/3.4.5/spring-boot-buildpack-platform-3.4.5.pom (3.2 kB at 119 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/net/java/dev/jna/jna-platform/5.13.0/jna-platform-5.13.0.pom
+Progress (1): 1.4 kBProgress (1): 2.3 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/net/java/dev/jna/jna-platform/5.13.0/jna-platform-5.13.0.pom (2.3 kB at 113 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/net/java/dev/jna/jna/5.13.0/jna-5.13.0.pom
+Progress (1): 1.4 kBProgress (1): 2.0 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/net/java/dev/jna/jna/5.13.0/jna-5.13.0.pom (2.0 kB at 102 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.25.0/commons-compress-1.25.0.pom
+Progress (1): 753 BProgress (1): 1.9 kBProgress (1): 3.5 kBProgress (1): 6.8 kBProgress (1): 9.5 kBProgress (1): 11 kB Progress (1): 14 kBProgress (1): 17 kBProgress (1): 22 kBProgress (1): 22 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.25.0/commons-compress-1.25.0.pom (22 kB at 868 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.4.3/httpclient5-5.4.3.pom
+Progress (1): 869 BProgress (1): 3.2 kBProgress (1): 5.6 kBProgress (1): 6.1 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.4.3/httpclient5-5.4.3.pom (6.1 kB at 357 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/client5/httpclient5-parent/5.4.3/httpclient5-parent-5.4.3.pom
+Progress (1): 840 BProgress (1): 2.2 kBProgress (1): 4.0 kBProgress (1): 8.4 kBProgress (1): 11 kB Progress (1): 15 kBProgress (1): 16 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/client5/httpclient5-parent/5.4.3/httpclient5-parent-5.4.3.pom (16 kB at 858 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpcomponents-parent/13/httpcomponents-parent-13.pom
+Progress (1): 805 BProgress (1): 2.1 kBProgress (1): 4.1 kBProgress (1): 5.9 kBProgress (1): 7.1 kBProgress (1): 8.5 kBProgress (1): 12 kB Progress (1): 16 kBProgress (1): 18 kBProgress (1): 22 kBProgress (1): 24 kBProgress (1): 27 kBProgress (1): 30 kBProgress (1): 30 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpcomponents-parent/13/httpcomponents-parent-13.pom (30 kB at 1.4 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/apache/27/apache-27.pom
+Progress (1): 745 BProgress (1): 2.1 kBProgress (1): 3.9 kBProgress (1): 7.3 kBProgress (1): 12 kB Progress (1): 16 kBProgress (1): 19 kBProgress (1): 20 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/apache/27/apache-27.pom (20 kB at 1.1 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.3.4/httpcore5-5.3.4.pom
+Progress (1): 883 BProgress (1): 2.9 kBProgress (1): 3.9 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.3.4/httpcore5-5.3.4.pom (3.9 kB at 172 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5-parent/5.3.4/httpcore5-parent-5.3.4.pom
+Progress (1): 846 BProgress (1): 2.2 kBProgress (1): 3.9 kBProgress (1): 7.5 kBProgress (1): 10 kB Progress (1): 14 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5-parent/5.3.4/httpcore5-parent-5.3.4.pom (14 kB at 634 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.3.4/httpcore5-h2-5.3.4.pom
+Progress (1): 890 BProgress (1): 3.1 kBProgress (1): 3.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.3.4/httpcore5-h2-5.3.4.pom (3.6 kB at 164 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/tomlj/tomlj/1.0.0/tomlj-1.0.0.pom
+Progress (1): 1.2 kBProgress (1): 2.8 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/tomlj/tomlj/1.0.0/tomlj-1.0.0.pom (2.8 kB at 157 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/antlr/antlr4-runtime/4.7.2/antlr4-runtime-4.7.2.pom
+Progress (1): 915 BProgress (1): 3.3 kBProgress (1): 3.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/antlr/antlr4-runtime/4.7.2/antlr4-runtime-4.7.2.pom (3.6 kB at 226 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/antlr/antlr4-master/4.7.2/antlr4-master-4.7.2.pom
+Progress (1): 1.0 kBProgress (1): 2.9 kBProgress (1): 4.4 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/antlr/antlr4-master/4.7.2/antlr4-master-4.7.2.pom (4.4 kB at 210 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.pom
+Progress (1): 1.0 kBProgress (1): 3.7 kBProgress (1): 4.3 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.pom (4.3 kB at 238 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-loader-tools/3.4.5/spring-boot-loader-tools-3.4.5.pom
+Progress (1): 1.0 kBProgress (1): 2.2 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-loader-tools/3.4.5/spring-boot-loader-tools-3.4.5.pom (2.2 kB at 93 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-common-artifact-filters/3.3.2/maven-common-artifact-filters-3.3.2.pom
+Progress (1): 791 BProgress (1): 2.3 kBProgress (1): 5.3 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-common-artifact-filters/3.3.2/maven-common-artifact-filters-3.3.2.pom (5.3 kB at 310 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-shared-components/37/maven-shared-components-37.pom
+Progress (1): 781 BProgress (1): 2.3 kBProgress (1): 4.5 kBProgress (1): 4.9 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-shared-components/37/maven-shared-components-37.pom (4.9 kB at 258 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/maven-parent/37/maven-parent-37.pom
+Progress (1): 721 BProgress (1): 1.9 kBProgress (1): 5.4 kBProgress (1): 9.5 kBProgress (1): 14 kB Progress (1): 19 kBProgress (1): 23 kBProgress (1): 26 kBProgress (1): 28 kBProgress (1): 30 kBProgress (1): 34 kBProgress (1): 37 kBProgress (1): 40 kBProgress (1): 45 kBProgress (1): 46 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/maven-parent/37/maven-parent-37.pom (46 kB at 2.3 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-shade-plugin/3.5.0/maven-shade-plugin-3.5.0.pom
+Progress (1): 764 BProgress (1): 2.3 kBProgress (1): 4.8 kBProgress (1): 8.4 kBProgress (1): 11 kB Progress (1): 12 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-shade-plugin/3.5.0/maven-shade-plugin-3.5.0.pom (12 kB at 565 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.32/slf4j-api-1.7.32.pom
+Progress (1): 1.0 kBProgress (1): 3.3 kBProgress (1): 3.8 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.32/slf4j-api-1.7.32.pom (3.8 kB at 213 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/slf4j/slf4j-parent/1.7.32/slf4j-parent-1.7.32.pom
+Progress (1): 1.0 kBProgress (1): 3.2 kBProgress (1): 6.0 kBProgress (1): 9.1 kBProgress (1): 12 kB Progress (1): 14 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/slf4j/slf4j-parent/1.7.32/slf4j-parent-1.7.32.pom (14 kB at 727 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.5/asm-9.5.pom
+Progress (1): 1.3 kBProgress (1): 2.4 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.5/asm-9.5.pom (2.4 kB at 125 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm-commons/9.5/asm-commons-9.5.pom
+Progress (1): 1.1 kBProgress (1): 2.8 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm-commons/9.5/asm-commons-9.5.pom (2.8 kB at 116 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm-tree/9.5/asm-tree-9.5.pom
+Progress (1): 1.1 kBProgress (1): 2.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm-tree/9.5/asm-tree-9.5.pom (2.6 kB at 136 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/jdom/jdom2/2.0.6.1/jdom2-2.0.6.1.pom
+Progress (1): 956 BProgress (1): 2.2 kBProgress (1): 3.2 kBProgress (1): 4.6 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/jdom/jdom2/2.0.6.1/jdom2-2.0.6.1.pom (4.6 kB at 230 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-dependency-tree/3.2.1/maven-dependency-tree-3.2.1.pom
+Progress (1): 786 BProgress (1): 2.2 kBProgress (1): 4.4 kBProgress (1): 6.2 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-dependency-tree/3.2.1/maven-dependency-tree-3.2.1.pom (6.2 kB at 390 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether-util/1.0.0.v20140518/aether-util-1.0.0.v20140518.pom
+Progress (1): 937 BProgress (1): 2.2 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether-util/1.0.0.v20140518/aether-util-1.0.0.v20140518.pom (2.2 kB at 129 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether/1.0.0.v20140518/aether-1.0.0.v20140518.pom
+Progress (1): 798 BProgress (1): 3.2 kBProgress (1): 5.1 kBProgress (1): 9.1 kBProgress (1): 12 kB Progress (1): 17 kBProgress (1): 20 kBProgress (1): 23 kBProgress (1): 28 kBProgress (1): 30 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether/1.0.0.v20140518/aether-1.0.0.v20140518.pom (30 kB at 1.5 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether-api/1.0.0.v20140518/aether-api-1.0.0.v20140518.pom
+Progress (1): 938 BProgress (1): 1.9 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether-api/1.0.0.v20140518/aether-api-1.0.0.v20140518.pom (1.9 kB at 105 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/commons-io/commons-io/2.13.0/commons-io-2.13.0.pom
+Progress (1): 771 BProgress (1): 2.1 kBProgress (1): 5.2 kBProgress (1): 7.9 kBProgress (1): 10 kB Progress (1): 12 kBProgress (1): 15 kBProgress (1): 18 kBProgress (1): 20 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/commons-io/commons-io/2.13.0/commons-io-2.13.0.pom (20 kB at 847 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/58/commons-parent-58.pom
+Progress (1): 707 BProgress (1): 1.9 kBProgress (1): 3.1 kBProgress (1): 4.6 kBProgress (1): 6.5 kBProgress (1): 8.4 kBProgress (1): 10 kB Progress (1): 12 kBProgress (1): 15 kBProgress (1): 18 kBProgress (1): 20 kBProgress (1): 23 kBProgress (1): 26 kBProgress (1): 29 kBProgress (1): 30 kBProgress (1): 34 kBProgress (1): 38 kBProgress (1): 42 kBProgress (1): 45 kBProgress (1): 47 kBProgress (1): 50 kBProgress (1): 53 kBProgress (1): 57 kBProgress (1): 59 kBProgress (1): 62 kBProgress (1): 65 kBProgress (1): 69 kBProgress (1): 75 kBProgress (1): 78 kBProgress (1): 80 kBProgress (1): 83 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/58/commons-parent-58.pom (83 kB at 3.4 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/vafer/jdependency/2.8.0/jdependency-2.8.0.pom
+Progress (1): 1.1 kBProgress (1): 5.0 kBProgress (1): 8.6 kBProgress (1): 13 kB Progress (1): 14 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/vafer/jdependency/2.8.0/jdependency-2.8.0.pom (14 kB at 731 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.pom
+Progress (1): 763 BProgress (1): 2.2 kBProgress (1): 5.1 kBProgress (1): 8.9 kBProgress (1): 12 kB Progress (1): 14 kBProgress (1): 16 kBProgress (1): 19 kBProgress (1): 22 kBProgress (1): 24 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.pom (24 kB at 881 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/48/commons-parent-48.pom
+Progress (1): 704 BProgress (1): 1.9 kBProgress (1): 3.2 kBProgress (1): 4.7 kBProgress (1): 8.4 kBProgress (1): 11 kB Progress (1): 14 kBProgress (1): 17 kBProgress (1): 21 kBProgress (1): 24 kBProgress (1): 26 kBProgress (1): 29 kBProgress (1): 32 kBProgress (1): 36 kBProgress (1): 37 kBProgress (1): 39 kBProgress (1): 42 kBProgress (1): 47 kBProgress (1): 53 kBProgress (1): 56 kBProgress (1): 60 kBProgress (1): 62 kBProgress (1): 64 kBProgress (1): 67 kBProgress (1): 68 kBProgress (1): 70 kBProgress (1): 72 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/48/commons-parent-48.pom (72 kB at 3.3 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-buildpack-platform/3.4.5/spring-boot-buildpack-platform-3.4.5.jar
+Progress (1): 7.4/300 kBProgress (1): 7.7/300 kBProgress (1): 24/300 kB Progress (1): 29/300 kBProgress (1): 46/300 kBProgress (1): 57/300 kBProgress (1): 73/300 kBProgress (1): 90/300 kBProgress (1): 106/300 kBProgress (1): 122/300 kBProgress (1): 139/300 kBProgress (1): 155/300 kBProgress (1): 172/300 kBProgress (1): 188/300 kBProgress (1): 204/300 kBProgress (1): 221/300 kBProgress (1): 237/300 kBProgress (1): 253/300 kBProgress (1): 270/300 kBProgress (1): 286/300 kBProgress (1): 300 kB                        Downloaded from central: https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-buildpack-platform/3.4.5/spring-boot-buildpack-platform-3.4.5.jar (300 kB at 14 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/net/java/dev/jna/jna-platform/5.13.0/jna-platform-5.13.0.jar
+Downloading from central: https://repo.maven.apache.org/maven2/net/java/dev/jna/jna/5.13.0/jna-5.13.0.jar
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.25.0/commons-compress-1.25.0.jar
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.4.3/httpclient5-5.4.3.jar
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.3.4/httpcore5-5.3.4.jar
+Progress (1): 0/1.1 MBProgress (1): 0/1.1 MBProgress (1): 0/1.1 MBProgress (1): 0/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.1/1.1 MBProgress (1): 0.2/1.1 MBProgress (2): 0.2/1.1 MB | 3.2/910 kBProgress (2): 0.2/1.1 MB | 3.2/910 kBProgress (2): 0.2/1.1 MB | 11/910 kB Progress (2): 0.2/1.1 MB | 11/910 kBProgress (2): 0.2/1.1 MB | 28/910 kBProgress (2): 0.2/1.1 MB | 28/910 kBProgress (2): 0.2/1.1 MB | 28/910 kBProgress (2): 0.2/1.1 MB | 28/910 kBProgress (2): 0.2/1.1 MB | 44/910 kBProgress (2): 0.3/1.1 MB | 44/910 kBProgress (2): 0.3/1.1 MB | 61/910 kBProgress (2): 0.3/1.1 MB | 61/910 kBProgress (2): 0.3/1.1 MB | 61/910 kBProgress (2): 0.3/1.1 MB | 61/910 kBProgress (2): 0.3/1.1 MB | 61/910 kBProgress (2): 0.3/1.1 MB | 61/910 kBProgress (2): 0.3/1.1 MB | 61/910 kBProgress (2): 0.4/1.1 MB | 61/910 kBProgress (2): 0.4/1.1 MB | 61/910 kBProgress (2): 0.4/1.1 MB | 61/910 kBProgress (2): 0.4/1.1 MB | 61/910 kBProgress (2): 0.4/1.1 MB | 77/910 kBProgress (2): 0.4/1.1 MB | 77/910 kBProgress (2): 0.4/1.1 MB | 93/910 kBProgress (2): 0.4/1.1 MB | 93/910 kBProgress (2): 0.4/1.1 MB | 110/910 kBProgress (2): 0.5/1.1 MB | 110/910 kBProgress (2): 0.5/1.1 MB | 126/910 kBProgress (2): 0.5/1.1 MB | 126/910 kBProgress (2): 0.5/1.1 MB | 142/910 kBProgress (2): 0.5/1.1 MB | 142/910 kBProgress (2): 0.5/1.1 MB | 159/910 kBProgress (2): 0.5/1.1 MB | 159/910 kBProgress (2): 0.5/1.1 MB | 175/910 kBProgress (2): 0.5/1.1 MB | 175/910 kBProgress (2): 0.5/1.1 MB | 175/910 kBProgress (2): 0.6/1.1 MB | 175/910 kBProgress (3): 0.6/1.1 MB | 175/910 kB | 0/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.6/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.1/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.2/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.2/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.2/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.2/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.2/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.2/1.9 MBProgress (3): 0.7/1.1 MB | 175/910 kB | 0.2/1.9 MBProgress (3): 0.7/1.1 MB | 192/910 kB | 0.2/1.9 MBProgress (3): 0.7/1.1 MB | 208/910 kB | 0.2/1.9 MBProgress (3): 0.8/1.1 MB | 208/910 kB | 0.2/1.9 MBProgress (3): 0.8/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.8/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.8/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.8/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.8/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.8/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (3): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MBProgress (4): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0/1.4 MBProgress (4): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0/1.4 MBProgress (4): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0/1.4 MBProgress (4): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0/1.4 MBProgress (4): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0/1.4 MBProgress (4): 0.9/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0/1.4 MBProgress (4): 1.0/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0/1.4 MBProgress (4): 1.0/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 217/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.0/1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.1/1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.1/1.4 MBProgress (4): 1.1/1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.2/1.4 MBProgress (4): 1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.2/1.4 MB    Progress (4): 1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.2/1.4 MBProgress (4): 1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.2/1.4 MBProgress (4): 1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.2/1.4 MBProgress (4): 1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.2/1.4 MBProgress (4): 1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.2/1.4 MBProgress (4): 1.1 MB | 233/910 kB | 0.2/1.9 MB | 0.2/1.4 MB                                                           Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.25.0/commons-compress-1.25.0.jar (1.1 MB at 47 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.3.4/httpcore5-h2-5.3.4.jar
+Progress (3): 250/910 kB | 0.2/1.9 MB | 0.2/1.4 MBProgress (3): 250/910 kB | 0.3/1.9 MB | 0.2/1.4 MBProgress (3): 250/910 kB | 0.3/1.9 MB | 0.2/1.4 MBProgress (3): 266/910 kB | 0.3/1.9 MB | 0.2/1.4 MBProgress (3): 266/910 kB | 0.3/1.9 MB | 0.2/1.4 MBProgress (3): 266/910 kB | 0.3/1.9 MB | 0.2/1.4 MBProgress (3): 266/910 kB | 0.3/1.9 MB | 0.3/1.4 MBProgress (3): 266/910 kB | 0.3/1.9 MB | 0.3/1.4 MBProgress (3): 266/910 kB | 0.3/1.9 MB | 0.3/1.4 MBProgress (3): 266/910 kB | 0.3/1.9 MB | 0.3/1.4 MBProgress (3): 266/910 kB | 0.3/1.9 MB | 0.3/1.4 MBProgress (3): 282/910 kB | 0.3/1.9 MB | 0.3/1.4 MBProgress (3): 299/910 kB | 0.3/1.9 MB | 0.3/1.4 MBProgress (3): 315/910 kB | 0.3/1.9 MB | 0.3/1.4 MBProgress (3): 331/910 kB | 0.3/1.9 MB | 0.3/1.4 MBProgress (4): 331/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 7.4/909 kBProgress (4): 331/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 11/909 kB Progress (4): 348/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 11/909 kBProgress (4): 364/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 11/909 kBProgress (4): 364/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 28/909 kBProgress (4): 381/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 28/909 kBProgress (4): 381/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 33/909 kBProgress (4): 397/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 33/909 kBProgress (4): 397/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 49/909 kBProgress (4): 397/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 49/909 kBProgress (4): 413/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 49/909 kBProgress (4): 413/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 430/910 kB | 0.3/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 430/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 446/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 446/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 463/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 463/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 463/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 479/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 479/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 479/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 479/910 kB | 0.4/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 479/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 479/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 479/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 495/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 495/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 61/909 kBProgress (4): 495/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 77/909 kBProgress (4): 495/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 93/909 kBProgress (4): 495/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 110/909 kBProgress (4): 495/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 110/909 kBProgress (4): 495/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 126/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 126/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 142/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 142/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 159/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 175/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 192/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 208/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 224/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 233/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 233/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.3/1.4 MB | 233/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 512/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 528/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 528/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 528/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 544/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 561/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.5/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.6/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.6/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.6/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.6/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.6/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.6/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 233/909 kBProgress (4): 573/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 249/909 kBProgress (4): 573/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 249/909 kBProgress (4): 573/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 249/909 kBProgress (4): 573/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 249/909 kBProgress (4): 573/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 249/909 kBProgress (4): 573/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 249/909 kBProgress (4): 590/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 249/909 kBProgress (4): 590/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 265/909 kBProgress (4): 590/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 265/909 kBProgress (4): 590/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 265/909 kBProgress (4): 606/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 265/909 kBProgress (4): 610/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 265/909 kBProgress (4): 626/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 265/909 kBProgress (4): 643/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 265/909 kBProgress (4): 659/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 265/909 kBProgress (4): 676/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 265/909 kBProgress (4): 676/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 282/909 kBProgress (4): 692/910 kB | 0.7/1.9 MB | 0.4/1.4 MB | 282/909 kBProgress (4): 692/910 kB | 0.8/1.9 MB | 0.4/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.4/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.5/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.5/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.5/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.5/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.5/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.5/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.6/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.6/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.6/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.6/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.6/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.6/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 282/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 298/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 298/909 kBProgress (4): 705/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 298/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 298/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 314/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 314/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 314/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 331/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 331/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 347/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 347/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 364/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.7/1.4 MB | 364/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 721/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 737/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 737/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 737/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 737/910 kB | 0.8/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 737/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 741/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 364/909 kBProgress (4): 741/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 741/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 757/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 774/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 790/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 790/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 807/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 807/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 807/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 807/910 kB | 0.9/1.9 MB | 0.8/1.4 MB | 380/909 kBProgress (4): 807/910 kB | 0.9/1.9 MB | 0.9/1.4 MB | 380/909 kBProgress (4): 823/910 kB | 0.9/1.9 MB | 0.9/1.4 MB | 380/909 kBProgress (4): 839/910 kB | 0.9/1.9 MB | 0.9/1.4 MB | 380/909 kBProgress (4): 856/910 kB | 0.9/1.9 MB | 0.9/1.4 MB | 380/909 kBProgress (4): 872/910 kB | 0.9/1.9 MB | 0.9/1.4 MB | 380/909 kBProgress (4): 888/910 kB | 0.9/1.9 MB | 0.9/1.4 MB | 380/909 kBProgress (4): 905/910 kB | 0.9/1.9 MB | 0.9/1.4 MB | 380/909 kBProgress (4): 910 kB | 0.9/1.9 MB | 0.9/1.4 MB | 380/909 kB                                                               Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.4.3/httpclient5-5.4.3.jar (910 kB at 24 MB/s)
+Progress (3): 0.9/1.9 MB | 0.9/1.4 MB | 396/909 kB                                                  Downloading from central: https://repo.maven.apache.org/maven2/org/tomlj/tomlj/1.0.0/tomlj-1.0.0.jar
+Progress (3): 0.9/1.9 MB | 0.9/1.4 MB | 396/909 kBProgress (3): 0.9/1.9 MB | 0.9/1.4 MB | 396/909 kBProgress (3): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kBProgress (3): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kBProgress (3): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kB | 7.7/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kB | 15/242 kB Progress (4): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kB | 32/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kB | 48/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kB | 65/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kB | 81/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kB | 97/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 413/909 kB | 114/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 429/909 kB | 114/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 429/909 kB | 130/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 445/909 kB | 130/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 445/909 kB | 147/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 462/909 kB | 147/242 kBProgress (4): 0.9/1.9 MB | 0.9/1.4 MB | 462/909 kB | 163/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 462/909 kB | 163/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 478/909 kB | 163/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 478/909 kB | 163/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 478/909 kB | 179/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kB | 179/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kB | 179/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kB | 179/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kB | 196/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kB | 196/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kB | 212/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kB | 212/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kB | 228/242 kBProgress (4): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kB | 242 kB                                                               Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.3.4/httpcore5-h2-5.3.4.jar (242 kB at 5.9 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/antlr/antlr4-runtime/4.7.2/antlr4-runtime-4.7.2.jar
+Progress (3): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kBProgress (3): 1.0/1.9 MB | 0.9/1.4 MB | 495/909 kBProgress (3): 1.0/1.9 MB | 0.9/1.4 MB | 511/909 kBProgress (3): 1.0/1.9 MB | 0.9/1.4 MB | 511/909 kBProgress (3): 1.0/1.9 MB | 0.9/1.4 MB | 511/909 kBProgress (3): 1.0/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.0/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.0/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.1/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.1/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.1/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.1/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.1/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.1/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.2/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.2/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.2/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.2/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.2/1.9 MB | 1.0/1.4 MB | 511/909 kBProgress (3): 1.2/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.2/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.3/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.3/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.3/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.3/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.3/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.3/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.3/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.4/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.4/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.4/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.4/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.4/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.4/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.5/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.5/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.5/1.9 MB | 1.0/1.4 MB | 527/909 kBProgress (3): 1.5/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.5/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.5/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.5/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.5/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.6/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.6/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.6/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.6/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.6/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.6/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.7/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.7/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.7/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.7/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.7/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.7/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 544/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 560/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 560/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 560/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 560/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 577/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 577/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 593/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 593/909 kBProgress (3): 1.8/1.9 MB | 1.0/1.4 MB | 609/909 kBProgress (3): 1.9/1.9 MB | 1.0/1.4 MB | 609/909 kBProgress (3): 1.9/1.9 MB | 1.0/1.4 MB | 626/909 kBProgress (3): 1.9/1.9 MB | 1.0/1.4 MB | 626/909 kBProgress (3): 1.9/1.9 MB | 1.0/1.4 MB | 642/909 kBProgress (3): 1.9 MB | 1.0/1.4 MB | 642/909 kB    Progress (3): 1.9 MB | 1.0/1.4 MB | 658/909 kBProgress (3): 1.9 MB | 1.0/1.4 MB | 675/909 kBProgress (3): 1.9 MB | 1.0/1.4 MB | 691/909 kBProgress (3): 1.9 MB | 1.0/1.4 MB | 708/909 kBProgress (3): 1.9 MB | 1.0/1.4 MB | 724/909 kB                                              Downloaded from central: https://repo.maven.apache.org/maven2/net/java/dev/jna/jna/5.13.0/jna-5.13.0.jar (1.9 MB at 40 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar
+Progress (2): 1.0/1.4 MB | 740/909 kBProgress (2): 1.0/1.4 MB | 757/909 kBProgress (2): 1.0/1.4 MB | 757/909 kBProgress (2): 1.0/1.4 MB | 773/909 kBProgress (2): 1.0/1.4 MB | 790/909 kBProgress (2): 1.0/1.4 MB | 790/909 kBProgress (2): 1.0/1.4 MB | 806/909 kBProgress (2): 1.0/1.4 MB | 822/909 kBProgress (2): 1.0/1.4 MB | 839/909 kBProgress (2): 1.0/1.4 MB | 855/909 kBProgress (2): 1.0/1.4 MB | 871/909 kBProgress (2): 1.0/1.4 MB | 888/909 kBProgress (2): 1.0/1.4 MB | 888/909 kBProgress (2): 1.0/1.4 MB | 904/909 kBProgress (2): 1.0/1.4 MB | 909 kB                                     Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.3.4/httpcore5-5.3.4.jar (909 kB at 19 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-loader-tools/3.4.5/spring-boot-loader-tools-3.4.5.jar
+Progress (1): 1.0/1.4 MBProgress (1): 1.0/1.4 MBProgress (1): 1.1/1.4 MBProgress (1): 1.1/1.4 MBProgress (2): 1.1/1.4 MB | 7.4/157 kBProgress (2): 1.1/1.4 MB | 16/157 kB Progress (2): 1.1/1.4 MB | 16/157 kBProgress (2): 1.1/1.4 MB | 24/157 kBProgress (2): 1.1/1.4 MB | 40/157 kBProgress (2): 1.1/1.4 MB | 57/157 kBProgress (2): 1.1/1.4 MB | 73/157 kBProgress (2): 1.1/1.4 MB | 90/157 kBProgress (2): 1.1/1.4 MB | 106/157 kBProgress (2): 1.1/1.4 MB | 122/157 kBProgress (2): 1.1/1.4 MB | 139/157 kBProgress (2): 1.1/1.4 MB | 155/157 kBProgress (2): 1.1/1.4 MB | 157 kB                                     Downloaded from central: https://repo.maven.apache.org/maven2/org/tomlj/tomlj/1.0.0/tomlj-1.0.0.jar (157 kB at 2.9 MB/s)
+Progress (2): 1.1/1.4 MB | 7.2/338 kB                                     Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-common-artifact-filters/3.3.2/maven-common-artifact-filters-3.3.2.jar
+Progress (2): 1.1/1.4 MB | 15/338 kBProgress (2): 1.1/1.4 MB | 32/338 kBProgress (2): 1.1/1.4 MB | 32/338 kBProgress (2): 1.1/1.4 MB | 48/338 kBProgress (2): 1.1/1.4 MB | 65/338 kBProgress (2): 1.1/1.4 MB | 81/338 kBProgress (2): 1.1/1.4 MB | 97/338 kBProgress (2): 1.1/1.4 MB | 97/338 kBProgress (2): 1.1/1.4 MB | 114/338 kBProgress (2): 1.1/1.4 MB | 114/338 kBProgress (2): 1.2/1.4 MB | 114/338 kBProgress (2): 1.2/1.4 MB | 114/338 kBProgress (2): 1.2/1.4 MB | 114/338 kBProgress (2): 1.2/1.4 MB | 130/338 kBProgress (2): 1.2/1.4 MB | 130/338 kBProgress (2): 1.2/1.4 MB | 130/338 kBProgress (2): 1.2/1.4 MB | 147/338 kBProgress (2): 1.2/1.4 MB | 147/338 kBProgress (2): 1.2/1.4 MB | 163/338 kBProgress (2): 1.2/1.4 MB | 163/338 kBProgress (2): 1.2/1.4 MB | 163/338 kBProgress (2): 1.2/1.4 MB | 179/338 kBProgress (2): 1.3/1.4 MB | 179/338 kBProgress (2): 1.3/1.4 MB | 196/338 kBProgress (2): 1.3/1.4 MB | 196/338 kBProgress (2): 1.3/1.4 MB | 196/338 kBProgress (2): 1.3/1.4 MB | 196/338 kBProgress (2): 1.3/1.4 MB | 196/338 kBProgress (2): 1.3/1.4 MB | 196/338 kBProgress (2): 1.4 MB | 196/338 kB                                     Downloaded from central: https://repo.maven.apache.org/maven2/net/java/dev/jna/jna-platform/5.13.0/jna-platform-5.13.0.jar (1.4 MB at 23 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-shade-plugin/3.5.0/maven-shade-plugin-3.5.0.jar
+Progress (1): 212/338 kBProgress (1): 228/338 kBProgress (2): 228/338 kB | 3.2/20 kBProgress (2): 228/338 kB | 20/20 kB Progress (2): 228/338 kB | 20 kB                                   Downloaded from central: https://repo.maven.apache.org/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar (20 kB at 327 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.5/asm-9.5.jar
+Progress (1): 245/338 kBProgress (1): 261/338 kBProgress (1): 278/338 kBProgress (1): 294/338 kBProgress (1): 310/338 kBProgress (2): 310/338 kB | 7.7/465 kBProgress (2): 310/338 kB | 15/465 kB Progress (2): 327/338 kB | 15/465 kBProgress (2): 338 kB | 15/465 kB    Progress (2): 338 kB | 32/465 kBProgress (2): 338 kB | 48/465 kBProgress (2): 338 kB | 65/465 kBProgress (2): 338 kB | 81/465 kBProgress (2): 338 kB | 97/465 kB                                Downloaded from central: https://repo.maven.apache.org/maven2/org/antlr/antlr4-runtime/4.7.2/antlr4-runtime-4.7.2.jar (338 kB at 5.4 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm-commons/9.5/asm-commons-9.5.jar
+Progress (1): 114/465 kBProgress (1): 130/465 kBProgress (1): 147/465 kBProgress (1): 163/465 kBProgress (1): 179/465 kBProgress (1): 196/465 kBProgress (1): 212/465 kBProgress (1): 228/465 kBProgress (1): 245/465 kBProgress (1): 261/465 kBProgress (1): 278/465 kBProgress (1): 294/465 kBProgress (1): 310/465 kBProgress (1): 327/465 kBProgress (1): 328/465 kBProgress (1): 344/465 kBProgress (1): 360/465 kBProgress (1): 377/465 kBProgress (1): 393/465 kBProgress (1): 410/465 kBProgress (1): 426/465 kBProgress (1): 442/465 kBProgress (1): 459/465 kBProgress (1): 465 kB                        Downloaded from central: https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-loader-tools/3.4.5/spring-boot-loader-tools-3.4.5.jar (465 kB at 7.2 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm-tree/9.5/asm-tree-9.5.jar
+Progress (1): 7.7/58 kBProgress (1): 15/58 kB Progress (1): 32/58 kBProgress (1): 48/58 kBProgress (1): 58 kB                      Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-common-artifact-filters/3.3.2/maven-common-artifact-filters-3.3.2.jar (58 kB at 788 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/jdom/jdom2/2.0.6.1/jdom2-2.0.6.1.jar
+Progress (1): 4.1/122 kBProgress (2): 4.1/122 kB | 7.4/147 kBProgress (2): 4.1/122 kB | 15/147 kB Progress (2): 4.1/122 kB | 32/147 kBProgress (2): 4.1/122 kB | 48/147 kBProgress (2): 4.1/122 kB | 53/147 kBProgress (2): 4.1/122 kB | 70/147 kBProgress (2): 4.1/122 kB | 86/147 kBProgress (2): 4.1/122 kB | 103/147 kBProgress (2): 4.1/122 kB | 119/147 kBProgress (2): 4.1/122 kB | 130/147 kBProgress (2): 4.1/122 kB | 130/147 kBProgress (2): 4.1/122 kB | 147/147 kBProgress (2): 4.1/122 kB | 147 kB    Progress (2): 20/122 kB | 147 kB                                 Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-shade-plugin/3.5.0/maven-shade-plugin-3.5.0.jar (147 kB at 1.9 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-dependency-tree/3.2.1/maven-dependency-tree-3.2.1.jar
+Progress (1): 29/122 kBProgress (1): 45/122 kBProgress (1): 50/122 kBProgress (2): 50/122 kB | 7.4/52 kBProgress (2): 50/122 kB | 7.7/52 kBProgress (2): 61/122 kB | 7.7/52 kBProgress (2): 61/122 kB | 24/52 kB Progress (2): 61/122 kB | 40/52 kBProgress (2): 61/122 kB | 52 kB                                  Downloaded from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm-tree/9.5/asm-tree-9.5.jar (52 kB at 649 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether-util/1.0.0.v20140518/aether-util-1.0.0.v20140518.jar
+Progress (2): 61/122 kB | 7.7/72 kBProgress (2): 61/122 kB | 8.2/72 kBProgress (2): 78/122 kB | 8.2/72 kBProgress (2): 78/122 kB | 25/72 kB Progress (2): 94/122 kB | 25/72 kBProgress (2): 94/122 kB | 41/72 kBProgress (2): 111/122 kB | 41/72 kBProgress (2): 122 kB | 41/72 kB    Progress (2): 122 kB | 57/72 kB                               Downloaded from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.5/asm-9.5.jar (122 kB at 1.5 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether-api/1.0.0.v20140518/aether-api-1.0.0.v20140518.jar
+Progress (1): 72 kB                   Downloaded from central: https://repo.maven.apache.org/maven2/org/ow2/asm/asm-commons/9.5/asm-commons-9.5.jar (72 kB at 850 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/commons-io/commons-io/2.13.0/commons-io-2.13.0.jar
+Progress (1): 7.3/328 kBProgress (1): 15/328 kB Progress (1): 32/328 kBProgress (1): 48/328 kBProgress (1): 65/328 kBProgress (2): 65/328 kB | 7.7/146 kBProgress (2): 65/328 kB | 7.7/146 kBProgress (2): 65/328 kB | 24/146 kB Progress (2): 65/328 kB | 40/146 kBProgress (2): 65/328 kB | 57/146 kBProgress (2): 65/328 kB | 73/146 kBProgress (2): 65/328 kB | 90/146 kBProgress (2): 81/328 kB | 90/146 kBProgress (2): 81/328 kB | 106/146 kBProgress (2): 97/328 kB | 106/146 kBProgress (2): 97/328 kB | 122/146 kBProgress (2): 114/328 kB | 122/146 kBProgress (2): 114/328 kB | 139/146 kBProgress (2): 114/328 kB | 146 kB    Progress (2): 130/328 kB | 146 kB                                 Downloaded from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether-util/1.0.0.v20140518/aether-util-1.0.0.v20140518.jar (146 kB at 1.5 MB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/vafer/jdependency/2.8.0/jdependency-2.8.0.jar
+Progress (1): 147/328 kBProgress (1): 163/328 kBProgress (1): 179/328 kBProgress (1): 196/328 kBProgress (2): 196/328 kB | 7.7/43 kBProgress (2): 196/328 kB | 11/43 kB Progress (2): 196/328 kB | 28/43 kBProgress (2): 196/328 kB | 43 kB                                   Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-dependency-tree/3.2.1/maven-dependency-tree-3.2.1.jar (43 kB at 444 kB/s)
+Downloading from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar
+Progress (1): 212/328 kBProgress (1): 228/328 kBProgress (1): 245/328 kBProgress (1): 261/328 kBProgress (1): 278/328 kBProgress (1): 294/328 kBProgress (1): 310/328 kBProgress (1): 327/328 kBProgress (1): 328 kB                        Downloaded from central: https://repo.maven.apache.org/maven2/org/jdom/jdom2/2.0.6.1/jdom2-2.0.6.1.jar (328 kB at 3.3 MB/s)
+Progress (1): 7.4/136 kBProgress (1): 16/136 kB Progress (1): 32/136 kBProgress (2): 32/136 kB | 7.4/484 kBProgress (2): 32/136 kB | 11/484 kB Progress (2): 32/136 kB | 28/484 kBProgress (2): 32/136 kB | 44/484 kBProgress (2): 32/136 kB | 61/484 kBProgress (2): 48/136 kB | 61/484 kBProgress (2): 65/136 kB | 61/484 kBProgress (2): 81/136 kB | 61/484 kBProgress (2): 81/136 kB | 77/484 kBProgress (2): 97/136 kB | 77/484 kBProgress (2): 97/136 kB | 93/484 kBProgress (2): 114/136 kB | 93/484 kBProgress (2): 114/136 kB | 110/484 kBProgress (2): 114/136 kB | 118/484 kBProgress (2): 130/136 kB | 118/484 kBProgress (2): 136 kB | 118/484 kB    Progress (2): 136 kB | 134/484 kB                                 Downloaded from central: https://repo.maven.apache.org/maven2/org/eclipse/aether/aether-api/1.0.0.v20140518/aether-api-1.0.0.v20140518.jar (136 kB at 1.3 MB/s)
+Progress (1): 151/484 kBProgress (1): 167/484 kBProgress (1): 183/484 kBProgress (1): 200/484 kBProgress (1): 216/484 kBProgress (1): 233/484 kBProgress (1): 249/484 kBProgress (1): 265/484 kBProgress (1): 274/484 kBProgress (1): 290/484 kBProgress (1): 307/484 kBProgress (1): 323/484 kBProgress (2): 323/484 kB | 7.7/233 kBProgress (2): 323/484 kB | 16/233 kB Progress (2): 323/484 kB | 24/233 kBProgress (2): 323/484 kB | 40/233 kBProgress (2): 323/484 kB | 57/233 kBProgress (2): 323/484 kB | 73/233 kBProgress (2): 323/484 kB | 90/233 kBProgress (2): 323/484 kB | 106/233 kBProgress (2): 340/484 kB | 106/233 kBProgress (2): 340/484 kB | 115/233 kBProgress (2): 356/484 kB | 115/233 kBProgress (2): 372/484 kB | 115/233 kBProgress (2): 389/484 kB | 115/233 kBProgress (2): 405/484 kB | 115/233 kBProgress (2): 422/484 kB | 115/233 kBProgress (2): 438/484 kB | 115/233 kBProgress (2): 442/484 kB | 115/233 kBProgress (2): 442/484 kB | 131/233 kBProgress (2): 459/484 kB | 131/233 kBProgress (2): 459/484 kB | 147/233 kBProgress (2): 475/484 kB | 147/233 kBProgress (2): 484 kB | 147/233 kB    Progress (2): 484 kB | 164/233 kB                                 Downloaded from central: https://repo.maven.apache.org/maven2/commons-io/commons-io/2.13.0/commons-io-2.13.0.jar (484 kB at 4.3 MB/s)
+Progress (2): 164/233 kB | 7.3/752 kBProgress (2): 180/233 kB | 7.3/752 kBProgress (2): 180/233 kB | 24/752 kB Progress (2): 180/233 kB | 32/752 kBProgress (2): 180/233 kB | 48/752 kBProgress (2): 180/233 kB | 65/752 kBProgress (2): 180/233 kB | 81/752 kBProgress (2): 180/233 kB | 97/752 kBProgress (2): 180/233 kB | 114/752 kBProgress (2): 180/233 kB | 130/752 kBProgress (2): 180/233 kB | 130/752 kBProgress (2): 197/233 kB | 130/752 kBProgress (2): 197/233 kB | 147/752 kBProgress (2): 197/233 kB | 163/752 kBProgress (2): 197/233 kB | 179/752 kBProgress (2): 197/233 kB | 196/752 kBProgress (2): 197/233 kB | 212/752 kBProgress (2): 197/233 kB | 228/752 kBProgress (2): 197/233 kB | 233/752 kBProgress (2): 213/233 kB | 233/752 kBProgress (2): 213/233 kB | 249/752 kBProgress (2): 229/233 kB | 249/752 kBProgress (2): 233 kB | 249/752 kB                                     Downloaded from central: https://repo.maven.apache.org/maven2/org/vafer/jdependency/2.8.0/jdependency-2.8.0.jar (233 kB at 2.0 MB/s)
+Progress (1): 265/752 kBProgress (1): 282/752 kBProgress (1): 298/752 kBProgress (1): 314/752 kBProgress (1): 331/752 kBProgress (1): 347/752 kBProgress (1): 364/752 kBProgress (1): 380/752 kBProgress (1): 396/752 kBProgress (1): 413/752 kBProgress (1): 429/752 kBProgress (1): 445/752 kBProgress (1): 462/752 kBProgress (1): 478/752 kBProgress (1): 487/752 kBProgress (1): 503/752 kBProgress (1): 520/752 kBProgress (1): 536/752 kBProgress (1): 553/752 kBProgress (1): 569/752 kBProgress (1): 585/752 kBProgress (1): 602/752 kBProgress (1): 618/752 kBProgress (1): 635/752 kBProgress (1): 651/752 kBProgress (1): 667/752 kBProgress (1): 684/752 kBProgress (1): 700/752 kBProgress (1): 716/752 kBProgress (1): 733/752 kBProgress (1): 749/752 kBProgress (1): 752 kB                        Downloaded from central: https://repo.maven.apache.org/maven2/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar (752 kB at 5.9 MB/s)
+[INFO] Attaching repackaged archive /workspace/JaSAgent/jasagent-agentpass-server/target/jasagent-agentpass-server-0.1.0-exec.jar with classifier exec
+[INFO] 
+[INFO] --------------------< dev.jasagent:jasagent-trace >---------------------
+[INFO] Building jasagent-trace 0.1.0                                    [16/22]
+[INFO]   from jasagent-trace/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-trace ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-trace ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 14 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-trace ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-trace/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-trace ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-trace ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-trace ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-trace/target/jasagent-trace-0.1.0.jar
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-otel >---------------------
+[INFO] Building jasagent-otel 0.1.0                                     [17/22]
+[INFO]   from jasagent-otel/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-otel ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-otel/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-otel ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-otel ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-otel/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-otel ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-otel ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-otel ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-otel/target/jasagent-otel-0.1.0.jar
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-evaluation >------------------
+[INFO] Building jasagent-evaluation 0.1.0                               [18/22]
+[INFO]   from jasagent-evaluation/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-evaluation ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-evaluation/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-evaluation ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 8 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-evaluation ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-evaluation/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-evaluation ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-evaluation ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-evaluation ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-evaluation/target/jasagent-evaluation-0.1.0.jar
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-controller >------------------
+[INFO] Building jasagent-controller 0.1.0                               [19/22]
+[INFO]   from jasagent-controller/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-controller ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-controller/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-controller ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 11 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-controller ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-controller/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-controller ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-controller ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-controller ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-controller/target/jasagent-controller-0.1.0.jar
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-web >----------------------
+[INFO] Building jasagent-web 0.1.0                                      [20/22]
+[INFO]   from jasagent-web/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.5.0:exec (build-console-frontend) @ jasagent-web ---
+
+> jasagent-console@0.1.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 1615 modules transformed.
+rendering chunks...
+computing gzip size...
+../target/classes/admin/index.html                     0.67 kB │ gzip:   0.41 kB
+../target/classes/admin/assets/index-DIdf20W1.css    388.03 kB │ gzip:  52.99 kB
+../target/classes/admin/assets/index-DptgTkLg.js   1,098.77 kB │ gzip: 360.78 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 3.50s
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-web ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-web ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 5 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-web ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-web/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-web ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-web ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-web ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-web/target/jasagent-web-0.1.0.jar
+[INFO] 
+[INFO] --- spring-boot:3.4.5:repackage (default) @ jasagent-web ---
+[INFO] Attaching repackaged archive /workspace/JaSAgent/jasagent-web/target/jasagent-web-0.1.0-exec.jar with classifier exec
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-cli >----------------------
+[INFO] Building jasagent-cli 0.1.0                                      [21/22]
+[INFO]   from jasagent-cli/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-cli ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-cli/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-cli ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-cli ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-cli/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-cli ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-cli ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-cli ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-cli/target/jasagent-cli-0.1.0.jar
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-app >----------------------
+[INFO] Building jasagent-app 0.1.0                                      [22/22]
+[INFO]   from jasagent-app/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-app ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-app ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 25 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-app ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-app/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-app ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 29 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-app ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.1:jar (default-jar) @ jasagent-app ---
+[INFO] Building jar: /workspace/JaSAgent/jasagent-app/target/jasagent-app-0.1.0.jar
+[INFO] 
+[INFO] --- spring-boot:3.4.5:repackage (default) @ jasagent-app ---
+[INFO] Replacing main artifact /workspace/JaSAgent/jasagent-app/target/jasagent-app-0.1.0.jar with repackaged archive, adding nested dependencies in BOOT-INF/.
+[INFO] The original artifact has been renamed to /workspace/JaSAgent/jasagent-app/target/jasagent-app-0.1.0.jar.original
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for jasagent 0.1.0:
+[INFO] 
+[INFO] jasagent ........................................... SUCCESS [  0.002 s]
+[INFO] jasagent-api ....................................... SUCCESS [  1.425 s]
+[INFO] jasagent-auth ...................................... SUCCESS [  0.725 s]
+[INFO] jasagent-core ...................................... SUCCESS [  0.357 s]
+[INFO] jasagent-persist ................................... SUCCESS [  0.408 s]
+[INFO] jasagent-workflow .................................. SUCCESS [  0.360 s]
+[INFO] jasagent-tool ...................................... SUCCESS [  0.201 s]
+[INFO] jasagent-llm ....................................... SUCCESS [  0.302 s]
+[INFO] jasagent-mcp ....................................... SUCCESS [  0.164 s]
+[INFO] jasagent-plugin .................................... SUCCESS [  0.192 s]
+[INFO] jasagent-rag ....................................... SUCCESS [  0.171 s]
+[INFO] jasagent-interrupt ................................. SUCCESS [  0.128 s]
+[INFO] jasagent-exception ................................. SUCCESS [  0.092 s]
+[INFO] jasagent-agentpass ................................. SUCCESS [  0.128 s]
+[INFO] jasagent-agentpass-server .......................... SUCCESS [  1.372 s]
+[INFO] jasagent-trace ..................................... SUCCESS [  0.135 s]
+[INFO] jasagent-otel ...................................... SUCCESS [  0.079 s]
+[INFO] jasagent-evaluation ................................ SUCCESS [  0.095 s]
+[INFO] jasagent-controller ................................ SUCCESS [  0.076 s]
+[INFO] jasagent-web ....................................... SUCCESS [  4.185 s]
+[INFO] jasagent-cli ....................................... SUCCESS [  0.047 s]
+[INFO] jasagent-app ....................................... SUCCESS [  0.605 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  11.441 s
+[INFO] Finished at: 2026-11-20T10:26:01+08:00
+[INFO] ------------------------------------------------------------------------
+PASS listen-127.0.0.1
+PASS listen-present
+PASS file-session-rejected
+PASS mysql-session-ignores-yaml
+PASS issued-has-no-token
+PASS policy-miss-403
+PASS policy-miss-row
+PASS fresh-issued
+PASS bob-issued
+PASS cannot-claim-other-tenant
+PASS cannot-use-other-session
+PASS verify-other-tenant-rejected
+PASS redeem-other-tenant-rejected
+PASS blank-binding-still-matches
+PASS owner-redeem-after-cross-attempt
+PASS concurrent-tenants-issue
+PASS concurrent-redeem-isolated
+PASS audit-unauthenticated
+PASS audit-query-ignored
+PASS audit-alice-only
+PASS audit-bob-cookie
+PASS redeem-before-restart
+PASS listen-127.0.0.1
+PASS listen-present
+PASS pending-survives-restart
+PASS used-flag-survives-restart
+PASS replay-after-restart
+PASS unused-redeem-after-restart
+PASS missing-key-refuses-start
+PASS missing-key-log-clean
+PASS listen-127.0.0.1
+PASS listen-present
+PASS execution-accepted
+PASS approval-required
+PASS no-home-pending
+PASS execution-pending-row
+PASS other-user-cannot-approve
+PASS pending-unchanged
+PASS owner-approves-existing-path
+PASS same-execution-resumes
+PASS approved-row
+PASS process-tenant-restart-audit-approval
+2026-11-20T10:26:10+0800	T-001	文件会话被拒，库里的策略覆盖家目录 yaml，待批落库	30576	通过
