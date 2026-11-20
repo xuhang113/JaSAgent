@@ -1,0 +1,6 @@
+2026-11-20T10:27:49+0800	T-005	sidecar 相对规格提交未改	12	通过
+2026-11-20T10:27:49+0800	T-005	018、021、022 脚本和官方探测未改	31	通过
+ticket-contract-present
+2026-11-20T10:27:49+0800	T-005	领证、校验、核销路径和请求字段仍在	58	通过
+2026-11-20T10:27:56+0800	T-005	模块测试 SidecarEgressTest,SidecarHealthTest,SidecarContractTest,SidecarStreamTest,TicketWireTest,LlmAllowlistTest,SidecarPlatformThreadTest,SidecarLlmTransportTest,CarrierFreeReadTest	7172	退出码 0
+2026-11-20T10:27:56+0800	T-005	018 出站、票据、白名单与 021 平台线程模块测试	7189	通过

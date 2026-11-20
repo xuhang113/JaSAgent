@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-001"
+result_text='发证前的会话、租户和权限以 020 的 MySQL 为准，不以 emptyDir 上的会话文件或 `policies.yaml` 为真相来源。策略和待批不能再只靠 emptyDir 上的文件。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-agentpass,jasagent-app" "DurablePassGateTest,DurablePassResumeTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "策略来源和恢复模块测试" "通过" >> "${ATDD_LOG}"
+  "${HERE}/live.sh"
+  atdd_require_live_pass "file-session-rejected"
+  atdd_require_live_pass "mysql-session-ignores-yaml"
+  atdd_require_live_pass "policy-miss-row"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "文件会话被拒，库里的策略覆盖家目录 yaml，待批落库" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

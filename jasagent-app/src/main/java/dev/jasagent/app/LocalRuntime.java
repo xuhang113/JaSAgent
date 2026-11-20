@@ -3,6 +3,8 @@ package dev.jasagent.app;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.jasagent.agentpass.PassSettings;
+import dev.jasagent.agentpass.durable.AgentPassLedger;
+import dev.jasagent.agentpass.durable.DurablePassGate;
 import dev.jasagent.api.auth.Catalog;
 import dev.jasagent.api.auth.RuleDocument;
 import dev.jasagent.api.auth.Session;
@@ -19,6 +21,7 @@ import dev.jasagent.api.llm.ChatResponse;
 import dev.jasagent.api.llm.Embedding;
 import dev.jasagent.api.llm.TokenUsage;
 import dev.jasagent.api.pass.ExternalEgress;
+import dev.jasagent.api.pass.PassApproval;
 import dev.jasagent.api.pass.PassDecision;
 import dev.jasagent.api.pass.TicketRequest;
 import dev.jasagent.api.persist.DataDirectory;
@@ -1184,7 +1187,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                     PassDecision.ALLOW,
                     ExternalEgress.Kind.EXTERNAL,
                     ticketClient,
-                    new TicketRequest(exec.tenantId, exec.userId, exec.sessionId, exec.executionId, ragTarget, name));
+                    new TicketRequest(exec.tenantId, exec.userId, ticketSession(exec), exec.executionId, ragTarget, name));
             if (!outcome.invoke()) {
                 recordTool(exec, name, outcome.detail(), elapsed(started), arguments);
                 return CompletableFuture.completedFuture(outcome.detail());
@@ -1826,8 +1829,9 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     /**
-     * 把通行证改成 ALLOW 或 DENY。ALLOW 且执行仍挂着、还有待运行工作流时，异步从检查点继续。其他决定值直接拒绝。找不到通行证时抛出工作流异常。
-     * 副作用：改通行证的决定和原因，可能追加 resume 日志并调度继续运行。
+     * 把通行证改成 ALLOW 或 DENY。账本里的待批只接受同一用户、同一次执行；别人的编号直接拒绝。
+     * ALLOW 且执行仍挂着、还有待运行工作流时，异步从检查点继续，执行编号不变。其他决定值直接拒绝。找不到通行证时抛出工作流异常。
+     * 副作用：可能更新待批行，改通行证的决定和原因，并调度继续运行。
      *
      * @param userId 所有者登录名
      * @param executionId 执行编号
@@ -1841,6 +1845,16 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
             throw new AgentException(ErrorCode.WORKFLOW, "决定只允许 ALLOW 或 DENY", executionId, null);
         }
         Exec exec = owned(userId, executionId);
+        if (passGate instanceof DurablePassGate durable) {
+            AgentPassLedger.DecisionOutcome outcome = durable.decideStored(new PassApproval(
+                    userId, executionId, passId, PassDecision.valueOf(decision), null));
+            if (outcome == AgentPassLedger.DecisionOutcome.FORBIDDEN) {
+                throw new AgentException(ErrorCode.AUTH, "pass");
+            }
+            if (outcome == AgentPassLedger.DecisionOutcome.ALREADY) {
+                throw new AgentException(ErrorCode.INTERNAL, "pass already decided");
+            }
+        }
         for (Map<String, Object> pass : exec.passes) {
             if (passId.equals(pass.get("passId"))) {
                 pass.put("decision", decision);
@@ -1899,7 +1913,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
 
     /**
      * 向通行证门申请一次决定并记入执行。种类是 tool 时名字放在工具槽，否则放在插件槽。
-     * 副作用：通行证列表增加一行。
+     * 门已经给出编号时沿用它，这样控制台批准的就是账本里的那一行。
+     * 副作用：通行证列表增加一行。待批时账本也会多一行。
      *
      * @param exec 当前执行
      * @param name 工具或插件名
@@ -1915,7 +1930,11 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
                 tool ? null : name,
                 "")).toCompletableFuture().join();
         Map<String, Object> row = new LinkedHashMap<>();
-        row.put("passId", UUID.randomUUID().toString());
+        String passId = pass.passId();
+        if (passId == null || passId.isBlank()) {
+            passId = UUID.randomUUID().toString();
+        }
+        row.put("passId", passId);
         row.put("name", name);
         row.put("kind", kind);
         row.put("decision", pass.decision().name());
@@ -2027,6 +2046,19 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     private static String workspaceKey(String tenantId, String userId) {
         String tenant = tenantId == null || tenantId.isBlank() ? GatewayHeaders.TENANT_LOCAL : tenantId;
         return tenant + "\u0000" + (userId == null ? "" : userId);
+    }
+
+    /**
+     * 领一次性证时使用的会话编号。网关登录会话优先，没有时用这场对话的会话编号。
+     *
+     * @param exec 已经写上身份的执行
+     * @return 会话编号，可能是空串
+     */
+    private static String ticketSession(Exec exec) {
+        if (exec.callerSession != null && !exec.callerSession.isBlank()) {
+            return exec.callerSession;
+        }
+        return exec.sessionId == null ? "" : exec.sessionId;
     }
 
     /**

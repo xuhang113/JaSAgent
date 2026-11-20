@@ -5,9 +5,11 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.jasagent.agentpass.PolicyPassGate;
+import dev.jasagent.agentpass.durable.AgentPassLedger;
+import dev.jasagent.agentpass.durable.DurablePassGate;
 import dev.jasagent.api.auth.Session;
 import dev.jasagent.api.pass.PassGate;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -25,7 +27,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -43,6 +48,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @AutoConfigureMockMvc
 class OneTimePassHttpTest {
     private static final Path HOME = createHome();
+    private static final String JDBC = "jdbc:h2:mem:agentpasshttp;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1";
+    private static final String DB_PASSWORD = secret();
+    private static final String SIGNING_KEY = secret();
+    private static final String ALICE_TOKEN = secret();
+    private static final String BOB_TOKEN = secret();
     private static Session alice;
     private static Session bob;
 
@@ -54,6 +64,8 @@ class OneTimePassHttpTest {
     private AuditLog auditLog;
     @Autowired
     private PassGate passGate;
+    @Autowired
+    private AgentPassLedger ledger;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -65,22 +77,42 @@ class OneTimePassHttpTest {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("jasagent.home", HOME::toString);
+        registry.add("jasagent.agentpass.signing-key", () -> SIGNING_KEY);
+        registry.add("jasagent.agentpass.jdbc-url", () -> JDBC);
+        registry.add("jasagent.agentpass.jdbc-user", () -> "sa");
+        registry.add("jasagent.agentpass.jdbc-password", () -> DB_PASSWORD);
     }
 
     /**
-     * 建两个已登录用户，并给 alice 写上允许检索、拒绝写入的策略。口令在建用户方法里清掉。
+     * 把两个用户写进账本。策略文件故意写成相反的决定，用来证明发证不读它。
+     * 副作用：插入账号、会话和策略，并写下会被忽略的策略文件。
      */
     @BeforeAll
     static void users() throws IOException {
-        alice = TestUsers.register(HOME, "alice", null);
-        TestUsers.writePolicy(HOME, "alice", """
+        alice = new Session("alice-session-1", ALICE_TOKEN, "alice", null, Instant.now());
+        bob = new Session("bob-session-1", BOB_TOKEN, "bob", null, Instant.now());
+        AgentPassLedger ledger = AgentPassLedger.open(JDBC, "sa", DB_PASSWORD);
+        ledger.saveAccount("alice", "local");
+        ledger.saveLogin("alice", alice.sessionId(), alice.token());
+        ledger.savePolicy("local", "tool", "rag.search", "ALLOW");
+        ledger.savePolicy("local", "tool", "rag.write", "DENY");
+        ledger.saveAccount("bob", "bob-tenant");
+        ledger.saveLogin("bob", bob.sessionId(), bob.token());
+        ledger.savePolicy("bob-tenant", "tool", "rag.search", "ALLOW");
+        Path policy = HOME.resolve("alice").resolve("jasagent").resolve("auth").resolve("policies.yaml");
+        Files.createDirectories(policy.getParent());
+        Files.writeString(policy, """
                 rules:
                   - tool: rag.search
-                    decision: ALLOW
-                  - tool: rag.write
                     decision: DENY
+                  - tool: rag.write
+                    decision: ALLOW
+                  - tool: rag.hold
+                    decision: ALLOW
                 """);
-        bob = TestUsers.register(HOME, "bob", alice.token());
+        Path fileSession = HOME.resolve("alice").resolve("jasagent").resolve("auth").resolve("sessions").resolve("file-only");
+        Files.createDirectories(fileSession.getParent());
+        Files.writeString(fileSession, "login=alice\n");
     }
 
     /**
@@ -92,11 +124,11 @@ class OneTimePassHttpTest {
     }
 
     /**
-     * 服务使用的仍是按策略裁决的进程内门，ALLOW、DENY、PENDING 没有被换掉。
+     * 服务使用账本上的租户门。允许、拒绝和等待仍由后面的领证请求覆盖。
      */
     @Test
-    void keepsInProcessPolicyGate() {
-        assertTrue(passGate instanceof PolicyPassGate);
+    void usesDurableTenantGate() {
+        assertTrue(passGate instanceof DurablePassGate);
     }
 
     /**
@@ -164,6 +196,74 @@ class OneTimePassHttpTest {
         JsonNode body = postIssue("alice", alice.sessionId(), "exec-pending", "http://127.0.0.1:18751", "rag.hold", 403);
         assertEquals(PassReasons.APPROVAL_REQUIRED, body.get("reason").asText());
         assertEquals(before, store.size());
+        assertTrue(ledger.countPending("exec-pending") >= 1);
+        assertNoSecret(body.toString());
+    }
+
+    /**
+     * 只有家目录会话文件、库里没有这个会话时不发证。文件里的策略也不能推翻库里的允许或拒绝。
+     */
+    @Test
+    void ignoresHomeSessionAndPolicyFiles() throws Exception {
+        JsonNode missing = postIssue("alice", "file-only", "exec-file-session", "http://127.0.0.1:18751", "rag.search", 403);
+        assertEquals(PassReasons.NOT_LOGGED_IN, missing.get("reason").asText());
+        JsonNode allowed = postIssue("alice", alice.sessionId(), "exec-file-ignored", "http://127.0.0.1:18751", "rag.search", 201);
+        assertTrue(allowed.get("issued").asBoolean());
+    }
+
+    /**
+     * 未登录不能看到流水。登录后只能看到自己的租户，Cookie 和 Bearer 都认，查询参数里的令牌不算登录。
+     */
+    @Test
+    void auditRequiresAuthAndFiltersTenant() throws Exception {
+        postIssue("alice", alice.sessionId(), "exec-audit-alice", "http://127.0.0.1:18751", "rag.search", 201);
+        postIssueFor("bob-tenant", "bob", bob.sessionId(), "exec-audit-bob", "http://127.0.0.1:18751", "rag.search", 201);
+        MvcResult anonymous = mockMvc.perform(get(TicketPaths.AUDIT)).andReturn();
+        assertEquals(401, anonymous.getResponse().getStatus());
+        String hidden = anonymous.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertFalse(hidden.contains("exec-audit-alice"));
+        assertFalse(hidden.contains("exec-audit-bob"));
+        assertNoSecret(hidden);
+        MvcResult query = mockMvc.perform(get(TicketPaths.AUDIT).param("access_token", alice.token())).andReturn();
+        assertEquals(401, query.getResponse().getStatus());
+        assertNoSecret(query.getResponse().getContentAsString(StandardCharsets.UTF_8));
+        MvcResult aliceView = mockMvc.perform(get(TicketPaths.AUDIT).header("Authorization", "Bearer " + alice.token())).andReturn();
+        assertEquals(200, aliceView.getResponse().getStatus());
+        String aliceBody = aliceView.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(aliceBody.contains("exec-audit-alice"));
+        assertFalse(aliceBody.contains("exec-audit-bob"));
+        assertFalse(aliceBody.contains("bob-tenant"));
+        assertNoSecret(aliceBody);
+        MvcResult bobView = mockMvc.perform(get(TicketPaths.AUDIT).cookie(new Cookie(PassController.SESSION_COOKIE, bob.token()))).andReturn();
+        assertEquals(200, bobView.getResponse().getStatus());
+        String bobBody = bobView.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(bobBody.contains("exec-audit-bob"));
+        assertFalse(bobBody.contains("exec-audit-alice"));
+        assertNoSecret(bobBody);
+    }
+
+    /**
+     * 租户对不上、会话属于别人，或拿别人的证来校验和核销，都不能成功。空白的额外绑定仍算匹配。
+     */
+    @Test
+    void tenantCannotUseAnotherTenantsTicket() throws Exception {
+        JsonNode wrongTenant = postIssueFor("bob-tenant", "alice", alice.sessionId(), "exec-wrong-tenant",
+                "http://127.0.0.1:18751", "rag.search", 403);
+        assertEquals(PassReasons.SESSION_MISMATCH, wrongTenant.get("reason").asText());
+        JsonNode cross = postIssue("alice", bob.sessionId(), "exec-cross-session", "http://127.0.0.1:18751", "rag.search", 403);
+        assertEquals(PassReasons.SESSION_MISMATCH, cross.get("reason").asText());
+        JsonNode issued = postIssueFor("bob-tenant", "bob", bob.sessionId(), "exec-bob-owned", "http://127.0.0.1:18751", "rag.search", 201);
+        assertEquals("bob-tenant", issued.get("tenantId").asText());
+        JsonNode verified = postProofFor(TicketPaths.VERIFY, issued, "local", "bob", "rag.search", 200);
+        assertTrue(verified.get("proofValid").asBoolean());
+        assertFalse(verified.get("accepted").asBoolean());
+        assertEquals(PassReasons.BINDING_MISMATCH, verified.get("reason").asText());
+        JsonNode rejected = postProofFor(TicketPaths.REDEEM, issued, "local", "alice", "rag.search", 403);
+        assertFalse(rejected.get("redeemed").asBoolean());
+        JsonNode blank = postProofFor(TicketPaths.VERIFY, issued, "", "bob", "rag.search", 200);
+        assertTrue(blank.get("accepted").asBoolean());
+        JsonNode redeemed = postProof(TicketPaths.REDEEM, issued, "bob", "rag.search", 200);
+        assertTrue(redeemed.get("redeemed").asBoolean());
     }
 
     /**
@@ -253,10 +353,27 @@ class OneTimePassHttpTest {
      */
     private JsonNode postIssue(String user, String sessionId, String executionId, String target, String tool, int status)
             throws Exception {
+        return postIssueFor("local", user, sessionId, executionId, target, tool, status);
+    }
+
+    /**
+     * 用指定租户提交领证。租户可以和会话所属租户不同，用来核对拒绝。
+     *
+     * @param tenant 声称的租户
+     * @param user 登录名
+     * @param sessionId 会话编号，不是登录令牌
+     * @param executionId 执行编号
+     * @param target 目标地址或名字
+     * @param tool 工具名
+     * @param status 期望的 HTTP 状态码
+     * @return 响应 JSON
+     */
+    private JsonNode postIssueFor(String tenant, String user, String sessionId, String executionId, String target, String tool,
+                                  int status) throws Exception {
         MvcResult result = mockMvc.perform(post(TicketPaths.ISSUE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of(
-                                "tenantId", "local",
+                                "tenantId", tenant,
                                 "userId", user,
                                 "sessionId", sessionId,
                                 "executionId", executionId,
@@ -296,11 +413,44 @@ class OneTimePassHttpTest {
      */
     private JsonNode postRawProof(String path, String pass, JsonNode issued, String user, String tool, int status)
             throws Exception {
+        return postProofFor(path, issued, issued.get("tenantId").asText(), user, tool, status, pass);
+    }
+
+    /**
+     * 用给定租户和用户提交校验或核销。租户可以是空串，表示不额外对照。
+     *
+     * @param path 校验或核销路径
+     * @param issued 领证响应
+     * @param tenant 声称的租户
+     * @param user 声称的登录名
+     * @param tool 声称的工具名
+     * @param status 期望的 HTTP 状态码
+     * @return 响应 JSON
+     */
+    private JsonNode postProofFor(String path, JsonNode issued, String tenant, String user, String tool, int status)
+            throws Exception {
+        return postProofFor(path, issued, tenant, user, tool, status, issued.get("ticket").asText());
+    }
+
+    /**
+     * 用给定证明文、租户和用户提交校验或核销。
+     *
+     * @param path 接口路径
+     * @param issued 领证响应，用来提供其余绑定字段
+     * @param tenant 声称的租户
+     * @param user 声称的登录名
+     * @param tool 声称的工具名
+     * @param status 期望的 HTTP 状态码
+     * @param pass 证明文
+     * @return 响应 JSON
+     */
+    private JsonNode postProofFor(String path, JsonNode issued, String tenant, String user, String tool, int status, String pass)
+            throws Exception {
         MvcResult result = mockMvc.perform(post(path)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of(
                                 "ticket", pass,
-                                "tenantId", issued.get("tenantId").asText(),
+                                "tenantId", tenant,
                                 "userId", user,
                                 "sessionId", issued.get("sessionId").asText(),
                                 "executionId", issued.get("executionId").asText(),
@@ -342,9 +492,9 @@ class OneTimePassHttpTest {
      * @param logs 这次操作期间收集到的日志
      */
     private void assertNoSecret(ListAppender<ILoggingEvent> logs) throws Exception {
-        String audit = mockMvc.perform(get(TicketPaths.AUDIT)).andReturn()
-                .getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertNoSecret(audit);
+        MvcResult audit = mockMvc.perform(get(TicketPaths.AUDIT)).andReturn();
+        assertEquals(401, audit.getResponse().getStatus());
+        assertNoSecret(audit.getResponse().getContentAsString(StandardCharsets.UTF_8));
         for (ILoggingEvent event : logs.list) {
             assertNoSecret(event.getFormattedMessage());
         }
@@ -370,6 +520,17 @@ class OneTimePassHttpTest {
         char last = pass.charAt(pass.length() - 1);
         char flipped = last == 'a' ? 'b' : 'a';
         return pass.substring(0, pass.length() - 1) + flipped;
+    }
+
+    /**
+     * 生成只留在这次测试进程里的随机文本。不写进仓库。
+     *
+     * @return 十六进制文本
+     */
+    private static String secret() {
+        byte[] bytes = new byte[24];
+        new SecureRandom().nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
     }
 
     /**

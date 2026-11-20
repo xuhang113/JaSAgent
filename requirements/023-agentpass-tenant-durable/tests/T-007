@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-007"
+result_text='生产缺少 `JASAGENT_AGENTPASS_SIGNING_KEY` 必须失败，不得再静默在内存里另生成一把。本地和验收可另给测试密钥。密钥只在运行时注入，不出现在仓库、说明或日志里。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-agentpass-server" "SigningKeyRequiredTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "缺签名密钥模块测试" "通过" >> "${ATDD_LOG}"
+  "${HERE}/live.sh"
+  atdd_require_live_pass "missing-key-refuses-start"
+  atdd_require_live_pass "missing-key-log-clean"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "缺密钥拒绝启动，日志没有密文" "通过" >> "${ATDD_LOG}"
+  leaked="$(
+    python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'CHK'
+import re
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+text = subprocess.check_output(
+    [
+        "git", "-C", repo, "diff", "-U0", base, "HEAD", "--",
+        "*.md", "*.properties", "*.sh", "*.java",
+        ":!**/logs/**", ":!**/results/**", ":!**/src/test/**", ":!requirements/**",
+    ],
+    text=True,
+)
+
+def literal_secret(body):
+    if re.search(r"(?i)(atdd_|test_|fake_|dummy_|not-for-logs|-atdd|for-test|process-local)", body):
+        return None
+    # 检查脚本里的模式不是真正写入的密钥。
+    if "grep" in body or "grep -Eq" in body:
+        if "BEGIN PRIVATE KEY" in body or "JASAGENT_AGENTPASS_SIGNING_KEY=" in body or "password=" in body:
+            return None
+    if "BEGIN PRIVATE KEY" in body:
+        return body.strip()
+    key = re.search(r"JASAGENT_AGENTPASS_SIGNING_KEY=(\S+)", body)
+    if key:
+        value = key.group(1).strip().strip("'\"")
+        if value.startswith("[") or "${" in key.group(1):
+            return None
+        if re.match(r"^[A-Za-z0-9+/=._-]{8,}$", value):
+            return body.strip()
+    for match in re.finditer(
+        r"(?i)(?:^|[^\w.])(?:this\.)?(password|token|secret|ticket)\s*=\s*(.+)",
+        body,
+    ):
+        rhs = match.group(2).strip().rstrip(";").strip()
+        lower = body.lower()
+        if "password-file" in lower or "password_file" in lower or "passwordfile" in lower:
+            continue
+        if any(mark in body for mark in ("不能带", "不能包含", "含 password=", "包含 password=", "password= must")):
+            continue
+        if re.search(r"\$\{|\$\(|\$[A-Za-z_]", rhs):
+            continue
+        if " + " in rhs or "++" in rhs or "?" in rhs:
+            continue
+        if re.match(r"^(null|None|readSecret\b|[A-Za-z_][A-Za-z0-9_.]*(\s*\(.*\))?)$", rhs):
+            continue
+        if rhs in ('""', "''"):
+            continue
+        ident = rhs.strip("'\"")
+        # 表名、列名这类标识符不是密文。
+        if re.match(r"^jasagent_[A-Za-z0-9_]+$", ident):
+            continue
+        if re.match(r"^['\"][^'\"]+['\"]$", rhs) or re.match(r"^[A-Za-z0-9_./:+-]{8,}$", rhs):
+            return rhs
+    return None
+
+bad = []
+for line in text.splitlines():
+    if not line.startswith("+") or line.startswith("+++"):
+        continue
+    body = line[1:]
+    found = literal_secret(body)
+    if found:
+        bad.append(body.strip())
+print("\n".join(bad))
+CHK
+  )"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "仓库新增行密文检查" "${leaked:-无}" >> "${ATDD_LOG}"
+  if [[ -n "${leaked}" ]]; then
+    echo "实现提交里出现了口令、令牌、票据或密钥原文：" >&2
+    printf '%s\n' "${leaked}" >&2
+    exit 1
+  fi
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

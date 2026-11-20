@@ -1,0 +1,46 @@
+2026-11-20T10:31:09+0800	T-007	模块测试 SigningKeyRequiredTest	2954	退出码 0
+2026-11-20T10:31:09+0800	T-007	缺签名密钥模块测试	2969	通过
+PASS listen-127.0.0.1
+PASS listen-present
+PASS file-session-rejected
+PASS mysql-session-ignores-yaml
+PASS issued-has-no-token
+PASS policy-miss-403
+PASS policy-miss-row
+PASS fresh-issued
+PASS bob-issued
+PASS cannot-claim-other-tenant
+PASS cannot-use-other-session
+PASS verify-other-tenant-rejected
+PASS redeem-other-tenant-rejected
+PASS blank-binding-still-matches
+PASS owner-redeem-after-cross-attempt
+PASS concurrent-tenants-issue
+PASS concurrent-redeem-isolated
+PASS audit-unauthenticated
+PASS audit-query-ignored
+PASS audit-alice-only
+PASS audit-bob-cookie
+PASS redeem-before-restart
+PASS listen-127.0.0.1
+PASS listen-present
+PASS pending-survives-restart
+PASS used-flag-survives-restart
+PASS replay-after-restart
+PASS unused-redeem-after-restart
+PASS missing-key-refuses-start
+PASS missing-key-log-clean
+PASS listen-127.0.0.1
+PASS listen-present
+PASS execution-accepted
+PASS approval-required
+PASS no-home-pending
+PASS execution-pending-row
+PASS other-user-cannot-approve
+PASS pending-unchanged
+PASS owner-approves-existing-path
+PASS same-execution-resumes
+PASS approved-row
+PASS process-tenant-restart-audit-approval
+2026-11-20T10:31:09+0800	T-007	缺密钥拒绝启动，日志没有密文	2988	通过
+2026-11-20T10:31:09+0800	T-007	仓库新增行密文检查	3035	无

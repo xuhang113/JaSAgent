@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-002"
+result_text='证状态和流水已落到已有 MySQL。用同一库和同一签名密钥环境变量重启 agentpass 进程后，已核销的证仍须拒绝重放；未过期、未使用的证在签名密钥未变时仍可核销。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  atdd_mvn_test "jasagent-agentpass-server" "DurableTicketRestartTest,ExpiredPassTest"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "重启与过期模块测试" "通过" >> "${ATDD_LOG}"
+  "${HERE}/live.sh"
+  atdd_require_live_pass "redeem-before-restart"
+  atdd_require_live_pass "pending-survives-restart"
+  atdd_require_live_pass "used-flag-survives-restart"
+  atdd_require_live_pass "replay-after-restart"
+  atdd_require_live_pass "unused-redeem-after-restart"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "同库同密钥重启后已核销拒绝重放，未使用证仍可核销" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

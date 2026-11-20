@@ -1,5 +1,8 @@
 package dev.jasagent.agentpass.server;
 
+import dev.jasagent.agentpass.durable.AgentPassLedger;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 一次性通行证的 HTTP 接口。
@@ -16,18 +20,26 @@ import java.util.List;
  */
 @RestController
 public class PassController {
+    /**
+     * 与网关相同的登录 Cookie 名。审计只接受这个 Cookie 或 Authorization Bearer，不读查询参数。
+     */
+    static final String SESSION_COOKIE = "JASAGENT_SESSION";
+
     private final OneTimePassService passes;
     private final AuditLog audit;
+    private final AgentPassLedger ledger;
 
     /**
-     * 注入签发服务和流水。流水单独注入，是为了查询时不经过会改状态的核销方法。
+     * 注入签发服务、流水和账本。流水按调用方的登录令牌找回租户后再读。
      *
      * @param passes 领证、校验和核销
      * @param audit 已经记下的流水
+     * @param ledger 用来按登录令牌找回租户的账本
      */
-    public PassController(OneTimePassService passes, AuditLog audit) {
+    public PassController(OneTimePassService passes, AuditLog audit, AgentPassLedger ledger) {
         this.passes = passes;
         this.audit = audit;
+        this.ledger = ledger;
     }
 
     /**
@@ -74,12 +86,47 @@ public class PassController {
     }
 
     /**
-     * 按写入顺序返回领证、核销、拒绝和重放流水。
+     * 按写入顺序返回调用方自己租户的流水。没有登录令牌或令牌对不上时返回 401，正文里没有流水。
      *
-     * @return 当前进程里的全部流水
+     * @param request 当前 HTTP 请求，令牌在 Authorization 或登录 Cookie 里
+     * @return 该租户的流水，或未登录错误
      */
     @GetMapping(TicketPaths.AUDIT)
-    public List<AuditEvent> audit() {
-        return audit.all();
+    public ResponseEntity<?> audit(HttpServletRequest request) {
+        AgentPassLedger.Identity caller = ledger.authenticate(token(request));
+        if (caller == null || caller.tenantId() == null || caller.tenantId().isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "unauthorized"));
+        }
+        List<AuditEvent> events = audit.forTenant(caller.tenantId());
+        return ResponseEntity.ok(events);
+    }
+
+    /**
+     * 从 Authorization Bearer 或登录 Cookie 取出令牌原文。不接受查询参数，也不把原文写进日志。
+     *
+     * @param request 当前请求
+     * @return 令牌原文；没有时为空
+     */
+    private static String token(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String header = request.getHeader("Authorization");
+        if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            String value = header.substring(7).trim();
+            if (!value.isEmpty()) {
+                return value;
+            }
+        }
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (SESSION_COOKIE.equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+                return cookie.getValue().trim();
+            }
+        }
+        return null;
     }
 }

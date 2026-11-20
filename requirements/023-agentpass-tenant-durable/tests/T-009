@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-009"
+result_text='实现和测试提交不修改 `deploy/k8s` 下的清单文件。本轮改到的模块有注释，有自动测试，并且有可执行的测试脚本。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  if git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- deploy/k8s | grep -q .; then
+    echo "deploy/k8s 有差异。" >&2
+    git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- deploy/k8s >&2
+    exit 1
+  fi
+  if git -C "${REPO_ROOT}" ls-files --others --exclude-standard -- deploy/k8s | grep -q .; then
+    echo "出现了未跟踪的 deploy/k8s 文件。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "deploy/k8s 未改" "通过" >> "${ATDD_LOG}"
+  atdd_assert_comments "${REPO_ROOT}/scripts/test-023-agentpass-tenant-durable.sh" 1
+  atdd_assert_comments "${HERE}/lib.sh" 1
+  atdd_assert_comments "${HERE}/live.sh" 1
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "验收脚本注释" "通过" >> "${ATDD_LOG}"
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'CHK'
+import pathlib
+import re
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+prefixes = (
+    "jasagent-agentpass/",
+    "jasagent-agentpass-server/",
+    "jasagent-app/",
+)
+
+def is_main_java(path):
+    return path.endswith(".java") and "/src/main/java/" in path and path.startswith(prefixes)
+
+def is_declaration(stripped):
+    if not stripped:
+        return False
+    if stripped.startswith(("//", "/*", "*", "@", "package ", "import ", "return ", "throw ", "new ", "if ", "for ", "while ", "switch ", "catch ", "else ", "try ", "assert ", "case ", "this(", "super(", "synchronized (")):
+        return False
+    if stripped.startswith("}") or stripped.startswith("default:"):
+        return False
+    # 建表语句里的 SQL 片段不是 Java 声明。
+    if re.match(r"(?i)^(CREATE TABLE|ALTER TABLE|PRIMARY KEY|UNIQUE KEY|FOREIGN KEY|CONSTRAINT |INDEX |KEY |ENGINE=)", stripped):
+        return False
+    if re.search(r"\b(class|interface|enum|record)\s+\w+", stripped):
+        return True
+    if re.search(r"\b(public|protected)\s+(static\s+final|final\s+static)\s+", stripped) and re.search(r"\b[A-Za-z_][A-Za-z0-9_]*\s*=", stripped):
+        return True
+    if "(" not in stripped:
+        return False
+    head = stripped.split("(", 1)[0].strip()
+    if "=" in head or not re.search(r"\b[A-Za-z_][A-Za-z0-9_]*$", head):
+        return False
+    if re.search(r"\b(public|protected|private)\b", head):
+        return True
+    return bool(re.search(r"\b(void|boolean|byte|short|char|int|long|float|double|[A-Z][A-Za-z0-9_.<>,\s\[\]]*)\s+[A-Za-z_][A-Za-z0-9_]*$", head))
+
+def has_javadoc(lines, index):
+    i = index - 1
+    skipping_annotation = False
+    while i >= 0:
+        stripped = lines[i].strip()
+        if stripped == "" or stripped.startswith("//"):
+            i -= 1
+            continue
+        if skipping_annotation:
+            if stripped.startswith("@"):
+                skipping_annotation = False
+            i -= 1
+            continue
+        if stripped.endswith("*/") or stripped.startswith("/**") or stripped.startswith("*"):
+            return True
+        if stripped.startswith("@"):
+            i -= 1
+            continue
+        if re.match(r"^[@A-Za-z0-9_.,(){}\[\]=\s]+$", stripped) and any(token in stripped for token in ("(", ")", "{", "}", ",")):
+            skipping_annotation = True
+            i -= 1
+            continue
+        return False
+    return False
+
+diff = subprocess.check_output(["git", "-C", repo, "diff", "-U0", base, "HEAD", "--", "**.java"], text=True)
+current = None
+wanted = {}
+for line in diff.splitlines():
+    if line.startswith("+++ b/"):
+        current = line[6:]
+        continue
+    if current is None or not is_main_java(current):
+        continue
+    if not line.startswith("+") or line.startswith("+++"):
+        continue
+    body = line[1:].strip()
+    if is_declaration(body):
+        wanted.setdefault(current, []).append(body)
+
+if not wanted:
+    raise SystemExit("本轮没有新增或改动的 Java 实现符号。")
+
+missing = []
+for rel, decls in wanted.items():
+    path = pathlib.Path(repo, rel)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for decl in decls:
+        found = False
+        for i, raw in enumerate(lines):
+            if raw.strip() != decl:
+                continue
+            found = True
+            if not has_javadoc(lines, i):
+                missing.append("%s:%s 缺少注释：%s" % (rel, i + 1, decl))
+            break
+        if not found:
+            missing.append("%s: 找不到本轮新增或改动的符号：%s" % (rel, decl))
+if missing:
+    print("本轮新增或改动的实现缺少注释：", file=sys.stderr)
+    print("\n".join(missing), file=sys.stderr)
+    raise SystemExit(1)
+print("java-comments-ok")
+CHK
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本轮新增或改动的 Java 实现注释" "通过" >> "${ATDD_LOG}"
+  script="${REPO_ROOT}/scripts/test-023-agentpass-tenant-durable.sh"
+  if [[ ! -x "${script}" ]]; then
+    echo "实现提交的合同测试脚本不可执行。" >&2
+    exit 1
+  fi
+  if ! head -n 8 "${script}" | grep -q '^#'; then
+    echo "合同测试脚本缺少说明注释。" >&2
+    exit 1
+  fi
+  if ! grep -q '第 1 到第 9 条' "${script}" || ! grep -q '第 10 到第 12 条' "${script}"; then
+    echo "合同测试脚本没有写明覆盖范围。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "合同测试脚本可执行且有说明注释" "通过" >> "${ATDD_LOG}"
+  for testf in \
+    jasagent-agentpass/src/test/java/dev/jasagent/agentpass/durable/DurablePassGateTest.java \
+    jasagent-agentpass-server/src/test/java/dev/jasagent/agentpass/server/DurableTicketRestartTest.java \
+    jasagent-agentpass-server/src/test/java/dev/jasagent/agentpass/server/SigningKeyRequiredTest.java \
+    jasagent-app/src/test/java/dev/jasagent/app/DurablePassResumeTest.java; do
+    if [[ ! -f "${REPO_ROOT}/${testf}" ]]; then
+      echo "缺少自动测试 ${testf}。" >&2
+      exit 1
+    fi
+  done
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "自动测试文件存在" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"
