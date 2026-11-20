@@ -1,22 +1,17 @@
 package dev.jasagent.agentpass.server;
 
-import dev.jasagent.agentpass.PolicyPassGate;
+import dev.jasagent.agentpass.durable.AgentPassLedger;
 import dev.jasagent.api.auth.Session;
-import dev.jasagent.auth.LocalDirectories;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.util.Comparator;
-import java.util.stream.Stream;
+import java.util.HexFormat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -26,40 +21,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 用可拨动的时钟核对过期报告。过期的证不能核销，也不会被标成已使用。
  */
 class ExpiredPassTest {
-    private static final Path HOME = createHome();
     private static final AdjustableClock CLOCK = new AdjustableClock(Instant.parse("2026-11-12T03:00:00Z"));
+    private static final String SIGNING_KEY = secret();
     private static Session alice;
     private static OneTimePassService service;
     private static PassStore store;
 
     /**
-     * 在固定时刻建好用户、允许策略和证服务。口令不留在字段里。
+     * 在固定时刻把用户和允许策略写进账本，并用运行时密钥建证服务。不读策略文件。
      */
     @BeforeAll
-    static void setup() throws IOException {
-        alice = TestUsers.register(HOME, "alice", null);
-        TestUsers.writePolicy(HOME, "alice", """
-                rules:
-                  - tool: rag.search
-                    decision: ALLOW
-                """);
-        LocalDirectories directories = new LocalDirectories(HOME);
-        store = new PassStore();
+    static void setup() {
+        String jdbc = "jdbc:h2:mem:agentpassexpire;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1";
+        String password = secret();
+        alice = new Session("alice-session-expire", secret(), "alice", null, CLOCK.instant());
+        AgentPassLedger ledger = AgentPassLedger.open(jdbc, "sa", password);
+        ledger.saveAccount("alice", "local");
+        ledger.saveLogin("alice", alice.sessionId(), alice.token());
+        ledger.savePolicy("local", "tool", "rag.search", "ALLOW");
+        store = new PassStore(ledger);
         service = new OneTimePassService(
-                new HumanAccess(directories, new PolicyPassGate(directories::userDirectory)),
-                PassSigner.create(""),
+                new HumanAccess(ledger),
+                PassSigner.create(SIGNING_KEY),
                 store,
                 new AuditLog(CLOCK),
                 CLOCK,
                 Duration.ofSeconds(60));
-    }
-
-    /**
-     * 删除临时家目录里的口令摘要和会话。
-     */
-    @AfterAll
-    static void cleanup() throws IOException {
-        delete(HOME);
     }
 
     /**
@@ -91,32 +78,14 @@ class ExpiredPassTest {
     }
 
     /**
-     * 创建这个测试专用的临时家目录。
+     * 生成只留在这次测试进程里的随机文本。不写进仓库。
      *
-     * @return 临时目录
+     * @return 十六进制文本
      */
-    private static Path createHome() {
-        try {
-            return Files.createTempDirectory("jasagent-agentpass-expire-");
-        } catch (IOException ex) {
-            throw new IllegalStateException(ex);
-        }
-    }
-
-    /**
-     * 递归删除临时目录。
-     *
-     * @param root 要删除的目录
-     */
-    private static void delete(Path root) throws IOException {
-        if (root == null || !Files.exists(root)) {
-            return;
-        }
-        try (Stream<Path> walk = Files.walk(root)) {
-            for (Path path : walk.sorted(Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(path);
-            }
-        }
+    private static String secret() {
+        byte[] bytes = new byte[24];
+        new SecureRandom().nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
     }
 
     /**

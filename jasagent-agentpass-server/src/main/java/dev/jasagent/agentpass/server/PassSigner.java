@@ -7,7 +7,6 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -52,21 +51,16 @@ public final class PassSigner {
     }
 
     /**
-     * 按配置创建签名器。密钥为空白时生成 32 字节随机密钥，并且不返回这把密钥的文本。
+     * 按配置创建签名器。密钥为空白时拒绝，不再在内存里另生成一把。异常消息只有配置名，没有密钥。
      *
-     * @param configuredKey 配置或环境变量里的密钥原文；空白表示另生成
+     * @param configuredKey 配置或环境变量里的密钥原文，不能为空白
      * @return 可以签发和打开证明文的签名器
      */
     public static PassSigner create(String configuredKey) {
-        boolean blank = configuredKey == null || configuredKey.isBlank();
-        byte[] keyBytes;
-        if (blank) {
-            keyBytes = new byte[32];
-            new SecureRandom().nextBytes(keyBytes);
-        } else {
-            keyBytes = configuredKey.getBytes(StandardCharsets.UTF_8);
+        if (configuredKey == null || configuredKey.isBlank()) {
+            throw new IllegalStateException("jasagent.agentpass.signing-key");
         }
-        return new PassSigner(keyBytes, blank, new ObjectMapper());
+        return new PassSigner(configuredKey.getBytes(StandardCharsets.UTF_8), false, new ObjectMapper());
     }
 
     /**

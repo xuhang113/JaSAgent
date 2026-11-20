@@ -2,6 +2,7 @@ package dev.jasagent.app;
 
 import dev.jasagent.agentpass.PassSettings;
 import dev.jasagent.auth.LocalAuthService;
+import dev.jasagent.persist.UragMysql;
 import dev.jasagent.llm.GrokEnvironment;
 import dev.jasagent.llm.egress.SidecarAddress;
 import dev.jasagent.cli.CliCommands;
@@ -87,7 +88,7 @@ public class JasagentApplication {
      * @param compressAt 上下文开始压缩的占用比例，对应 jasagent.context.compress-at
      * @param deepseekThinking 是否打开 DeepSeek 思考，对应 jasagent.deepseek.thinking
      * @param sidecarUrl 回环上的 sidecar 根地址，离开集群的 HTTP 发到它的 /v1/forward
-     * @return 可供执行和会话接口使用的运行时
+     * @return 可供执行和会话接口使用的运行时。进程已配置 020 的 JDBC 地址时，通行证改走同一套库
      */
     @Bean
     LocalRuntime localRuntime(LocalAuthService localAuthService,
@@ -106,7 +107,37 @@ public class JasagentApplication {
         configuration.put("jasagent.egress.enabled", egressEnabled);
         configuration.put("jasagent.rag.base-url", ragBaseUrl);
         configuration.put("jasagent.egress.ticket-url", ticketUrl);
+        copyDurableLedger(configuration);
         return new LocalRuntime(localAuthService, configuration);
+    }
+
+    /**
+     * 进程里已经给出 020 的 JDBC 地址时，通行证改走同一套库。地址里不能带口令。口令不写进日志。
+     * 没有这个环境变量时保持原来的目录策略，避免没有库的测试被本机口令文件带偏。
+     * 副作用：向配置写入账本地址、账号和口令。
+     *
+     * @param configuration 即将交给运行时的配置
+     */
+    private static void copyDurableLedger(Map<String, String> configuration) {
+        String url = System.getenv("JASAGENT_JDBC_URL");
+        if (url == null || url.isBlank()) {
+            return;
+        }
+        if (url.toLowerCase().contains("password=")) {
+            throw new IllegalStateException("JDBC 地址不能携带口令");
+        }
+        String user = System.getenv("JASAGENT_JDBC_USER");
+        String password = System.getenv("JASAGENT_JDBC_PASSWORD");
+        if (password == null || password.isBlank()) {
+            password = UragMysql.readPassword();
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalStateException("没有找到本机 MySQL 口令");
+        }
+        configuration.put(PassSettings.DURABLE, "mysql");
+        configuration.put(PassSettings.JDBC_URL, url);
+        configuration.put(PassSettings.JDBC_USER, user == null || user.isBlank() ? "root" : user);
+        configuration.put(PassSettings.JDBC_PASSWORD, password);
     }
 
     /**
