@@ -366,16 +366,29 @@ EOF
   say "已预先写入 runsc 的 containerd 模板。"
 }
 
+# 等到生成后的 containerd 配置里已经出现 runsc。节点就绪后配置文件可能还要再写一会儿。
+wait_for_containerd_runsc() {
+  local n=0
+  while [[ "$n" -lt 30 ]]; do
+    if containerd_has_runsc; then
+      return 0
+    fi
+    n=$((n + 1))
+    sleep 2
+  done
+  return 1
+}
+
 # 把 runsc 登记进 k3s 的 containerd。已经生效则不重启。
 configure_containerd() {
-  if containerd_has_runsc; then
+  if wait_for_containerd_runsc; then
     say "k3s containerd 已登记 runsc。"
     return 0
   fi
   write_runsc_templates
   restart_k3s
   wait_for_node
-  if ! containerd_has_runsc; then
+  if ! wait_for_containerd_runsc; then
     say "重启后 k3s containerd 仍没有登记 runsc。" >&2
     exit 1
   fi
