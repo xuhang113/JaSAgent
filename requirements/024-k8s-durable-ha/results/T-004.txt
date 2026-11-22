@@ -1,0 +1,1 @@
+T-004	通过	`JASAGENT_GATEWAY_FORWARDED_TRUSTED` 仍只信任 Ingress，取值禁止 `0.0.0.0/0` 或 `::/0`。任意客户端自己带来的 `X-Forwarded-*` 不被信任。	109	logs/T-004.log

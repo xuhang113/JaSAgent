@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-005"
+result_text='不改 sidecar 和 agentpass 的产品约定。`/v1/tickets` 的领证、校验、核销约定不变。018 / 021 / 022 / 023 仍须成立。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  for path in jasagent-sidecar jasagent-agentpass jasagent-agentpass-server; do
+    if git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- "${path}" | grep -q .; then
+      echo "${path} 有差异，产品约定不能视为未改。" >&2
+      git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- "${path}" >&2
+      exit 1
+    fi
+  done
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "sidecar 和 agentpass 相对规格提交未改" "通过" >> "${ATDD_LOG}"
+  for script in \
+    scripts/test-018-sidecar-egress.sh \
+    scripts/test-021-sidecar-egress-threads.sh \
+    scripts/test-022-runtime-full-async.sh \
+    scripts/test-023-agentpass-tenant-durable.sh \
+    scripts/k8s/probe-egress.sh \
+    scripts/k8s/prepare-cluster.sh; do
+    if git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- "${script}" | grep -q .; then
+      echo "碰到了不应改动的脚本：${script}" >&2
+      exit 1
+    fi
+  done
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "018 到 023 脚本和官方探测、集群准备脚本未改" "通过" >> "${ATDD_LOG}"
+  python3 - "${REPO_ROOT}" <<'CHK'
+import pathlib
+import sys
+repo = pathlib.Path(sys.argv[1])
+base = repo / "jasagent-agentpass-server/src/main/java/dev/jasagent/agentpass/server"
+parts = []
+for name in ("PassController.java", "IssuePassRequest.java", "TicketPaths.java"):
+    path = base / name
+    if not path.exists():
+        raise SystemExit("领证约定文件不见了：" + name)
+    parts.append(path.read_text(encoding="utf-8"))
+text = "\n".join(parts)
+for needle in ("/v1/tickets", "/v1/tickets/verify", "/v1/tickets/redeem"):
+    if needle not in text:
+        raise SystemExit("领证约定缺少路径：" + needle)
+for field in ("tenantId", "userId", "sessionId", "executionId", "target", "toolName"):
+    if field not in text:
+        raise SystemExit("领证约定缺少字段：" + field)
+print("ticket-contract-present")
+CHK
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "领证、校验、核销路径和请求字段仍在" "通过" >> "${ATDD_LOG}"
+  # SidecarPlatformThreadTest 会清点进程里名字带 -exec- 的平台线程；同 JVM 里前面启动的 Tomcat 若还没退干净会误判。每个测试类单独进程跑。
+  atdd_mvn_test "jasagent-sidecar,jasagent-llm" "SidecarEgressTest,SidecarHealthTest,SidecarContractTest,SidecarStreamTest,TicketWireTest,LlmAllowlistTest,SidecarPlatformThreadTest,SidecarLlmTransportTest,CarrierFreeReadTest" -DreuseForks=false
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "018 出站、票据、白名单与 021 平台线程、022 读流模块测试" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

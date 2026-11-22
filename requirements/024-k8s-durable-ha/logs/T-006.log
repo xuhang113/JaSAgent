@@ -1,0 +1,43 @@
+2026-11-22T12:10:50+0800	T-006	deploy/k8s 未改	17	通过
+changelog/2026-11-22-gateway-ha-liveness.md
+jasagent-gateway/src/main/java/dev/jasagent/gateway/GatewayApplication.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/GatewayRuntime.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/agent/AgentDiscovery.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/agent/AgentLinkSupervisor.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/agent/AgentLiveness.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/agent/InMemoryAgentLiveness.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/agent/MysqlAgentLiveness.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/agent/TcpAgentLink.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewaySessionFilter.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/cluster/ClusterController.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/cluster/ClusterInventory.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/config/GatewayConfiguration.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/nacos/UnavailableAgentDiscovery.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/route/StickyAgentRouter.java
+jasagent-gateway/src/main/resources/application.properties
+jasagent-gateway/src/test/java/dev/jasagent/gateway/CEndTenantImTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/GatewayForwardTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/GatewayHaContractTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/GatewayLayoutTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/agent/SharedAgentLivenessTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/nacos/NacosContractTest.java
+requirements/024-k8s-durable-ha/tdd.md
+requirements/024-k8s-durable-ha/tests/024-k8s-durable-ha.sh
+requirements/024-k8s-durable-ha/tests/T-001
+requirements/024-k8s-durable-ha/tests/T-002
+requirements/024-k8s-durable-ha/tests/T-003
+requirements/024-k8s-durable-ha/tests/T-004
+requirements/024-k8s-durable-ha/tests/T-005
+requirements/024-k8s-durable-ha/tests/T-006
+requirements/024-k8s-durable-ha/tests/gateway-tests.sh
+requirements/024-k8s-durable-ha/tests/lib.sh
+scripts/test-024-gateway-ha-liveness.sh
+2026-11-22T12:10:50+0800	T-006	改动只在网关、本轮脚本、变更记录和 ATDD	81	通过
+2026-11-22T12:10:50+0800	T-006	本机缺省副本数仍是 1，JDBC 地址不含 password=	113	通过
+2026-11-22T12:10:50+0800	T-006	验收脚本注释	162	通过
+java-comments-ok
+2026-11-22T12:10:50+0800	T-006	本轮新增或改动的 Java 实现注释	221	通过
+2026-11-22T12:10:50+0800	T-006	合同测试脚本可执行且有说明注释	255	通过
+2026-11-22T12:10:50+0800	T-006	自动测试文件存在	287	通过
+2026-11-22T12:10:50+0800	T-006	仓库新增行密文检查	350	无
+2026-11-22T12:10:50+0800	T-006	验收日志没有口令原文	397	通过
