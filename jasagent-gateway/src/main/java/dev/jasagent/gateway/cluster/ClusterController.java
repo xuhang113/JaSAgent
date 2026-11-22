@@ -9,8 +9,8 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 
 /**
- * 控制台的集群接口。数据来自当时的 Nacos 发现和本进程长连接，不向浏览器编造一台静态约定实例。
- * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
+ * 控制台的集群接口。数据来自当时的 Nacos 发现和共享存活表，不向浏览器编造一台静态约定实例。
+ * 登录会话在 MySQL。存活探测按网关副本写入同一库并跨副本读取。本机缺省副本数仍是 1。
  */
 @RestController
 public class ClusterController {

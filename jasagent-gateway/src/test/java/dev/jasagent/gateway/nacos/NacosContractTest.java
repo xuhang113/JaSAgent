@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 网关源码不再把静态目录当发现来源，并且仍按单副本把会话和存活留在进程内。
+ * 网关源码不再把静态目录当发现来源。存活探测按副本共享，本机缺省副本数仍是 1。
  */
 class NacosContractTest {
     /**
@@ -51,17 +51,18 @@ class NacosContractTest {
     }
 
     /**
-     * 登录会话和存活探测仍在网关进程里，本轮副本数是 1。
+     * 登录会话在库里，存活探测按副本共享。本机缺省副本数仍是 1，选路不新建一份进程内存活表。
      */
     @Test
     void gatewayStaysSingleReplica() throws Exception {
         String configuration = Files.readString(Path.of("src/main/java/dev/jasagent/gateway/config/GatewayConfiguration.java"));
-        assertTrue(configuration.contains("InMemoryAgentLiveness"));
+        assertTrue(configuration.contains("MysqlAgentLiveness"));
+        assertFalse(configuration.contains("new InMemoryAgentLiveness("));
         assertTrue(configuration.contains("LocalAuthService"));
         assertTrue(configuration.contains(GatewayRuntime.SINGLE_REPLICA));
         String session = Files.readString(Path.of("src/main/java/dev/jasagent/gateway/auth/GatewaySessionFilter.java"));
         assertTrue(session.contains(GatewayRuntime.SINGLE_REPLICA));
-        String liveness = Files.readString(Path.of("src/main/java/dev/jasagent/gateway/agent/InMemoryAgentLiveness.java"));
+        String liveness = Files.readString(Path.of("src/main/java/dev/jasagent/gateway/agent/MysqlAgentLiveness.java"));
         assertTrue(liveness.contains(GatewayRuntime.SINGLE_REPLICA));
         String start = Files.readString(Path.of("../scripts/start.sh"));
         assertTrue(start.contains("jasagent_prepare_nacos"));

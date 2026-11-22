@@ -24,7 +24,7 @@ public final class TcpAgentLink implements Runnable {
     public static final String HEALTH_PATH = "/health";
 
     private final AgentInstance instance;
-    private final InMemoryAgentLiveness liveness;
+    private final AgentLiveness liveness;
     private final Duration retryDelay;
     private final Duration heartbeatInterval;
     private final int connectTimeoutMillis;
@@ -36,11 +36,11 @@ public final class TcpAgentLink implements Runnable {
      * 准备一条还没启动的长连接。
      *
      * @param instance 要连接的 agent
-     * @param liveness 连接状态写到这里
+     * @param liveness 连接状态写到这里。共享实现按本副本落库，断开不擦掉其它副本的心跳
      * @param retryDelay 断开后再次连接前的等待
      * @param heartbeatInterval 同一条连接上两次健康检查的间隔
      */
-    public TcpAgentLink(AgentInstance instance, InMemoryAgentLiveness liveness, Duration retryDelay, Duration heartbeatInterval) {
+    public TcpAgentLink(AgentInstance instance, AgentLiveness liveness, Duration retryDelay, Duration heartbeatInterval) {
         this.instance = instance;
         this.liveness = liveness;
         this.retryDelay = retryDelay;

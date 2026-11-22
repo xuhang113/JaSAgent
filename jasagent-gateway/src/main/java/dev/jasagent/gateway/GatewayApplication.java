@@ -10,7 +10,7 @@ import java.util.Map;
 /**
  * 统一网关入口。浏览器只访问本进程的 127.0.0.1:18721。
  * 登录、会话、健康检查和粘性转发留在本进程。控制台页面反代到 jasagent-web，不再挂载 gateway-admin。
- * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
+ * 登录会话在 MySQL。存活探测按网关副本写入同一库并跨副本读取。本机缺省副本数仍是 1。
  */
 @SpringBootConfiguration
 @EnableAutoConfiguration

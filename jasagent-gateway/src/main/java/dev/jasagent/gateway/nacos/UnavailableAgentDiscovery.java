@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * 没有配置 Nacos，或当前不能查询时的发现结果。调用即失败，不返回静态约定实例。
- * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
+ * 登录会话在 MySQL。存活探测按网关副本写入同一库并跨副本读取。本机缺省副本数仍是 1。
  */
 public final class UnavailableAgentDiscovery implements AgentDiscovery {
     /**

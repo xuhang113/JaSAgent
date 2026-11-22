@@ -4,7 +4,7 @@ import dev.jasagent.api.exception.AgentException;
 import dev.jasagent.api.exception.ErrorCode;
 import dev.jasagent.gateway.agent.AgentDiscovery;
 import dev.jasagent.gateway.agent.AgentInstance;
-import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
+import dev.jasagent.gateway.agent.AgentLiveness;
 import dev.jasagent.gateway.store.AffinityStore;
 
 import java.util.ArrayList;
@@ -13,23 +13,24 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 按用户把请求粘到同一台仍可用的 agent。候选只来自当时 Nacos 查到的健康实例，再叠加本进程里的长连接存活。
- * 目标还在发现结果里且本进程认为存活时不改道。目标消失或不健康时改到其它实例并写回 MySQL。
- * 没有可用实例时保留原粘性，不删行。登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
+ * 按用户把请求粘到同一台仍可用的 agent。候选只来自当时 Nacos 查到的健康实例，再叠加共享存活表。
+ * 目标还在发现结果里且任一副本的长连接仍有效时不改道。目标消失或不健康时改到其它实例并写回 MySQL。
+ * 没有可用实例时保留原粘性，不删行。
+ * 登录会话在 MySQL。存活探测按网关副本写入同一库并跨副本读取。本机缺省副本数仍是 1。
  */
 public final class StickyAgentRouter {
     private final AgentDiscovery discovery;
-    private final InMemoryAgentLiveness liveness;
+    private final AgentLiveness liveness;
     private final AffinityStore store;
 
     /**
-     * 绑定发现、本进程存活表和粘性库。发现失败或为空时不能改用静态目录。
+     * 绑定发现、共享存活表和粘性库。发现失败或为空时不能改用静态目录。
      *
      * @param discovery 当时的 Nacos 健康实例
-     * @param liveness 每台 agent 的长连接状态，只存在本进程
+     * @param liveness 每台 agent 的长连接状态。生产按副本共享，不只看本进程
      * @param store 粘性库，重启后仍能读到
      */
-    public StickyAgentRouter(AgentDiscovery discovery, InMemoryAgentLiveness liveness, AffinityStore store) {
+    public StickyAgentRouter(AgentDiscovery discovery, AgentLiveness liveness, AffinityStore store) {
         this.discovery = discovery;
         this.liveness = liveness;
         this.store = store;
@@ -64,7 +65,7 @@ public final class StickyAgentRouter {
     }
 
     /**
-     * 这一次既能从 Nacos 看到、本进程长连接也还在的实例，按端口再按主机排序。
+     * 这一次既能从 Nacos 看到、共享存活也认为还连着的实例，按端口再按主机排序。
      * 发现失败时原样抛出，不换成静态地址。
      *
      * @return 可以转发的实例

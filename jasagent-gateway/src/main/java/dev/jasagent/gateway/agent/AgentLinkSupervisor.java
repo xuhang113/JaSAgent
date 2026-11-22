@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * 为本进程维护到已发现 agent 的长连接。连接目标只来自当时的 Nacos 健康实例。
  * 查询失败或列表为空时不拨到静态约定地址。停止网关时只关掉这些套接字。
- * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
+ * 登录会话在 MySQL。存活探测按网关副本写入同一库并跨副本读取。本机缺省副本数仍是 1。
  */
 public final class AgentLinkSupervisor implements SmartLifecycle {
     /**
@@ -24,12 +24,12 @@ public final class AgentLinkSupervisor implements SmartLifecycle {
      */
     private static final Duration RETRY_DELAY = Duration.ofSeconds(2);
     /**
-     * 同一条连接上两次健康检查的间隔。
+     * 同一条连接上两次健康检查的间隔。与共享存活的新鲜度使用同一个间隔。
      */
-    private static final Duration HEARTBEAT = Duration.ofSeconds(15);
+    private static final Duration HEARTBEAT = AgentLiveness.HEARTBEAT_INTERVAL;
 
     private final AgentDiscovery discovery;
-    private final InMemoryAgentLiveness liveness;
+    private final AgentLiveness liveness;
     private final Object guard = new Object();
     private final Map<String, TcpAgentLink> links = new LinkedHashMap<>();
     private ScheduledExecutorService scheduler;
@@ -39,9 +39,9 @@ public final class AgentLinkSupervisor implements SmartLifecycle {
      * 绑定发现和本进程存活表。此时还不拨号。
      *
      * @param discovery 当时的健康实例
-     * @param liveness 连接状态的存放处，路由和集群都读它
+     * @param liveness 连接状态的存放处。生产按副本写入共享库，路由和集群读同一份
      */
-    public AgentLinkSupervisor(AgentDiscovery discovery, InMemoryAgentLiveness liveness) {
+    public AgentLinkSupervisor(AgentDiscovery discovery, AgentLiveness liveness) {
         this.discovery = discovery;
         this.liveness = liveness;
     }
