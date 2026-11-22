@@ -1,15 +1,15 @@
 # 网关对外端口 18721。业务容器使用 gVisor。
-# 登录会话和存活探测都在网关进程内，本轮网关按单副本运行。
+# 登录会话、粘性和存活探测都写在集群已有的 MySQL 库 jasagent，本轮网关至少 2 个就绪副本。
 # 只从 Nacos 发现 agent 实例，不再使用静态目录或 jasagent-agent-0 / jasagent-agent-1。
 # 控制台请求反代到 jasagent-web。JASAGENT_GATEWAY_WEB_ORIGIN 保持集群内地址，不写成公网主机名。
-# 账号表 jasagent_account、登录会话表 jasagent_login_session、聊天会话表 agent_session
-# 和粘性表 jasagent_gateway_affinity 共用集群里已有的 MySQL。
+# 账号表 jasagent_account、登录会话表 jasagent_login_session、聊天会话表 agent_session、
+# 粘性表 jasagent_gateway_affinity 和存活表 jasagent_gateway_liveness 共用集群里已有的 MySQL。
 # 020 的网关把这四张表都接到 jasagent.gateway.affinity.jdbc-url / username / password-file，
 # 对应环境变量仍是 JASAGENT_GATEWAY_AFFINITY_JDBC_URL、JASAGENT_GATEWAY_AFFINITY_USERNAME
 # 和 JASAGENT_GATEWAY_AFFINITY_PASSWORD_FILE。地址和账号来自 Secret jasagent-mysql 的
 # jdbc-url、username。口令只从该 Secret 挂进的文件读取。JDBC 地址里不能有 password=。
 # volume home 仍是 emptyDir，只放其它家目录文件（含一次性迁入运维账号时要读的目录）。
-# 它不是账号或会话的权威存储。删掉或重启本 Pod 后，账号和聊天会话仍在上述 MySQL 里。
+# 它不是账号或会话的权威存储。删掉或重启本 Pod 后，账号、聊天会话和存活探测状态仍在上述 MySQL 里。
 # JASAGENT_GATEWAY_FORWARDED_TRUSTED 只信任 Ingress 这一跳，禁止 0.0.0.0/0 或 ::/0。
 apiVersion: apps/v1
 kind: Deployment
@@ -20,7 +20,7 @@ metadata:
     app.kubernetes.io/name: jasagent
     app.kubernetes.io/component: gateway
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: jasagent
@@ -71,7 +71,7 @@ spec:
             - name: JASAGENT_GATEWAY_AFFINITY_PASSWORD_FILE
               value: /var/lib/jasagent/.config/urag-mysql-root.password
             - name: JASAGENT_GATEWAY_REPLICAS
-              value: "1"
+              value: "2"
             - name: JASAGENT_INTERNAL_TOKEN
               valueFrom:
                 secretKeyRef:

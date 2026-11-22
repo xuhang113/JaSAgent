@@ -533,14 +533,15 @@ forwarded_trusted_ingress_only() {
   return 0
 }
 
-# 网关仍是单副本，web 上游仍是集群内地址。
-gateway_single_replica_and_web_origin() {
+# 网关至少 2 个就绪副本，web 上游仍是集群内地址。不再要求必须单副本。
+gateway_multi_replica_and_web_origin() {
   local replicas ready origin
   replicas="$(kubectl -n "${NS}" get deploy jasagent-gateway -o jsonpath='{.spec.replicas}')"
   ready="$(kubectl -n "${NS}" get deploy jasagent-gateway -o jsonpath='{.status.readyReplicas}')"
   origin="$(kubectl -n "${NS}" get deploy jasagent-gateway -o jsonpath='{range .spec.template.spec.containers[?(@.name=="gateway")].env[*]}{.name}={.value}{"\n"}{end}' | awk -F= '$1=="JASAGENT_GATEWAY_WEB_ORIGIN"{print $2}')"
   printf 'replicas=%s ready=%s origin=%s\n' "${replicas}" "${ready}" "${origin}"
-  [[ "${replicas}" == "1" && "${ready}" == "1" && "${origin}" == "http://jasagent-web.jasagent.svc.cluster.local:18722" ]]
+  [[ "${replicas}" =~ ^[0-9]+$ && "${ready}" =~ ^[0-9]+$ ]] || return 1
+  [[ "${replicas}" -ge 2 && "${ready}" -ge 2 && "${origin}" == "http://jasagent-web.jasagent.svc.cluster.local:18722" ]]
 }
 
 main() {
@@ -581,7 +582,7 @@ main() {
   run_test ingress-nginx-runtime ingress_nginx_runtime
   run_test ingress-only-gateway ingress_only_gateway
   run_test forwarded-trusted-ingress-only forwarded_trusted_ingress_only
-  run_test gateway-single-replica-web-origin gateway_single_replica_and_web_origin
+  run_test gateway-multi-replica-web-origin gateway_multi_replica_and_web_origin
   if [[ "${FAIL}" -ne 0 ]]; then
     printf 'PROBE FAILED\n'
     exit 1

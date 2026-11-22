@@ -1,10 +1,30 @@
 # 集群内 MySQL。业务容器不把口令写进镜像或清单，只引用 Secret。
 # 中间件用节点默认运行时，不套 gVisor。库名是 jasagent。
 # 新数据目录由 MYSQL_DATABASE 创建。已有数据目录时，scripts/up-stack.sh 再执行 CREATE DATABASE IF NOT EXISTS。
-# 这是栈里已有的那一个 MySQL，不另建外部数据库。
-# 账号表 jasagent_account、登录会话表 jasagent_login_session 和聊天会话表 agent_session 都写在库 jasagent。
-# 数据目录仍是本 Deployment 已有的 emptyDir。删掉或重启网关 Pod 不会清掉这个目录。
+# 这是栈里已有的那一个 MySQL，不另建外部数据库，也不另建库。
+# 账号表 jasagent_account、登录会话表 jasagent_login_session、聊天会话表 agent_session、
+# 粘性表 jasagent_gateway_affinity，以及 023 的证与流水，都写在库 jasagent。
+# 数据目录改成 PersistentVolumeClaim jasagent-mysql-data（k3s 默认 StorageClass local-path）。
+# 切到这份卷之前，scripts/up-stack.sh 会先把现有 emptyDir 上的 jasagent 库拷过来，
+# 不能直接用空卷滚动掉当前 MySQL Pod。迁完之后，删掉或重建该 Pod，同一库里的数据都还在。
+# 该卷能挺过 Pod 删除，挺不过整机或数据盘被清空；整机或数据盘清空不在本轮承诺里。
 # 网关和 agent 的 home emptyDir 不是这些表的存储。
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jasagent-mysql-data
+  namespace: jasagent
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: mysql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -76,8 +96,10 @@ spec:
               mountPath: /var/lib/mysql
       volumes:
         # 已有 MySQL 的数据目录。库 jasagent 的表文件在这里，不在网关 home。
+        # 由 PVC jasagent-mysql-data 提供，不再使用 emptyDir。
         - name: data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: jasagent-mysql-data
 ---
 apiVersion: v1
 kind: Service

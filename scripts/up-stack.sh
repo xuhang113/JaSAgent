@@ -4,6 +4,7 @@
 # apply 含 web、观测组件和 rag，并等待滚动。业务容器使用 gVisor。
 # 口令、令牌和模型密钥只从仓库外的文件或环境读取，不写进仓库，也不打印出来。
 # 集群未就绪时调用 scripts/k8s/prepare-cluster.sh。固定步骤用该脚本的 --steps 查看。
+# apply MySQL 清单前，若当前 Pod 仍用 emptyDir 且库 jasagent 已有表，会先把数据目录拷到持久卷再切换。
 #
 # 用法：bash scripts/up-stack.sh
 set -euo pipefail
@@ -146,6 +147,9 @@ usage() {
   JASAGENT_MYSQL_HOST             集群内 MySQL 主机名
   JASAGENT_JDBC_URL               覆盖 JDBC 地址；不能包含 password=
   JASAGENT_HTTPS_PROXY            可选的 HTTPS 代理
+
+也可单独执行迁移，不部署其它组件：
+  bash scripts/up-stack.sh --migrate-mysql
 EOF
 }
 
@@ -1003,6 +1007,171 @@ ensure_jasagent_database() {
 }
 
 
+# 目标持久卷名称。与 deploy/k8s/mysql.yaml 中的 PersistentVolumeClaim 一致。
+MYSQL_PVC_NAME="jasagent-mysql-data"
+
+# 迁移时用来挂目标卷的临时 Pod。拷完即删。
+MYSQL_MIGRATE_POD="jasagent-mysql-migrate"
+
+# 只 apply mysql.yaml 里的 PVC，不动当前 Deployment，避免还没拷数据就滚到空卷。
+apply_mysql_pvc_only() {
+  local path="${SCRIPT_ROOT}/deploy/k8s/mysql.yaml"
+  if [[ ! -f "${path}" ]]; then
+    say "找不到清单：${path}" >&2
+    exit 1
+  fi
+  say "先创建或确认持久卷 ${MYSQL_PVC_NAME}，暂不切换 MySQL Deployment。"
+  python3 - "${path}" <<'PY' | kctl apply -f -
+import sys
+path = sys.argv[1]
+parts = []
+buf = []
+for line in open(path, encoding="utf-8"):
+    if line.strip() == "---":
+        parts.append("".join(buf))
+        buf = []
+    else:
+        buf.append(line)
+parts.append("".join(buf))
+found = False
+for part in parts:
+    if "kind: PersistentVolumeClaim" in part and "name: jasagent-mysql-data" in part:
+        sys.stdout.write(part if part.lstrip().startswith("apiVersion:") or part.lstrip().startswith("#") else "---\n" + part)
+        if not part.endswith("\n"):
+            sys.stdout.write("\n")
+        found = True
+if not found:
+    sys.exit("mysql.yaml 里找不到 PersistentVolumeClaim jasagent-mysql-data")
+PY
+}
+
+# 当前 jasagent-mysql 是否已经挂着目标 PVC。
+mysql_uses_target_pvc() {
+  local claim
+  claim="$(kctl -n "${NS}" get deploy jasagent-mysql -o jsonpath='{.spec.template.spec.volumes[?(@.name=="data")].persistentVolumeClaim.claimName}' 2>/dev/null || true)"
+  [[ "${claim}" == "${MYSQL_PVC_NAME}" ]]
+}
+
+# 当前库 jasagent 是否已有表。没有就绪 Pod 或还没有库时返回 1。口令不打印。
+mysql_jasagent_has_tables() {
+  local count
+  if ! kctl -n "${NS}" get deploy jasagent-mysql >/dev/null 2>&1; then
+    return 1
+  fi
+  kctl -n "${NS}" wait --for=condition=available --timeout=180s deploy/jasagent-mysql >/dev/null
+  count="$(kctl -n "${NS}" exec deploy/jasagent-mysql -c mysql -- bash -c '
+    set -eu
+    umask 077
+    printf "[client]\nuser=root\npassword=%s\n" "$MYSQL_ROOT_PASSWORD" > /tmp/jasagent-migrate-client.cnf
+    mysql --defaults-extra-file=/tmp/jasagent-migrate-client.cnf -h 127.0.0.1 --protocol=TCP -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"jasagent\""
+    rm -f /tmp/jasagent-migrate-client.cnf
+  ')"
+  count="$(printf '%s' "${count}" | tr -d '[:space:]')"
+  [[ "${count}" =~ ^[1-9][0-9]*$ ]]
+}
+
+# 删掉迁移用的临时 Pod。
+delete_mysql_migrate_pod() {
+  kctl -n "${NS}" delete pod "${MYSQL_MIGRATE_POD}" --ignore-not-found=true --wait=true >/dev/null
+}
+
+# 启动只挂目标 PVC 的临时 Pod，用来接收数据目录。使用与 MySQL 相同的镜像和 fsGroup。
+start_mysql_migrate_pod() {
+  delete_mysql_migrate_pod
+  kctl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${MYSQL_MIGRATE_POD}
+  namespace: ${NS}
+  labels:
+    app.kubernetes.io/name: jasagent
+    app.kubernetes.io/component: mysql-migrate
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    fsGroup: 999
+  containers:
+    - name: copy
+      image: mysql:8.4
+      imagePullPolicy: IfNotPresent
+      command:
+        - sleep
+        - "3600"
+      volumeMounts:
+        - name: data
+          mountPath: /mysql-dest
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: ${MYSQL_PVC_NAME}
+EOF
+  local n=0
+  while [[ "$n" -lt 90 ]]; do
+    if [[ "$(kctl -n "${NS}" get pod "${MYSQL_MIGRATE_POD}" -o jsonpath='{.status.phase}' 2>/dev/null || true)" == "Running" ]]; then
+      return 0
+    fi
+    n=$((n + 1))
+    sleep 2
+  done
+  say "迁移用临时 Pod 没有在预期时间内就绪。" >&2
+  kctl -n "${NS}" describe pod "${MYSQL_MIGRATE_POD}" >&2 || true
+  exit 1
+}
+
+# 在持有读锁的情况下，把当前 MySQL Pod 的数据目录拷到目标卷。口令不打印。
+copy_mysql_datadir() {
+  local src
+  src="$(kctl -n "${NS}" get pod -l app.kubernetes.io/name=jasagent,app.kubernetes.io/component=mysql -o jsonpath='{.items[0].metadata.name}')"
+  if [[ -z "${src}" ]]; then
+    say "找不到正在运行的 MySQL Pod，无法迁移数据目录。" >&2
+    exit 1
+  fi
+  say "把 ${src} 的 /var/lib/mysql 拷到持久卷 ${MYSQL_PVC_NAME}。"
+  kctl -n "${NS}" exec "${src}" -c mysql -- bash -c '
+    set -eu
+    umask 077
+    printf "[client]\nuser=root\npassword=%s\n" "$MYSQL_ROOT_PASSWORD" > /tmp/jasagent-migrate-client.cnf
+    mysql --defaults-extra-file=/tmp/jasagent-migrate-client.cnf -h 127.0.0.1 --protocol=TCP -e "FLUSH TABLES WITH READ LOCK; DO SLEEP(1800);" >/tmp/jasagent-migrate-lock.log 2>&1 &
+    echo $! > /tmp/jasagent-migrate-lock.pid
+    sleep 2
+    mysqladmin --defaults-extra-file=/tmp/jasagent-migrate-client.cnf ping -h 127.0.0.1 --silent
+  '
+  if ! kctl -n "${NS}" exec "${src}" -c mysql -- tar -C /var/lib/mysql --exclude='*.pid' --exclude='*.sock' -cf - . \
+    | kctl -n "${NS}" exec -i "${MYSQL_MIGRATE_POD}" -c copy -- tar -C /mysql-dest -xf -; then
+    kctl -n "${NS}" exec "${src}" -c mysql -- bash -c 'kill "$(cat /tmp/jasagent-migrate-lock.pid)" >/dev/null 2>&1 || true; rm -f /tmp/jasagent-migrate-client.cnf /tmp/jasagent-migrate-lock.pid' || true
+    say "拷贝 MySQL 数据目录失败。" >&2
+    exit 1
+  fi
+  kctl -n "${NS}" exec "${src}" -c mysql -- bash -c 'kill "$(cat /tmp/jasagent-migrate-lock.pid)" >/dev/null 2>&1 || true; rm -f /tmp/jasagent-migrate-client.cnf /tmp/jasagent-migrate-lock.pid' || true
+  kctl -n "${NS}" exec "${MYSQL_MIGRATE_POD}" -c copy -- chown -R 999:999 /mysql-dest
+}
+
+# 若当前 MySQL 仍用 emptyDir（或其它非目标卷）且库 jasagent 已有表，先迁数据再让调用方 apply 新清单。
+# 还没有 MySQL，或已经挂着目标 PVC，或库里还没有表时，不改当前 Pod，由随后的 apply 处理。
+migrate_mysql_datadir_if_needed() {
+  if ! kctl -n "${NS}" get deploy jasagent-mysql >/dev/null 2>&1; then
+    say "还没有 jasagent-mysql，将直接 apply 带持久卷的清单。"
+    return 0
+  fi
+  if mysql_uses_target_pvc; then
+    say "MySQL 已在使用持久卷 ${MYSQL_PVC_NAME}。"
+    return 0
+  fi
+  if ! mysql_jasagent_has_tables; then
+    say "当前 MySQL 没有已有的 jasagent 表，将直接切到持久卷。"
+    return 0
+  fi
+  say "先把现有 jasagent 库迁到持久卷，再切换 Deployment。"
+  apply_mysql_pvc_only
+  start_mysql_migrate_pod
+  copy_mysql_datadir
+  delete_mysql_migrate_pod
+  say "数据目录已拷到持久卷，随后才切换 Deployment。"
+}
+
+
 # 共享 sidecar Deployment 改为每 Pod 容器后，kubectl apply 不会删掉遗留对象。
 remove_legacy_shared_sidecar() {
   say "删除遗留的共享 sidecar Deployment 和 Service。"
@@ -1149,6 +1318,9 @@ apply_stack() {
     fi
   done
   for name in "${JASAGENT_EARLY_MANIFESTS[@]}"; do
+    if [[ "${name}" == "mysql.yaml" ]]; then
+      migrate_mysql_datadir_if_needed
+    fi
     apply_manifest "${name}"
   done
   for item in "${JASAGENT_EARLY_WAITS[@]}"; do
@@ -1278,6 +1450,15 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
       configure_sidecar_proxy
       kctl -n "${NS}" rollout restart statefulset/jasagent-agent
       kctl -n "${NS}" rollout status statefulset/jasagent-agent --timeout=240s
+      exit 0
+      ;;
+    --migrate-mysql)
+      ensure_cluster
+      migrate_mysql_datadir_if_needed
+      apply_manifest mysql.yaml
+      wait_rollout_item "deployment/jasagent-mysql|300s"
+      ensure_jasagent_database
+      say "MySQL 已切换到持久卷。"
       exit 0
       ;;
     "")
