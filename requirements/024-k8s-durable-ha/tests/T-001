@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-001"
+result_text='跨副本下，020 的会话 Cookie 与租户隔离仍然成立：同一用户的登录会话在任一就绪网关副本上可用；租户 A 不能读到或操作租户 B 的会话。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  "${HERE}/gateway-tests.sh"
+  atdd_require_gateway_pass "loginSessionIsVisibleToAnotherReplica"
+  atdd_require_gateway_pass "registerCreatesAnOrdinaryTenantAndCanEnterTheConsole"
+  atdd_require_gateway_pass "gatewayRejectsForeignSessionsBeforeForwarding"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "跨副本登录会话可见，租户不能操作他人会话" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

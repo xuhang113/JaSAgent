@@ -7,7 +7,7 @@ import dev.jasagent.auth.AccountRoles;
 import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.auth.MysqlAccountAuth;
 import dev.jasagent.gateway.agent.AgentInstance;
-import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
+import dev.jasagent.gateway.agent.AgentLiveness;
 import dev.jasagent.gateway.store.MysqlAffinityStore;
 import dev.jasagent.gateway.store.UragPassword;
 import dev.jasagent.it.FixedTokenConfiguration;
@@ -79,7 +79,7 @@ public class CEndTenantImTest {
     @Autowired
     private SessionLedger sessions;
     @Autowired
-    private InMemoryAgentLiveness liveness;
+    private AgentLiveness liveness;
 
     /**
      * 用桩同时充当 agent 和控制台上游。家目录是空的，避免把真实用户迁成 admin。

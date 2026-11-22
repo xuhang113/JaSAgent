@@ -8,7 +8,7 @@ import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.auth.MysqlAccountAuth;
 import dev.jasagent.gateway.agent.AgentDiscovery;
 import dev.jasagent.gateway.agent.AgentInstance;
-import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
+import dev.jasagent.gateway.agent.AgentLiveness;
 import dev.jasagent.gateway.store.MysqlAffinityStore;
 import dev.jasagent.it.FixedTokenConfiguration;
 import jakarta.servlet.http.Cookie;
@@ -68,7 +68,7 @@ public class GatewayForwardTest {
     @Autowired
     private MockMvc mvc;
     @Autowired
-    private InMemoryAgentLiveness liveness;
+    private AgentLiveness liveness;
     @Autowired
     private MysqlAffinityStore store;
     @Autowired

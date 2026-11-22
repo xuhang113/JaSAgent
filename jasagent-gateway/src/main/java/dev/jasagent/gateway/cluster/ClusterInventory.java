@@ -2,7 +2,7 @@ package dev.jasagent.gateway.cluster;
 
 import dev.jasagent.gateway.agent.AgentDiscovery;
 import dev.jasagent.gateway.agent.AgentInstance;
-import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
+import dev.jasagent.gateway.agent.AgentLiveness;
 import dev.jasagent.gateway.store.AffinityStore;
 
 import java.time.Instant;
@@ -18,9 +18,9 @@ import java.util.Map;
 /**
  * 组装 GET /api/cluster 的正文。每台 agent 一行，字段给控制台原样显示。
  * 行来自当时的 Nacos 健康实例。Nacos 不可用或为空时列表为空，不补静态约定地址。
- * online 和 connectionAlive 都表示到这台 agent 的长连接是否还在。断开就是下线。
- * stickyUsers 是粘性库里仍指向这台实例的登录名。lastHeartbeat 是最近一次在长连接上确认存活的时间。
- * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
+ * online 和 connectionAlive 都表示是否还有副本的长连接仍有效。全部副本都断开才是下线。
+ * stickyUsers 是粘性库里仍指向这台实例的登录名。lastHeartbeat 是各副本里最近一次确认存活的时间。
+ * 登录会话在 MySQL。存活探测按网关副本写入同一库并跨副本读取。本机缺省副本数仍是 1。
  */
 public final class ClusterInventory {
     /**
@@ -29,17 +29,17 @@ public final class ClusterInventory {
     public static final DateTimeFormatter HEARTBEAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
     private final AgentDiscovery discovery;
-    private final InMemoryAgentLiveness liveness;
+    private final AgentLiveness liveness;
     private final AffinityStore store;
 
     /**
-     * 绑定发现、长连接状态和粘性库。
+     * 绑定发现、共享长连接状态和粘性库。
      *
      * @param discovery 当时的 Nacos 健康实例
-     * @param liveness 长连接是否还在，只在本进程
+     * @param liveness 长连接是否还在。生产按副本共享，不只看本进程
      * @param store 用户到实例的粘性
      */
-    public ClusterInventory(AgentDiscovery discovery, InMemoryAgentLiveness liveness, AffinityStore store) {
+    public ClusterInventory(AgentDiscovery discovery, AgentLiveness liveness, AffinityStore store) {
         this.discovery = discovery;
         this.liveness = liveness;
         this.store = store;

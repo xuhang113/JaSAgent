@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-003"
+result_text='存活探测和 EventSource 不依赖单进程状态，网关至少 2 个就绪副本时仍然可用。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  "${HERE}/gateway-tests.sh"
+  atdd_require_gateway_pass "twoReplicasSeeTheSameLiveness"
+  atdd_require_gateway_pass "oneReplicaDownDoesNotEraseTheOtherHeartbeat"
+  atdd_require_gateway_pass "expiredHeartbeatDoesNotKeepTheAgentAlive"
+  atdd_require_gateway_pass "routingUsesSharedLivenessInsteadOfTheLocalTable"
+  atdd_require_gateway_pass "clusterSnapshotReadsSharedLiveness"
+  atdd_require_gateway_pass "eventStreamIsForwardedWithoutReadingTheBody"
+  atdd_require_gateway_pass "productionWiringUsesSharedLiveness"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "共享存活和事件流原样转发模块测试" "通过" >> "${ATDD_LOG}"
+  if grep -RIn --include='*.java' --include='*.properties' -F '登录会话和存活探测都在网关进程内，本轮网关按单副本验收。' "${REPO_ROOT}/jasagent-gateway/src/main" >/dev/null; then
+    echo "网关主源码仍写着存活探测只在本进程。" >&2
+    exit 1
+  fi
+  if ! grep -q 'return MysqlAgentLiveness.open' "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/config/GatewayConfiguration.java"; then
+    echo "生产装配没有打开共享存活表。" >&2
+    exit 1
+  fi
+  if ! grep -q '事件流不在这里改写，避免把长连接响应整段读进内存' "${REPO_ROOT}/jasagent-gateway/src/main/java/dev/jasagent/gateway/route/GatewayPaths.java"; then
+    echo "事件流路径不再声明避免整段读入内存。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "主源码已改掉单进程存活，生产走共享表，事件流不整段读入" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

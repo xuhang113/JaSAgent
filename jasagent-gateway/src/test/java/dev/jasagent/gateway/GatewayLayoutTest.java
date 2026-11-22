@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * 网关源码树不再携带内嵌控制台，单副本口径写在配置和源码里。改过的类型都有注释。
+ * 网关源码树不再携带内嵌控制台。登录会话和共享存活的口径写在配置和源码里。改过的类型都有注释。
  */
 class GatewayLayoutTest {
     /**
@@ -32,7 +32,7 @@ class GatewayLayoutTest {
         assertTrue(props.contains(GatewayRuntime.SINGLE_REPLICA));
         assertEquals(1, GatewayRuntime.REPLICAS);
         assertEquals(18721, GatewayRuntime.DEFAULT_PORT);
-        String source = Files.readString(Path.of("src/main/java/dev/jasagent/gateway/agent/InMemoryAgentLiveness.java"));
+        String source = Files.readString(Path.of("src/main/java/dev/jasagent/gateway/agent/MysqlAgentLiveness.java"));
         assertTrue(source.contains(GatewayRuntime.SINGLE_REPLICA));
     }
 
@@ -84,6 +84,8 @@ class GatewayLayoutTest {
                 Path.of("src/main/java/dev/jasagent/gateway/store/UragPassword.java"),
                 Path.of("src/main/java/dev/jasagent/gateway/config/GatewayConfiguration.java"),
                 Path.of("src/main/java/dev/jasagent/gateway/agent/InMemoryAgentLiveness.java"),
+                Path.of("src/main/java/dev/jasagent/gateway/agent/AgentLiveness.java"),
+                Path.of("src/main/java/dev/jasagent/gateway/agent/MysqlAgentLiveness.java"),
                 Path.of("src/main/java/dev/jasagent/gateway/agent/AgentDiscovery.java"),
                 Path.of("src/main/java/dev/jasagent/gateway/agent/AgentLinkSupervisor.java"),
                 Path.of("src/main/java/dev/jasagent/gateway/agent/AgentInstance.java"),

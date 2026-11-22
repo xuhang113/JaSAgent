@@ -4,7 +4,8 @@ import dev.jasagent.auth.LocalAuthService;
 import dev.jasagent.auth.MysqlAccountAuth;
 import dev.jasagent.gateway.agent.AgentDiscovery;
 import dev.jasagent.gateway.agent.AgentLinkSupervisor;
-import dev.jasagent.gateway.agent.InMemoryAgentLiveness;
+import dev.jasagent.gateway.agent.AgentLiveness;
+import dev.jasagent.gateway.agent.MysqlAgentLiveness;
 import dev.jasagent.gateway.cluster.ClusterInventory;
 import dev.jasagent.gateway.nacos.NacosAgentDiscovery;
 import dev.jasagent.gateway.nacos.NacosHealthyLookup;
@@ -34,7 +35,7 @@ import java.util.Map;
 /**
  * 组装网关运行时需要的登录、令牌、粘性、集群、长连接和控制台上游。
  * 长连接默认开启，只连当时从 Nacos 查到的实例。测试把它关掉。
- * 登录会话和存活探测都在网关进程内，本轮网关按单副本验收。
+ * 登录会话在 MySQL。存活探测按网关副本写入同一库并跨副本读取。本机缺省副本数仍是 1。
  * 转发头默认不信任任何地址，只有配置的 Ingress/Funnel 这一跳可以声明 HTTPS。
  */
 @Configuration
@@ -156,13 +157,20 @@ public class GatewayConfiguration {
     }
 
     /**
-     * 进程内的长连接状态。路由和集群共用这一份。
+     * 按副本把长连接存活写进和粘性库同一套 JDBC。路由和集群读的是这份共享状态，不是本进程里的另一张表。
+     * 每个进程用自己的副本编号写心跳。一个副本断开只清自己的连接标记，不擦掉其它副本的近期心跳。
      *
-     * @return 空的存活表，长连接随后往里写
+     * @param url JDBC 地址，不能包含 password=
+     * @param username 数据库账号
+     * @param passwordFile 仓库外的口令文件
+     * @return 连到已有 jasagent 库的存活表
      */
     @Bean
-    public InMemoryAgentLiveness agentLiveness() {
-        return new InMemoryAgentLiveness();
+    public MysqlAgentLiveness agentLiveness(
+            @Value("${" + MysqlAffinityStore.URL_PROPERTY + "}") String url,
+            @Value("${" + MysqlAffinityStore.USER_PROPERTY + "}") String username,
+            @Value("${" + MysqlAffinityStore.PASSWORD_FILE_PROPERTY + "}") String passwordFile) {
+        return MysqlAgentLiveness.open(url, username, Path.of(passwordFile));
     }
 
     /**
@@ -206,15 +214,15 @@ public class GatewayConfiguration {
     }
 
     /**
-     * 用 Nacos 发现、本进程长连接和粘性库做路由器。
+     * 用 Nacos 发现、共享长连接和粘性库做路由器。
      *
      * @param agentDiscovery 当时的健康实例
-     * @param agentLiveness 长连接状态
+     * @param agentLiveness 跨副本的长连接状态
      * @param affinityStore 粘性库
      * @return 粘性路由器
      */
     @Bean
-    public StickyAgentRouter stickyAgentRouter(AgentDiscovery agentDiscovery, InMemoryAgentLiveness agentLiveness, MysqlAffinityStore affinityStore) {
+    public StickyAgentRouter stickyAgentRouter(AgentDiscovery agentDiscovery, AgentLiveness agentLiveness, MysqlAffinityStore affinityStore) {
         return new StickyAgentRouter(agentDiscovery, agentLiveness, affinityStore);
     }
 
@@ -222,12 +230,12 @@ public class GatewayConfiguration {
      * 集群页读的汇总。实例来自 Nacos，不来自静态目录。
      *
      * @param agentDiscovery 当时的健康实例
-     * @param agentLiveness 长连接状态
+     * @param agentLiveness 跨副本的长连接状态
      * @param affinityStore 粘性库
      * @return 集群汇总
      */
     @Bean
-    public ClusterInventory clusterInventory(AgentDiscovery agentDiscovery, InMemoryAgentLiveness agentLiveness, MysqlAffinityStore affinityStore) {
+    public ClusterInventory clusterInventory(AgentDiscovery agentDiscovery, AgentLiveness agentLiveness, MysqlAffinityStore affinityStore) {
         return new ClusterInventory(agentDiscovery, agentLiveness, affinityStore);
     }
 
@@ -255,12 +263,12 @@ public class GatewayConfiguration {
      * 发现为空或失败时不拨到本机约定端口。
      *
      * @param agentDiscovery 要连接的 agent
-     * @param agentLiveness 连接结果写到这里
+     * @param agentLiveness 连接结果按本副本写到共享存活表
      * @return 长连接管理器
      */
     @Bean
     @ConditionalOnProperty(name = "jasagent.gateway.links.enabled", havingValue = "true", matchIfMissing = true)
-    public AgentLinkSupervisor agentLinkSupervisor(AgentDiscovery agentDiscovery, InMemoryAgentLiveness agentLiveness) {
+    public AgentLinkSupervisor agentLinkSupervisor(AgentDiscovery agentDiscovery, AgentLiveness agentLiveness) {
         return new AgentLinkSupervisor(agentDiscovery, agentLiveness);
     }
 }
