@@ -114,6 +114,9 @@ spec:
                   key: token
             - name: JASAGENT_SIDECAR_URL
               value: "http://127.0.0.1:18761"
+            # 执行链路按 OTLP HTTP 报到集群内采集器，再转到 Jaeger。未配置则不外发。
+            - name: JASAGENT_OTEL_ENDPOINT
+              value: http://jasagent-otel-collector.jasagent.svc.cluster.local:4318/v1/traces
             - name: LD_PRELOAD
               value: /opt/jasagent/libjasagent-egress-filter.so
             - name: XAI_API_KEY

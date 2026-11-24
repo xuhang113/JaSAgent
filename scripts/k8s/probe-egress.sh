@@ -496,6 +496,33 @@ ingress_only_gateway() {
   [[ "${bad}" -eq 0 ]]
 }
 
+
+# Jaeger 只要 ClusterIP，不能是 NodePort 或 LoadBalancer，也不能把查询端口暴露成 nodePort。
+jaeger_clusterip_not_nodeport() {
+  local typ nodeports
+  if ! kubectl -n "${NS}" get svc jasagent-jaeger >/dev/null 2>&1; then
+    printf 'jaeger-service-missing\n'
+    return 1
+  fi
+  typ="$(kubectl -n "${NS}" get svc jasagent-jaeger -o jsonpath='{.spec.type}')"
+  nodeports="$(kubectl -n "${NS}" get svc jasagent-jaeger -o jsonpath='{range .spec.ports[*]}{.nodePort}{" "}{end}')"
+  printf 'type=%s nodePorts=%s\n' "${typ}" "${nodeports}"
+  [[ "${typ}" == "ClusterIP" || "${typ}" == "" ]] || return 1
+  # nodePort 未设置时 jsonpath 为空或 0。
+  local p
+  for p in ${nodeports}; do
+    if [[ -n "${p}" && "${p}" != "0" ]]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+# Ingress 后端不得出现 Jaeger 或其它非网关服务。沿用入口只到网关的既有检查口径。
+jaeger_not_on_ingress() {
+  ingress_only_gateway
+}
+
 # 受信任转发名单必须存在，且不是全网信任。
 forwarded_trusted_ingress_only() {
   local trusted
@@ -583,6 +610,8 @@ main() {
   run_test ingress-only-gateway ingress_only_gateway
   run_test forwarded-trusted-ingress-only forwarded_trusted_ingress_only
   run_test gateway-multi-replica-web-origin gateway_multi_replica_and_web_origin
+  run_test jaeger-clusterip-not-nodeport jaeger_clusterip_not_nodeport
+  run_test jaeger-not-on-ingress jaeger_not_on_ingress
   if [[ "${FAIL}" -ne 0 ]]; then
     printf 'PROBE FAILED\n'
     exit 1
