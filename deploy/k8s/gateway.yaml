@@ -49,6 +49,9 @@ spec:
               value: jasagent-nacos.jasagent.svc.cluster.local:8848
             - name: JASAGENT_GATEWAY_WEB_ORIGIN
               value: http://jasagent-web.jasagent.svc.cluster.local:18722
+            # 只反代到集群内 Jaeger 的 ClusterIP 根地址，不含路径。请求不能改写这个上游。
+            - name: JASAGENT_GATEWAY_JAEGER_ORIGIN
+              value: http://jasagent-jaeger.jasagent.svc.cluster.local:16686
             # 只信任 Ingress-nginx 这一跳的 X-Forwarded-*。取值由一键脚本按 Ingress Pod 或实际对端写入 ConfigMap，禁止 0.0.0.0/0 或 ::/0。
             - name: JASAGENT_GATEWAY_FORWARDED_TRUSTED
               valueFrom:

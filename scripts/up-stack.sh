@@ -73,12 +73,13 @@ JASAGENT_LATE_MANIFESTS=(
   metrics-adapter.yaml
 )
 
-# 业务工作负载的滚动等待。web、grafana、otel-collector、prometheus 和 rag 都在里面。
+# 业务工作负载的滚动等待。web、grafana、otel-collector、jaeger、prometheus 和 rag 都在里面。
 JASAGENT_LATE_WAITS=(
   "deployment/jasagent-agentpass|420s"
   "statefulset/jasagent-agent|420s"
   "deployment/jasagent-gateway|420s"
   "deployment/jasagent-web|420s"
+  "deployment/jasagent-jaeger|420s"
   "deployment/jasagent-otel-collector|420s"
   "deployment/jasagent-prometheus|420s"
   "deployment/jasagent-grafana|420s"
@@ -98,6 +99,7 @@ JASAGENT_RESTART_TARGETS=(
   deployment/jasagent-gateway
   deployment/jasagent-agentpass
   deployment/jasagent-web
+  deployment/jasagent-jaeger
   deployment/jasagent-otel-collector
   deployment/jasagent-prometheus
   deployment/jasagent-grafana
