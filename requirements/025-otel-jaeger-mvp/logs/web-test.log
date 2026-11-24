@@ -1,0 +1,149 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] jasagent                                                           [pom]
+[INFO] jasagent-api                                                       [jar]
+[INFO] jasagent-web                                                       [jar]
+[INFO] 
+[INFO] -----------------------< dev.jasagent:jasagent >------------------------
+[INFO] Building jasagent 0.1.0                                            [1/3]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-api >----------------------
+[INFO] Building jasagent-api 0.1.0                                        [2/3]
+[INFO]   from jasagent-api/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-api ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-api ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-api ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-api/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-api ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-api ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-web >----------------------
+[INFO] Building jasagent-web 0.1.0                                        [3/3]
+[INFO]   from jasagent-web/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.5.0:exec (build-console-frontend) @ jasagent-web ---
+[INFO] skipping execute as per configuration
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-web ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-web ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-web ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-web/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-web ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-web ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running dev.jasagent.web.upstream.JaegerConsoleLinkTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.039 s -- in dev.jasagent.web.upstream.JaegerConsoleLinkTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for jasagent 0.1.0:
+[INFO] 
+[INFO] jasagent ........................................... SUCCESS [  0.001 s]
+[INFO] jasagent-api ....................................... SUCCESS [  0.300 s]
+[INFO] jasagent-web ....................................... SUCCESS [  0.668 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  1.184 s
+[INFO] Finished at: 2026-11-24T10:59:52+08:00
+[INFO] ------------------------------------------------------------------------
+> jasagent-console@0.1.0 test
+> vitest run --reporter=verbose
+
+
+ RUN  v2.1.9 /workspace/JaSAgent/jasagent-web/frontend
+
+ ✓ src/gateway.spec.js > 网关控制台目录 > 保留接口里的 DeepSeek，并在末尾加上 grok-4.7
+ ✓ src/gateway.spec.js > 网关控制台目录 > 接口已经给了 grok-4.7 时不重复追加
+ ✓ src/gateway.spec.js > 网关控制台目录 > 空目录仍保留 deepseek-flash，并加上 grok-4.7
+ ✓ src/gateway.spec.js > 当前请求落到的 agent > 优先读 agentInstanceId 和 agentAddress
+ ✓ src/gateway.spec.js > 当前请求落到的 agent > 没有专用字段时用 instanceId 和 address
+ ✓ src/gateway.spec.js > 当前请求落到的 agent > 缺响应时两个字段都是空串
+ ✓ src/gateway.spec.js > 集群行 > 按约定字段整理，缺省不算在线
+ ✓ src/gateway.spec.js > 集群行 > 没有 agents 数组时是空表
+ ✓ src/views/RegisterView.spec.js > 注册页 > 注册成功后登录并进入会话壳，口令不出现在错误里
+ ✓ src/views/RegisterView.spec.js > 注册页 > 失败时不回显口令
+ ✓ src/views/ClusterView.spec.js > 集群页 > 列出实例、地址、在线、长连接、粘着登录名和心跳
+ ✓ src/views/ClusterView.spec.js > 集群页 > 长连接断开时第二个标记为关，不写完成
+ ✓ src/views/ClusterView.spec.js > 集群页 > 接口失败时不填假 agent
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 左栏放工作区和会话，中间是消息，右栏默认是任务
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 右栏 tab 一次只显示一栏，抽屉从菜单打开
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 空状态是短句
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 页面空状态不写还没有
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 空会话在中部用一句说明
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 输入框排在消息区之后，并钉在中间列
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 三列都占满视口高度
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 工具结果只出现在右栏 Trace，对话里不放执行过程
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 文件全文收在工具步骤里，时间线一行只留摘要
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 通行证的允许和拒绝在抽屉里，不靠横向表格
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 正在执行的子 agent 挂在对话上方，历史的要打开列表才看见
+ ✓ src/views/ConsoleView.spec.js > 会话页三列布局 > 任务行和子 agent 列表保持浅色和 8px 圆角
+ ✓ src/views/ConsoleView.spec.js > 会话页按钮对齐 llgraph > 主操作使用 cursor-btn-primary 的颜色、字号、圆角和内边距
+ ✓ src/views/ConsoleView.spec.js > 会话页按钮对齐 llgraph > 次操作使用 cursor-btn-ghost
+ ✓ src/views/ConsoleView.spec.js > 会话页按钮对齐 llgraph > 危险操作使用 cursor-btn-danger，中止使用 composer stop
+ ✓ src/views/ConsoleView.spec.js > 会话页按钮对齐 llgraph > 会话删除按钮沿用列表删除的颜色和圆角，并保持可见
+ ✓ src/views/ConsoleView.spec.js > 会话页按钮对齐 llgraph > 按钮间距去掉 Element Plus 的相邻外边距
+ ✓ src/views/ConsoleView.spec.js > 会话页按钮对齐 llgraph > 会话行、子 agent 和 skill 按钮只改颜色、字号、圆角
+ ✓ src/views/ConsoleView.spec.js > 会话页按钮对齐 llgraph > 按钮样式不加入过渡或关键帧
+ ✓ src/views/ConsoleView.spec.js > 会话页按钮对齐 llgraph > 通行证决定和中止仍走原来的接口
+ ✓ src/views/ConsoleView.spec.js > 会话页交互动效 > 悬停 0.15s，按压 0.1s，不改按钮颜色字号圆角和间距
+ ✓ src/views/ConsoleView.spec.js > 会话页交互动效 > 列宽展开是 0.2s，拖动时立刻跟上
+ ✓ src/views/ConsoleView.spec.js > 会话页交互动效 > 折叠的 Trace 用 0.2s 展开，右栏改用 tab 指示
+ ✓ src/views/ConsoleView.spec.js > 会话页交互动效 > 紧凑顶栏、细分割线、等宽数字，浅色上仍能读
+ ✓ src/views/ConsoleView.spec.js > 会话页交互动效 > 切换会话和消息进入只做 0.15s 透明度
+ ✓ src/router.spec.js > 会话壳路由 > 注册页不要求已经登录
+ ✓ src/router.spec.js > 会话壳路由 > 普通用户打开集群页时回到会话壳
+ ✓ src/router.spec.js > 会话壳路由 > admin 可以打开集群页
+ ✓ src/router.spec.js > 会话壳路由 > 未登录访问会话壳时回到登录页
+ ✓ src/router.spec.js > 会话壳路由 > 没有把 Jaeger 注册成页面路由
+ ✓ src/views/ConsoleView.spec.js > 会话页交互动效 > 右栏默认停在任务，抽屉收起，拖动分隔时标记按压
+ ✓ src/views/ConsoleView.spec.js > 助手回复上的思考 > 有思考内容时只留在最后一轮正文上面，灰色小字默认收起
+ ✓ src/views/ConsoleView.spec.js > 助手回复上的思考 > 没有思考内容时不渲染思考块
+ ✓ src/views/ConsoleView.spec.js > 助手回复上的思考 > SSE 的 thinking 事件在正文出现前就写进最后一轮
+ ✓ src/views/ConsoleView.spec.js > 会话标题 > 新建会话使用新会话，而不是带序号的会话 1
+ ✓ src/views/ConsoleView.spec.js > 会话标题 > 普通用户看不到集群入口，会话壳仍然列出自己的会话
+ ✓ src/views/ConsoleView.spec.js > 会话标题 > admin 仍能看到集群入口
+ ✓ src/views/ConsoleView.spec.js > 会话标题 > admin 能看到指向 Jaeger 的普通链接
+ ✓ src/views/ConsoleView.spec.js > 会话标题 > 普通用户看不到 Jaeger 入口
+ ✓ src/views/ConsoleView.spec.js > 会话标题 > 单击标题后回车保存，Esc 取消
+ ✓ src/views/ConsoleView.spec.js > 会话标题 > 改名入口和空标题都不发请求
+ ✓ src/views/ConsoleView.spec.js > 会话模型 > 输入区能看到当前模型，DeepSeek 后面有 grok-4.7
+ ✓ src/views/ConsoleView.spec.js > 会话模型 > 换模型只改这一会话，再打开仍然是保存的模型
+ ✓ src/views/ConsoleView.spec.js > 会话模型 > 发送时带上这一会话当前的模型
+ ✓ src/views/ConsoleView.spec.js > 网关控制台补充 > 人和模型用图标，任务行不再写完成
+ ✓ src/views/ConsoleView.spec.js > 网关控制台补充 > 顶栏显示这一请求落到的实例和地址
+ ✓ src/views/ConsoleView.spec.js > 网关控制台补充 > 右栏可以收起，Trace 默认不展开
+
+ Test Files  5 passed (5)
+      Tests  60 passed (60)
+   Start at  10:59:53
+   Duration  1.47s (transform 362ms, setup 0ms, collect 1.50s, tests 908ms, environment 763ms, prepare 245ms)

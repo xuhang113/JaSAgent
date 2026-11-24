@@ -120,7 +120,10 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      * 没有 MySQL 账本时，按租户和用户记住已选工作区。只活在本进程，不写新表，两个租户不共用一条路径。
      */
     private final Map<String, String> rememberedWorkspaces = new ConcurrentHashMap<>();
-    private final SavedTraceTracer traces = new SavedTraceTracer();
+    /**
+     * 执行追踪。未配置 {@code jasagent.otel.endpoint} 时只留在内存里；配置了非空地址才外发。
+     */
+    private final OtlpWiredTracer traces;
     private final Map<String, String> environment;
     private final Map<String, CheckpointRunControl> controls = new ConcurrentHashMap<>();
     private final Map<String, Exec> executions = new ConcurrentHashMap<>();
@@ -151,6 +154,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     /**
      * 用指定模型目录启动运行时，测试可以注入固定目录而不访问外网。
      * 副作用：创建通行证和调度器，包装对话模型以记录思考，绑定思考增量，尝试打开执行日志和检查点；打不开时日志留空，健康检查会报存储不可用。
+     * 配置了非空 {@code jasagent.otel.endpoint} 时，追踪会把同一次执行的 span 交给已有的 OTLP 导出；没配置时仍只使用内存追踪。
      *
      * @param auth 本机认证服务
      * @param configuration 运行覆盖项，可以是空映射
@@ -158,6 +162,7 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
      */
     LocalRuntime(LocalAuthService auth, Map<String, String> configuration, SessionModelCatalog catalog) {
         this.auth = auth;
+        this.traces = OtlpWiredTracer.open(configuration);
         this.catalog = catalog;
         this.passGate = PassSettings.create(configuration, userId -> auth.directories().userDirectory(userId));
         SubAgentRunner runner = item -> CompletableFuture.completedFuture(null);
@@ -235,11 +240,13 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     /**
-     * 丢掉检查点控制器并立刻打断工作线程，进行中的节点不再继续。
-     * 副作用：清空 controls，并对虚拟线程池执行 shutdownNow。
+     * 丢掉检查点控制器，把已经结束的链路刷到导出端点，并立刻打断工作线程。
+     * 没有配置导出端点时，关闭追踪器不会外发。进行中的节点不再继续。
+     * 副作用：清空 controls，关闭追踪器，并对虚拟线程池执行 shutdownNow。
      */
     public void close() {
         controls.clear();
+        traces.close();
         workers.shutdownNow();
     }
 
@@ -2476,7 +2483,8 @@ public final class LocalRuntime implements ExecutionApi, ConsoleApi {
     }
 
     /**
-     * 按工作区复用检查点控制器。工作流节点绑定到 runNode，追踪走内存追踪器。
+     * 按工作区复用检查点控制器。工作流节点绑定到 runNode，追踪走当前运行时的 {@link OtlpWiredTracer}。
+     * 没配导出端点时它只记内存；配了端点时同一次执行的 span 会外发。
      * 副作用：该工作区第一次使用时打开控制器并放进 controls。
      *
      * @param exec 提供工作区路径的执行

@@ -1,0 +1,171 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] jasagent                                                           [pom]
+[INFO] jasagent-api                                                       [jar]
+[INFO] jasagent-auth                                                      [jar]
+[INFO] jasagent-persist                                                   [jar]
+[INFO] jasagent-trace                                                     [jar]
+[INFO] jasagent-gateway                                                   [jar]
+[INFO] 
+[INFO] -----------------------< dev.jasagent:jasagent >------------------------
+[INFO] Building jasagent 0.1.0                                            [1/6]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-api >----------------------
+[INFO] Building jasagent-api 0.1.0                                        [2/6]
+[INFO]   from jasagent-api/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-api ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-api ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-api ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-api/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-api ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-api ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-auth >---------------------
+[INFO] Building jasagent-auth 0.1.0                                       [3/6]
+[INFO]   from jasagent-auth/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-auth ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-auth ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-auth ---
+[INFO] 
+[INFO] -------------------< dev.jasagent:jasagent-persist >--------------------
+[INFO] Building jasagent-persist 0.1.0                                    [4/6]
+[INFO]   from jasagent-persist/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-persist ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-persist ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-persist ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-persist/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-persist ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-persist ---
+[INFO] 
+[INFO] --------------------< dev.jasagent:jasagent-trace >---------------------
+[INFO] Building jasagent-trace 0.1.0                                      [5/6]
+[INFO]   from jasagent-trace/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-trace ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-trace ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-trace ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-trace/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-trace ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-trace ---
+[INFO] 
+[INFO] -------------------< dev.jasagent:jasagent-gateway >--------------------
+[INFO] Building jasagent-gateway 0.1.0                                    [6/6]
+[INFO]   from jasagent-gateway/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-gateway ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-gateway ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 40 source files with javac [debug release 21] to target/classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-gateway ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-gateway ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 32 source files with javac [debug release 21] to target/test-classes
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-gateway ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running dev.jasagent.gateway.JaegerProxyTest
+10:59:06.242 [main] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [dev.jasagent.gateway.JaegerProxyTest]: JaegerProxyTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+10:59:06.326 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration dev.jasagent.gateway.GatewayApplication for test class dev.jasagent.gateway.JaegerProxyTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.4.5)
+
+2026-11-24T10:59:06.925+08:00  INFO 2002148 --- [           main] dev.jasagent.gateway.JaegerProxyTest     : Starting JaegerProxyTest using Java 21.0.13 with PID 2002148 (started by box in /workspace/JaSAgent/jasagent-gateway)
+2026-11-24T10:59:06.927+08:00  INFO 2002148 --- [           main] dev.jasagent.gateway.JaegerProxyTest     : No active profile set, falling back to 1 default profile: "default"
+2026-11-24T10:59:07.423+08:00  INFO 2002148 --- [           main] o.s.cloud.context.scope.GenericScope     : BeanFactory id=3b38df68-da0f-39fd-af60-593ca6f6abec
+2026-11-24T10:59:08.195+08:00  INFO 2002148 --- [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-11-24T10:59:08.195+08:00  INFO 2002148 --- [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-11-24T10:59:08.196+08:00  INFO 2002148 --- [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 1 ms
+2026-11-24T10:59:08.249+08:00  INFO 2002148 --- [           main] dev.jasagent.gateway.JaegerProxyTest     : Started JaegerProxyTest in 1.701 seconds (process running for 2.503)
+Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build what is described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org/mockito/Mockito.html#0.3
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+WARNING: A Java agent has been loaded dynamically (/home/box/.m2/repository/net/bytebuddy/byte-buddy-agent/1.15.11/byte-buddy-agent-1.15.11.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.190 s -- in dev.jasagent.gateway.JaegerProxyTest
+[INFO] Running dev.jasagent.gateway.jaeger.JaegerPathsTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.012 s -- in dev.jasagent.gateway.jaeger.JaegerPathsTest
+[INFO] Running dev.jasagent.gateway.GatewayLayoutTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.012 s -- in dev.jasagent.gateway.GatewayLayoutTest
+[INFO] Running dev.jasagent.gateway.GatewayHaContractTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.018 s -- in dev.jasagent.gateway.GatewayHaContractTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 15, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for jasagent 0.1.0:
+[INFO] 
+[INFO] jasagent ........................................... SUCCESS [  0.002 s]
+[INFO] jasagent-api ....................................... SUCCESS [  0.280 s]
+[INFO] jasagent-auth ...................................... SUCCESS [  0.036 s]
+[INFO] jasagent-persist ................................... SUCCESS [  0.122 s]
+[INFO] jasagent-trace ..................................... SUCCESS [  0.017 s]
+[INFO] jasagent-gateway ................................... SUCCESS [  5.998 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  6.659 s
+[INFO] Finished at: 2026-11-24T10:59:09+08:00
+[INFO] ------------------------------------------------------------------------

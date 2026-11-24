@@ -36,4 +36,8 @@ describe('会话壳路由', () => {
     await router.push('/')
     expect(router.currentRoute.value.path).toBe('/login')
   })
+
+  it('没有把 Jaeger 注册成页面路由', () => {
+    expect(router.getRoutes().some((route) => String(route.path).includes('jaeger'))).toBe(false)
+  })
 })

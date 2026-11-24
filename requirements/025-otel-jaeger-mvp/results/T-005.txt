@@ -1,0 +1,1 @@
+T-005	通过	反代不把登录会话 Cookie 转给 Jaeger，也不接受 Jaeger 的 `Set-Cookie` 覆盖网关会话 Cookie。该判断和反代不依赖单进程状态。	82	logs/T-005.log

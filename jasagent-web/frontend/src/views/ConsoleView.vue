@@ -22,6 +22,7 @@
       <div class="session-head">
         <h2>会话</h2>
         <router-link v-if="isAdmin" class="rail-tool" data-cluster-entry to="/cluster">集群</router-link>
+        <a v-if="isAdmin" class="rail-tool" data-jaeger-entry href="/admin/jaeger">链路</a>
         <el-button size="small" type="primary" class="cursor-btn-primary" @click="createSession">新建</el-button>
       </div>
       <div class="session-list">
@@ -401,7 +402,7 @@ const router = useRouter()
 const route = useRoute()
 /** 当前登录名，显示在左上角。 */
 const loginName = ref('')
-/** 只有 admin 才显示集群入口。普通用户留在会话壳里。 */
+/** 只有 admin 才显示集群入口和链路入口。普通用户留在会话壳里。 */
 const isAdmin = ref(false)
 /** 正在编辑的工作区路径。 */
 const workspace = ref('')

@@ -1,0 +1,301 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-008"
+result_text='实现只改 `jasagent-app`、`jasagent-gateway`、`jasagent-web` 及必要接线，不修改 `deploy/k8s`，不改 sidecar 和 agentpass 的产品约定。本轮改到的模块有注释，有自动测试，并且有可执行的测试脚本。口令、令牌、凭证和密钥不出现在仓库、说明或日志里。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  if git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- deploy/k8s jasagent-otel jasagent-trace jasagent-sidecar jasagent-agentpass jasagent-agentpass-server | grep -q .; then
+    echo "禁止修改的模块有差异。" >&2
+    git -C "${REPO_ROOT}" diff --name-only "${ATDD_SPEC_BASE}" HEAD -- deploy/k8s jasagent-otel jasagent-trace jasagent-sidecar jasagent-agentpass jasagent-agentpass-server >&2
+    exit 1
+  fi
+  if git -C "${REPO_ROOT}" ls-files --others --exclude-standard -- deploy/k8s jasagent-otel jasagent-trace jasagent-sidecar jasagent-agentpass jasagent-agentpass-server | grep -q .; then
+    echo "出现了未跟踪的禁止路径文件。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "deploy/k8s、otel、trace、sidecar 和 agentpass 未改" "通过" >> "${ATDD_LOG}"
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'CHK'
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+cmd = "cd %s && { git diff --name-only %s HEAD; git ls-files --others --exclude-standard; } | sed '/^$/d' | sort -u" % (repo, base)
+names = subprocess.check_output(["bash", "-lc", cmd], text=True).splitlines()
+allowed_prefix = (
+    "jasagent-app/",
+    "jasagent-gateway/",
+    "jasagent-web/",
+    "requirements/025-otel-jaeger-mvp/",
+)
+allowed_exact = {
+    "scripts/test-025-otel-jaeger-mvp.sh",
+    "changelog/2026-11-24-otel-jaeger-mvp.md",
+}
+blocked = (
+    "deploy/k8s/",
+    "jasagent-otel/",
+    "jasagent-trace/",
+    "jasagent-sidecar/",
+    "jasagent-agentpass/",
+    "jasagent-agentpass-server/",
+    "scripts/k8s/",
+)
+bad = []
+for name in names:
+    if name in allowed_exact or name.startswith(allowed_prefix):
+        continue
+    bad.append(name)
+if not names:
+    raise SystemExit("相对规格提交没有改动。")
+blocked_hit = [name for name in names if name.startswith(blocked) or name in (
+    "scripts/k8s/probe-egress.sh",
+    "scripts/k8s/prepare-cluster.sh",
+    "scripts/up-stack.sh",
+)]
+if blocked_hit:
+    print("碰到了禁止修改的路径：", file=sys.stderr)
+    print("\n".join(blocked_hit), file=sys.stderr)
+    raise SystemExit(1)
+if bad:
+    print("改动超出 025 允许范围：", file=sys.stderr)
+    print("\n".join(bad), file=sys.stderr)
+    raise SystemExit(1)
+print("\n".join(names))
+CHK
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "改动只在 app、gateway、web、本轮脚本、变更记录和 ATDD" "通过" >> "${ATDD_LOG}"
+  app_props="${REPO_ROOT}/jasagent-app/src/main/resources/application.properties"
+  gw_props="${REPO_ROOT}/jasagent-gateway/src/main/resources/application.properties"
+  if ! grep -q 'jasagent.otel.endpoint=${JASAGENT_OTEL_ENDPOINT:}' "${app_props}"; then
+    echo "执行端点缺省没有保持为空。" >&2
+    exit 1
+  fi
+  if ! grep -q 'jasagent.gateway.jaeger-origin=${JASAGENT_GATEWAY_JAEGER_ORIGIN:}' "${gw_props}"; then
+    echo "Jaeger 上游缺省没有保持为空。" >&2
+    exit 1
+  fi
+  if ! grep -q 'jasagent.gateway.web-origin=http://127.0.0.1:18722' "${gw_props}"; then
+    echo "控制台上游被改掉了。" >&2
+    exit 1
+  fi
+  if grep -RIn --include='*.java' --include='*.properties' --include='*.vue' --include='*.js' -E 'jdbc:[^[:space:]]*password=' \
+    "${REPO_ROOT}/jasagent-app/src/main" "${REPO_ROOT}/jasagent-gateway/src/main" "${REPO_ROOT}/jasagent-web/src/main" >/dev/null; then
+    echo "主源码的 JDBC 地址带有 password=。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "端点缺省为空，控制台上游未改，JDBC 地址不含 password=" "通过" >> "${ATDD_LOG}"
+  atdd_assert_comments "${REPO_ROOT}/scripts/test-025-otel-jaeger-mvp.sh" 1
+  atdd_assert_comments "${HERE}/lib.sh" 1
+  atdd_assert_comments "${HERE}/app-tests.sh" 1
+  atdd_assert_comments "${HERE}/gateway-tests.sh" 1
+  atdd_assert_comments "${HERE}/web-tests.sh" 1
+  atdd_assert_comments "${HERE}/025-otel-jaeger-mvp.sh" 0
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "验收脚本注释" "通过" >> "${ATDD_LOG}"
+  python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'CHK'
+import pathlib
+import re
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+prefixes = ("jasagent-app/", "jasagent-gateway/", "jasagent-web/")
+
+def is_main_java(path):
+    return path.endswith(".java") and "/src/main/java/" in path and path.startswith(prefixes)
+
+def is_declaration(stripped):
+    if not stripped:
+        return False
+    if stripped.startswith(("//", "/*", "*", "@", "package ", "import ", "return ", "throw ", "new ", "if ", "for ", "while ", "switch ", "catch ", "else ", "try ", "assert ", "case ", "this(", "super(", "synchronized (")):
+        return False
+    if stripped.startswith("}") or stripped.startswith("default:"):
+        return False
+    if re.match(r"(?i)^(CREATE TABLE|ALTER TABLE|INSERT INTO|UPDATE |DELETE FROM|SELECT |FROM |WHERE |VALUES|ON DUPLICATE|PRIMARY KEY|UNIQUE KEY|FOREIGN KEY|CONSTRAINT |INDEX |KEY |ENGINE=)", stripped):
+        return False
+    if re.search(r"\b(class|interface|enum|record)\s+\w+", stripped):
+        return True
+    if re.search(r"\b(public|protected)\s+(static\s+final|final\s+static)\s+", stripped) and re.search(r"\b[A-Za-z_][A-Za-z0-9_]*\s*=", stripped):
+        return True
+    if "(" not in stripped:
+        return False
+    head = stripped.split("(", 1)[0].strip()
+    if "=" in head or not re.search(r"\b[A-Za-z_][A-Za-z0-9_]*$", head):
+        return False
+    if re.search(r"\b(public|protected|private)\b", head):
+        return True
+    return bool(re.search(r"\b(void|boolean|byte|short|char|int|long|float|double|[A-Z][A-Za-z0-9_.<>,\s\[\]]*)\s+[A-Za-z_][A-Za-z0-9_]*$", head))
+
+def has_javadoc(lines, index):
+    i = index - 1
+    skipping_annotation = False
+    while i >= 0:
+        stripped = lines[i].strip()
+        if stripped == "" or stripped.startswith("//"):
+            i -= 1
+            continue
+        if skipping_annotation:
+            if stripped.startswith("@"):
+                skipping_annotation = False
+            i -= 1
+            continue
+        if stripped.endswith("*/") or stripped.startswith("/**") or stripped.startswith("*"):
+            return True
+        if stripped.startswith("@"):
+            i -= 1
+            continue
+        if re.match(r"^[@A-Za-z0-9_.,(){}\[\]=\s]+$", stripped) and any(token in stripped for token in ("(", ")", "{", "}", ",")):
+            skipping_annotation = True
+            i -= 1
+            continue
+        return False
+    return False
+
+diff = subprocess.check_output(["git", "-C", repo, "diff", "-U0", base, "HEAD", "--", "**.java"], text=True)
+current = None
+wanted = {}
+for line in diff.splitlines():
+    if line.startswith("+++ b/"):
+        current = line[6:]
+        continue
+    if current is None or not is_main_java(current):
+        continue
+    if not line.startswith("+") or line.startswith("+++"):
+        continue
+    body = line[1:].strip()
+    if is_declaration(body):
+        wanted.setdefault(current, []).append(body)
+
+if not wanted:
+    raise SystemExit("本轮没有新增或改动的 Java 实现符号。")
+
+missing = []
+for rel, decls in wanted.items():
+    path = pathlib.Path(repo, rel)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for decl in decls:
+        found = False
+        for i, raw in enumerate(lines):
+            if raw.strip() != decl:
+                continue
+            found = True
+            if not has_javadoc(lines, i):
+                missing.append("%s:%s 缺少注释：%s" % (rel, i + 1, decl))
+            break
+        if not found:
+            missing.append("%s: 找不到本轮新增或改动的符号：%s" % (rel, decl))
+if missing:
+    print("本轮新增或改动的实现缺少注释：", file=sys.stderr)
+    print("\n".join(missing), file=sys.stderr)
+    raise SystemExit(1)
+print("java-comments-ok")
+CHK
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "本轮新增或改动的 Java 实现注释" "通过" >> "${ATDD_LOG}"
+  script="${REPO_ROOT}/scripts/test-025-otel-jaeger-mvp.sh"
+  if [[ ! -x "${script}" ]]; then
+    echo "实现提交的合同测试脚本不可执行。" >&2
+    exit 1
+  fi
+  if ! head -n 8 "${script}" | grep -q '^#'; then
+    echo "合同测试脚本缺少说明注释。" >&2
+    exit 1
+  fi
+  if ! grep -q '第 1 到第 8 条' "${script}" || ! grep -q '第 9 到第 13 条' "${script}"; then
+    echo "合同测试脚本没有写明覆盖范围。" >&2
+    exit 1
+  fi
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "合同测试脚本可执行且有说明注释" "通过" >> "${ATDD_LOG}"
+  for testf in \
+    jasagent-app/src/test/java/dev/jasagent/app/OtelJaegerExportTest.java \
+    jasagent-gateway/src/test/java/dev/jasagent/gateway/JaegerProxyTest.java \
+    jasagent-gateway/src/test/java/dev/jasagent/gateway/jaeger/JaegerPathsTest.java \
+    jasagent-web/src/test/java/dev/jasagent/web/upstream/JaegerConsoleLinkTest.java; do
+    if [[ ! -f "${REPO_ROOT}/${testf}" ]]; then
+      echo "缺少自动测试 ${testf}。" >&2
+      exit 1
+    fi
+  done
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "自动测试文件存在" "通过" >> "${ATDD_LOG}"
+  leaked="$(python3 - "${REPO_ROOT}" "${ATDD_SPEC_BASE}" <<'CHK'
+import re
+import subprocess
+import sys
+
+repo, base = sys.argv[1], sys.argv[2]
+text = subprocess.check_output(
+    [
+        "git", "-C", repo, "diff", "-U0", base, "HEAD", "--",
+        "*.md", "*.properties", "*.sh", "*.java", "*.vue", "*.js",
+        ":!**/logs/**", ":!**/results/**", ":!**/src/test/**", ":!requirements/**",
+        ":!**/frontend/**/*.spec.js",
+    ],
+    text=True,
+)
+
+def literal_secret(body):
+    if re.search(r"(?i)(atdd_|test_|fake_|dummy_|not-for-logs|-atdd|for-test|process-local)", body):
+        return None
+    if "grep" in body or "grep -Eq" in body or "grep -E" in body or "grep -q" in body:
+        if "password=" in body or "0.0.0.0/0" in body:
+            return None
+    if "BEGIN PRIVATE KEY" in body:
+        return body.strip()
+    for match in re.finditer(
+        r"(?i)(?:^|[^\w.])(?:this\.)?(password|token|secret|ticket)\s*=\s*(.+)",
+        body,
+    ):
+        rhs = match.group(2).strip().rstrip(";").strip()
+        lower = body.lower()
+        if "password-file" in lower or "password_file" in lower or "passwordfile" in lower:
+            continue
+        if any(mark in body for mark in ("不能带", "不能包含", "含 password=", "包含 password=", "password= must", "拒绝", "带有 password=")):
+            continue
+        if re.search(r"\$\{|\$\(|\$[A-Za-z_]", rhs):
+            continue
+        if " + " in rhs or "++" in rhs or "?" in rhs:
+            continue
+        if re.match(r"^(null|None|readSecret\b|UragPassword\.read\b|[A-Za-z_][A-Za-z0-9_.]*(\s*\(.*\))?)$", rhs):
+            continue
+        if rhs in ('""', "''"):
+            continue
+        ident = rhs.strip("'\"")
+        if re.match(r"^jasagent_[A-Za-z0-9_]+$", ident):
+            continue
+        if re.match(r"^['\"][^'\"]+['\"]$", rhs) or re.match(r"^[A-Za-z0-9_./:+-]{8,}$", rhs):
+            return rhs
+    return None
+
+bad = []
+for line in text.splitlines():
+    if not line.startswith("+") or line.startswith("+++"):
+        continue
+    body = line[1:]
+    found = literal_secret(body)
+    if found:
+        bad.append(body.strip())
+print("\n".join(bad))
+CHK
+)"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "仓库新增行密文检查" "${leaked:-无}" >> "${ATDD_LOG}"
+  if [[ -n "${leaked}" ]]; then
+    echo "实现提交里出现了口令、令牌、票据或密钥原文：" >&2
+    printf '%s\n' "${leaked}" >&2
+    exit 1
+  fi
+  for logf in app-test.log gateway-test.log web-test.log; do
+    if [[ -f "${ATDD_REQ}/logs/${logf}" ]]; then
+      atdd_assert_clean "模块测试日志 ${logf}" < "${ATDD_REQ}/logs/${logf}"
+    fi
+  done
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "验收日志没有口令原文" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

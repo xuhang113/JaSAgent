@@ -1,0 +1,5 @@
+PASS jaegerEntryIsAnAdminAnchorOutsideTheRouter
+PASS frontend:没有把 Jaeger 注册成页面路由
+PASS frontend:admin 能看到指向 Jaeger 的普通链接
+PASS frontend:普通用户看不到 Jaeger 入口
+PASS web-tests

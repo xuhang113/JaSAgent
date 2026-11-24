@@ -1,0 +1,1 @@
+T-003	通过	`/admin/jaeger` 及其所有子路径与 `/admin/cluster` 同一套判断：未登录的页面请求转到 `/admin/login`；已登录的非 admin 回 403，且不能落到控制台单页。前缀不能被绕过。	67	logs/T-003.log

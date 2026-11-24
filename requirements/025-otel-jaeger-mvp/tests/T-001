@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-001"
+result_text='未配置 `jasagent.otel.endpoint` 时不启用 OTLP 导出，现有行为不变。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  "${HERE}/app-tests.sh"
+  atdd_require_pass app "unsetOrBlankEndpointDoesNotExport"
+  atdd_require_pass app "suspendedExecutionResumesWithSavedTraceId"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "未配置端点不外发，恢复路径仍可用" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"
