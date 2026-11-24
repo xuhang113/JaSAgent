@@ -88,6 +88,7 @@ public class JasagentApplication {
      * @param compressAt 上下文开始压缩的占用比例，对应 jasagent.context.compress-at
      * @param deepseekThinking 是否打开 DeepSeek 思考，对应 jasagent.deepseek.thinking
      * @param sidecarUrl 回环上的 sidecar 根地址，离开集群的 HTTP 发到它的 /v1/forward
+     * @param otelEndpoint OTLP HTTP 导出地址；空白时不外发
      * @return 可供执行和会话接口使用的运行时。进程已配置 020 的 JDBC 地址时，通行证改走同一套库
      */
     @Bean
@@ -98,7 +99,8 @@ public class JasagentApplication {
                               @Value("${jasagent.egress.enabled:false}") String egressEnabled,
                               @Value("${jasagent.rag.base-url:http://127.0.0.1:18751}") String ragBaseUrl,
                               @Value("${jasagent.egress.ticket-url:http://127.0.0.1:18741/v1/tickets}") String ticketUrl,
-                              @Value("${jasagent.sidecar.url:http://127.0.0.1:18761}") String sidecarUrl) {
+                              @Value("${jasagent.sidecar.url:http://127.0.0.1:18761}") String sidecarUrl,
+                              @Value("${" + OtlpWiredTracer.ENDPOINT + ":}") String otelEndpoint) {
         SidecarAddress.configure(sidecarUrl);
         Map<String, String> configuration = new LinkedHashMap<>();
         configuration.put(PassSettings.ENABLED, agentpassEnabled);
@@ -107,6 +109,7 @@ public class JasagentApplication {
         configuration.put("jasagent.egress.enabled", egressEnabled);
         configuration.put("jasagent.rag.base-url", ragBaseUrl);
         configuration.put("jasagent.egress.ticket-url", ticketUrl);
+        configuration.put(OtlpWiredTracer.ENDPOINT, otelEndpoint == null ? "" : otelEndpoint);
         copyDurableLedger(configuration);
         return new LocalRuntime(localAuthService, configuration);
     }

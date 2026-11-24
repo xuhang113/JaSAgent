@@ -2,6 +2,7 @@ package dev.jasagent.gateway.cluster;
 
 import dev.jasagent.auth.AccountProfile;
 import dev.jasagent.gateway.auth.GatewaySessionFilter;
+import dev.jasagent.gateway.jaeger.JaegerPaths;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,8 +16,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 拒绝非 admin 访问集群接口和集群页。判断在网关里做完，不把清单转给普通用户，也不只靠页面隐藏。
- * 未登录的请求由会话过滤先挡住，这里只处理已经登录的人。
+ * 拒绝非 admin 访问集群接口、集群页和 Jaeger 前缀。判断在网关里做完，不把清单转给普通用户，也不只靠页面隐藏。
+ * Jaeger 路径与集群页使用同一套 admin 判断。未登录的请求由会话过滤先挡住，这里只处理已经登录的人。
  */
 @Component
 @Order(ClusterAccessFilter.ORDER)
@@ -45,8 +46,8 @@ public class ClusterAccessFilter extends OncePerRequestFilter implements Ordered
     }
 
     /**
-     * 集群接口和集群页只放行 admin。其它路径原样继续。
-     * 拒绝正文只有错误码，不含集群清单、口令或令牌。
+     * 集群接口、集群页和 Jaeger 前缀只放行 admin。其它路径原样继续。
+     * 拒绝正文只有错误码，不含集群清单、Jaeger 页面、口令或令牌。
      *
      * @param request 已经过会话过滤的请求
      * @param response 用来写 403
@@ -58,7 +59,7 @@ public class ClusterAccessFilter extends OncePerRequestFilter implements Ordered
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String path = request.getRequestURI();
-        if (!cluster(path)) {
+        if (!cluster(path) && !JaegerPaths.matches(request)) {
             chain.doFilter(request, response);
             return;
         }

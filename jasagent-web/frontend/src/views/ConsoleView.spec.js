@@ -1045,6 +1045,23 @@ describe('会话标题', () => {
     wrapper.unmount()
   })
 
+  it('admin 能看到指向 Jaeger 的普通链接', async () => {
+    const wrapper = await mountConsole()
+    const link = wrapper.get('[data-jaeger-entry]')
+    expect(link.element.tagName).toBe('A')
+    expect(link.attributes('href')).toBe('/admin/jaeger')
+    wrapper.unmount()
+  })
+
+  it('普通用户看不到 Jaeger 入口', async () => {
+    state.role = 'user'
+    state.tenantId = 't-user'
+    const wrapper = await mountConsole()
+    expect(wrapper.find('[data-jaeger-entry]').exists()).toBe(false)
+    expect(wrapper.find('[data-cluster-entry]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('单击标题后回车保存，Esc 取消', async () => {
     const wrapper = await mountConsole()
     await wrapper.get('.session-title').trigger('click')

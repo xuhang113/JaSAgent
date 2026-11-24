@@ -1,0 +1,6 @@
+# 执行链路导出与 admin 反代 Jaeger
+
+- 日期：2026-11-24（Asia/Shanghai）
+- 做了什么：未配置或空白的 `jasagent.otel.endpoint` 不启用 OTLP 导出，执行、会话和内存追踪保持原样。配置了非空地址时，由 jasagent-app 里的适配器把已有 OTLP HTTP 导出接到现有 AgentTracer，一次会打点的执行会外发，根 span 仍是 `jasagent.execution`。适配器只把端点交给导出器。网关在控制台反代之前拦截 `/admin/jaeger` 及其子路径，登录和 admin 判断与 `/admin/cluster` 相同，账号来自请求上的会话，不在进程里另存一份。未登录页面转到 `/admin/login`，已登录的非 admin 回 403，前缀绕过和未配置上游都不会落到控制台单页。上游只使用 `jasagent.gateway.jaeger-origin`，请求不能改写。登录会话 Cookie 不转发给 Jaeger，Jaeger 的同名 Set-Cookie 也不写回。控制台只给 admin 一个指向 `/admin/jaeger` 的普通链接，不是 Vue 路由，也没有加入 ConsolePages。第 9 到第 13 条是部署阶段，本轮不改 deploy/k8s，也不改官方拉起和探测脚本。
+- 涉及模块：jasagent-app、jasagent-gateway、jasagent-web。本轮不改 jasagent-otel、jasagent-trace、jasagent-sidecar、jasagent-agentpass、deploy/k8s、scripts/k8s/probe-egress.sh、scripts/k8s/prepare-cluster.sh、scripts/up-stack.sh。
+- 怎么验证：`bash scripts/test-025-otel-jaeger-mvp.sh`。脚本核对差异只在上述三个模块、本变更记录和脚本自身，并跑实现侧自动测试。对应规格第 1 到第 8 条：端点未设置时接收端没有导出；端点设为测试接收端时，不走 Funnel 的真实执行能收到根 span `jasagent.execution`，且不靠导出器类名判断；`/admin/jaeger` 的登录、admin、前缀绕过、上游不可被请求改写、会话 Cookie 不转发且不被 Set-Cookie 覆盖都有自动测试；span 正文不含另外放进配置的标记，也不带 Authorization 或 Cookie；页面入口只对 admin 显示，路由表和 ConsolePages 都没有这个路径。第 9 到第 13 条留给部署。本记录不改 deploy/k8s，也不代替 ATDD。
