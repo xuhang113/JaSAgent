@@ -1,0 +1,652 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] jasagent                                                           [pom]
+[INFO] jasagent-api                                                       [jar]
+[INFO] jasagent-auth                                                      [jar]
+[INFO] jasagent-core                                                      [jar]
+[INFO] jasagent-persist                                                   [jar]
+[INFO] jasagent-workflow                                                  [jar]
+[INFO] jasagent-tool                                                      [jar]
+[INFO] jasagent-llm                                                       [jar]
+[INFO] jasagent-mcp                                                       [jar]
+[INFO] jasagent-plugin                                                    [jar]
+[INFO] jasagent-rag                                                       [jar]
+[INFO] jasagent-interrupt                                                 [jar]
+[INFO] jasagent-exception                                                 [jar]
+[INFO] jasagent-agentpass                                                 [jar]
+[INFO] jasagent-trace                                                     [jar]
+[INFO] jasagent-otel                                                      [jar]
+[INFO] jasagent-evaluation                                                [jar]
+[INFO] jasagent-controller                                                [jar]
+[INFO] jasagent-web                                                       [jar]
+[INFO] jasagent-cli                                                       [jar]
+[INFO] jasagent-app                                                       [jar]
+[INFO] 
+[INFO] -----------------------< dev.jasagent:jasagent >------------------------
+[INFO] Building jasagent 0.1.0                                           [1/21]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-api >----------------------
+[INFO] Building jasagent-api 0.1.0                                       [2/21]
+[INFO]   from jasagent-api/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-api ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-api ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-api ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-api/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-api ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-api ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-auth >---------------------
+[INFO] Building jasagent-auth 0.1.0                                      [3/21]
+[INFO]   from jasagent-auth/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-auth ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-auth ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-auth/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-auth ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-auth ---
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-core >---------------------
+[INFO] Building jasagent-core 0.1.0                                      [4/21]
+[INFO]   from jasagent-core/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-core ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-core/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-core ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-core ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-core/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-core ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-core ---
+[INFO] 
+[INFO] -------------------< dev.jasagent:jasagent-persist >--------------------
+[INFO] Building jasagent-persist 0.1.0                                   [5/21]
+[INFO]   from jasagent-persist/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-persist ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-persist ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-persist ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-persist/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-persist ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-persist ---
+[INFO] 
+[INFO] -------------------< dev.jasagent:jasagent-workflow >-------------------
+[INFO] Building jasagent-workflow 0.1.0                                  [6/21]
+[INFO]   from jasagent-workflow/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-workflow ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-workflow ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-workflow ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-workflow/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-workflow ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-workflow ---
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-tool >---------------------
+[INFO] Building jasagent-tool 0.1.0                                      [7/21]
+[INFO]   from jasagent-tool/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-tool ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-tool/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-tool ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-tool ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-tool/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-tool ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-tool ---
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-llm >----------------------
+[INFO] Building jasagent-llm 0.1.0                                       [8/21]
+[INFO]   from jasagent-llm/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-llm ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-llm/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-llm ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-llm ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-llm/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-llm ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-llm ---
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-mcp >----------------------
+[INFO] Building jasagent-mcp 0.1.0                                       [9/21]
+[INFO]   from jasagent-mcp/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-mcp ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-mcp/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-mcp ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-mcp ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-mcp/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-mcp ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-mcp ---
+[INFO] 
+[INFO] --------------------< dev.jasagent:jasagent-plugin >--------------------
+[INFO] Building jasagent-plugin 0.1.0                                   [10/21]
+[INFO]   from jasagent-plugin/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-plugin ---
+[INFO] Copying 2 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-plugin ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-plugin ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-plugin/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-plugin ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-plugin ---
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-rag >----------------------
+[INFO] Building jasagent-rag 0.1.0                                      [11/21]
+[INFO]   from jasagent-rag/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-rag ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-rag/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-rag ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-rag ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-rag/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-rag ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-rag ---
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-interrupt >-------------------
+[INFO] Building jasagent-interrupt 0.1.0                                [12/21]
+[INFO]   from jasagent-interrupt/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-interrupt ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-interrupt/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-interrupt ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-interrupt ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-interrupt/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-interrupt ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-interrupt ---
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-exception >-------------------
+[INFO] Building jasagent-exception 0.1.0                                [13/21]
+[INFO]   from jasagent-exception/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-exception ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-exception/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-exception ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-exception ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-exception/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-exception ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-exception ---
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-agentpass >-------------------
+[INFO] Building jasagent-agentpass 0.1.0                                [14/21]
+[INFO]   from jasagent-agentpass/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-agentpass ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-agentpass/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-agentpass ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-agentpass ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-agentpass/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-agentpass ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-agentpass ---
+[INFO] 
+[INFO] --------------------< dev.jasagent:jasagent-trace >---------------------
+[INFO] Building jasagent-trace 0.1.0                                    [15/21]
+[INFO]   from jasagent-trace/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-trace ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-trace ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-trace ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-trace/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-trace ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-trace ---
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-otel >---------------------
+[INFO] Building jasagent-otel 0.1.0                                     [16/21]
+[INFO]   from jasagent-otel/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-otel ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-otel/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-otel ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-otel ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-otel/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-otel ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-otel ---
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-evaluation >------------------
+[INFO] Building jasagent-evaluation 0.1.0                               [17/21]
+[INFO]   from jasagent-evaluation/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-evaluation ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-evaluation/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-evaluation ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-evaluation ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-evaluation/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-evaluation ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-evaluation ---
+[INFO] 
+[INFO] ------------------< dev.jasagent:jasagent-controller >------------------
+[INFO] Building jasagent-controller 0.1.0                               [18/21]
+[INFO]   from jasagent-controller/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-controller ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-controller/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-controller ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-controller ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-controller/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-controller ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-controller ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-web >----------------------
+[INFO] Building jasagent-web 0.1.0                                      [19/21]
+[INFO]   from jasagent-web/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.5.0:exec (build-console-frontend) @ jasagent-web ---
+[INFO] skipping execute as per configuration
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-web ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-web ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-web ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-web/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-web ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-web ---
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-cli >----------------------
+[INFO] Building jasagent-cli 0.1.0                                      [20/21]
+[INFO]   from jasagent-cli/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-cli ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-cli/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-cli ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-cli ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-cli/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-cli ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-cli ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] ---------------------< dev.jasagent:jasagent-app >----------------------
+[INFO] Building jasagent-app 0.1.0                                      [21/21]
+[INFO]   from jasagent-app/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ jasagent-app ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ jasagent-app ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ jasagent-app ---
+[INFO] skip non existing resourceDirectory /workspace/JaSAgent/jasagent-app/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ jasagent-app ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ jasagent-app ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running dev.jasagent.app.RestartResumeTest
+10:59:00.415 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:h2:file:/tmp/jasagent-restart-home13667635164941750602/.jasagent/data/jasagent (H2 2.3)
+10:59:00.475 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Schema history table "PUBLIC"."flyway_schema_history" does not exist yet
+10:59:00.477 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 1 migration (execution time 00:00.010s)
+10:59:00.483 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "PUBLIC"."flyway_schema_history" ...
+10:59:00.512 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "PUBLIC": << Empty Schema >>
+10:59:00.522 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "PUBLIC" to version "1 - execution"
+10:59:00.540 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 1 migration to schema "PUBLIC", now at version v1 (execution time 00:00.010s)
+Nov 24, 2026 10:59:00 AM io.opentelemetry.api.GlobalOpenTelemetry maybeAutoConfigureAndSetGlobal
+INFO: AutoConfiguredOpenTelemetrySdk found on classpath but automatic configuration is disabled. To enable, run your JVM with -Dotel.java.global-autoconfigure.enabled=true
+10:59:00.752 [CancellableDispatcher[0]] INFO org.bsc.langgraph4j -- 
+node start: 'search' with state: {
+	summary=
+	role=assistant
+	rules=[]
+	sessionId=cb3a5f04-898b-4960-b546-2bb567173157
+	userId=restart-user
+	pluginErrors=[]
+	output=
+	hits=[]
+	skills=[]
+	input=hello
+	executionId=cb3a5f04-898b-4960-b546-2bb567173157
+	route=
+	corrections=[]
+	pendingTools=[]
+	toolTexts=[]
+	recent=[]
+	tasks=[]
+}
+10:59:00.755 [CancellableDispatcher[0]] INFO org.bsc.langgraph4j -- 
+node end: 'search' with result: {started.search=true, pluginErrors=[], lastOutput=approval-required}
+10:59:00.765 [CancellableDispatcher[0]] INFO org.bsc.langgraph4j -- 
+node start: 'done' with state: {
+	summary=
+	role=assistant
+	started.search=true
+	rules=[]
+	sessionId=cb3a5f04-898b-4960-b546-2bb567173157
+	userId=restart-user
+	lastOutput=approval-required
+	pluginErrors=[]
+	skills=[]
+	hits=[]
+	output=
+	executionId=cb3a5f04-898b-4960-b546-2bb567173157
+	input=hello
+	route=
+	corrections=[]
+	pendingTools=[]
+	recent=[]
+	toolTexts=[]
+	tasks=[]
+}
+10:59:00.766 [CancellableDispatcher[0]] INFO org.bsc.langgraph4j -- 
+node end: 'done' with result: {output=approval-required, started.done=true, pluginErrors=[]}
+10:59:00.839 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:h2:file:/tmp/jasagent-restart-home13667635164941750602/.jasagent/data/jasagent (H2 2.3)
+10:59:00.848 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 1 migration (execution time 00:00.002s)
+10:59:00.850 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "PUBLIC": 1
+10:59:00.851 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Schema "PUBLIC" is up to date. No migration necessary.
+10:59:00.887 [CancellableDispatcher[1]] INFO org.bsc.langgraph4j -- 
+node start: 'search' with state: {
+	summary=
+	role=assistant
+	rules=[]
+	sessionId=cb3a5f04-898b-4960-b546-2bb567173157
+	userId=restart-user
+	pluginErrors=[]
+	output=
+	hits=[]
+	skills=[]
+	input=hello
+	executionId=cb3a5f04-898b-4960-b546-2bb567173157
+	route=
+	corrections=[]
+	pendingTools=[]
+	toolTexts=[]
+	recent=[]
+	tasks=[]
+}
+10:59:00.888 [CancellableDispatcher[1]] INFO org.bsc.langgraph4j -- 
+node end: 'search' with result: {started.search=true, pluginErrors=[], lastOutput=approval-required}
+10:59:00.893 [CancellableDispatcher[1]] INFO org.bsc.langgraph4j -- 
+node start: 'done' with state: {
+	summary=
+	role=assistant
+	started.search=true
+	rules=[]
+	sessionId=cb3a5f04-898b-4960-b546-2bb567173157
+	userId=restart-user
+	lastOutput=approval-required
+	pluginErrors=[]
+	skills=[]
+	hits=[]
+	output=
+	executionId=cb3a5f04-898b-4960-b546-2bb567173157
+	input=hello
+	route=
+	corrections=[]
+	pendingTools=[]
+	recent=[]
+	toolTexts=[]
+	tasks=[]
+}
+10:59:00.893 [CancellableDispatcher[1]] INFO org.bsc.langgraph4j -- 
+node end: 'done' with result: {output=approval-required, started.done=true, pluginErrors=[]}
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.175 s -- in dev.jasagent.app.RestartResumeTest
+[INFO] Running dev.jasagent.app.OtelJaegerExportTest
+10:59:01.070 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:h2:file:/tmp/jasagent-otel-home14289240391921842128/.jasagent/data/jasagent (H2 2.3)
+10:59:01.076 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Schema history table "PUBLIC"."flyway_schema_history" does not exist yet
+10:59:01.076 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 1 migration (execution time 00:00.001s)
+10:59:01.077 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "PUBLIC"."flyway_schema_history" ...
+10:59:01.080 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "PUBLIC": << Empty Schema >>
+10:59:01.083 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "PUBLIC" to version "1 - execution"
+10:59:01.091 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 1 migration to schema "PUBLIC", now at version v1 (execution time 00:00.007s)
+10:59:01.116 [CancellableDispatcher[2]] INFO org.bsc.langgraph4j -- 
+node start: 'done' with state: {
+	summary=
+	role=assistant
+	rules=[]
+	sessionId=f53039bb-0350-4468-88a1-604aab7b8b3b
+	userId=otel-264afa16
+	pluginErrors=[]
+	output=
+	hits=[]
+	skills=[]
+	input=hello
+	executionId=f53039bb-0350-4468-88a1-604aab7b8b3b
+	route=
+	corrections=[]
+	pendingTools=[]
+	toolTexts=[]
+	recent=[]
+	tasks=[]
+}
+10:59:01.116 [CancellableDispatcher[2]] INFO org.bsc.langgraph4j -- 
+node end: 'done' with result: {output=, started.done=true, pluginErrors=[]}
+10:59:01.250 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:h2:file:/tmp/jasagent-otel-home792418885049479920/.jasagent/data/jasagent (H2 2.3)
+10:59:01.255 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Schema history table "PUBLIC"."flyway_schema_history" does not exist yet
+10:59:01.255 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 1 migration (execution time 00:00.000s)
+10:59:01.256 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "PUBLIC"."flyway_schema_history" ...
+10:59:01.259 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "PUBLIC": << Empty Schema >>
+10:59:01.264 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "PUBLIC" to version "1 - execution"
+10:59:01.270 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 1 migration to schema "PUBLIC", now at version v1 (execution time 00:00.004s)
+10:59:01.294 [CancellableDispatcher[3]] INFO org.bsc.langgraph4j -- 
+node start: 'done' with state: {
+	summary=
+	role=assistant
+	rules=[]
+	sessionId=6e968506-4f4b-4a78-aeb1-18f09bfc169f
+	userId=otel-123eace3
+	pluginErrors=[]
+	output=
+	hits=[]
+	skills=[]
+	input=hello
+	executionId=6e968506-4f4b-4a78-aeb1-18f09bfc169f
+	route=
+	corrections=[]
+	pendingTools=[]
+	toolTexts=[]
+	recent=[]
+	tasks=[]
+}
+10:59:01.294 [CancellableDispatcher[3]] INFO org.bsc.langgraph4j -- 
+node end: 'done' with result: {output=, started.done=true, pluginErrors=[]}
+10:59:01.499 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:h2:file:/tmp/jasagent-otel-home12739154672947505760/.jasagent/data/jasagent (H2 2.3)
+10:59:01.504 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Schema history table "PUBLIC"."flyway_schema_history" does not exist yet
+10:59:01.504 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 1 migration (execution time 00:00.001s)
+10:59:01.505 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "PUBLIC"."flyway_schema_history" ...
+10:59:01.508 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "PUBLIC": << Empty Schema >>
+10:59:01.510 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "PUBLIC" to version "1 - execution"
+10:59:01.515 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 1 migration to schema "PUBLIC", now at version v1 (execution time 00:00.004s)
+10:59:01.557 [CancellableDispatcher[4]] INFO org.bsc.langgraph4j -- 
+node start: 'done' with state: {
+	summary=
+	role=assistant
+	rules=[]
+	sessionId=cd56d807-044f-4a40-8759-a6eb0fe174fc
+	userId=otel-b20aa544
+	pluginErrors=[]
+	output=
+	hits=[]
+	skills=[]
+	input=hello
+	executionId=cd56d807-044f-4a40-8759-a6eb0fe174fc
+	route=
+	corrections=[]
+	pendingTools=[]
+	toolTexts=[]
+	recent=[]
+	tasks=[]
+}
+10:59:01.558 [CancellableDispatcher[4]] INFO org.bsc.langgraph4j -- 
+node end: 'done' with result: {output=, started.done=true, pluginErrors=[]}
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.772 s -- in dev.jasagent.app.OtelJaegerExportTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for jasagent 0.1.0:
+[INFO] 
+[INFO] jasagent ........................................... SUCCESS [  0.001 s]
+[INFO] jasagent-api ....................................... SUCCESS [  0.350 s]
+[INFO] jasagent-auth ...................................... SUCCESS [  0.042 s]
+[INFO] jasagent-core ...................................... SUCCESS [  0.018 s]
+[INFO] jasagent-persist ................................... SUCCESS [  0.099 s]
+[INFO] jasagent-workflow .................................. SUCCESS [  0.091 s]
+[INFO] jasagent-tool ...................................... SUCCESS [  0.014 s]
+[INFO] jasagent-llm ....................................... SUCCESS [  0.029 s]
+[INFO] jasagent-mcp ....................................... SUCCESS [  0.014 s]
+[INFO] jasagent-plugin .................................... SUCCESS [  0.013 s]
+[INFO] jasagent-rag ....................................... SUCCESS [  0.011 s]
+[INFO] jasagent-interrupt ................................. SUCCESS [  0.011 s]
+[INFO] jasagent-exception ................................. SUCCESS [  0.009 s]
+[INFO] jasagent-agentpass ................................. SUCCESS [  0.010 s]
+[INFO] jasagent-trace ..................................... SUCCESS [  0.011 s]
+[INFO] jasagent-otel ...................................... SUCCESS [  0.028 s]
+[INFO] jasagent-evaluation ................................ SUCCESS [  0.013 s]
+[INFO] jasagent-controller ................................ SUCCESS [  0.044 s]
+[INFO] jasagent-web ....................................... SUCCESS [  0.071 s]
+[INFO] jasagent-cli ....................................... SUCCESS [  0.010 s]
+[INFO] jasagent-app ....................................... SUCCESS [  2.814 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.927 s
+[INFO] Finished at: 2026-11-24T10:59:02+08:00
+[INFO] ------------------------------------------------------------------------

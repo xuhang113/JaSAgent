@@ -1,0 +1,1 @@
+T-002	通过	配置了非空 `jasagent.otel.endpoint` 之后，走一条会打点的执行（不走 Funnel）。测试用 OTLP 接收端能收到根 span `jasagent.execution`，不只查导出器类名。	59	logs/T-002.log

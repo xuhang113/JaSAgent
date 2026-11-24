@@ -1,0 +1,42 @@
+2026-11-24T10:59:54+0800	T-008	deploy/k8s、otel、trace、sidecar 和 agentpass 未改	19	通过
+changelog/2026-11-24-otel-jaeger-mvp.md
+jasagent-app/src/main/java/dev/jasagent/app/JasagentApplication.java
+jasagent-app/src/main/java/dev/jasagent/app/LocalRuntime.java
+jasagent-app/src/main/java/dev/jasagent/app/OtlpWiredTracer.java
+jasagent-app/src/main/resources/application.properties
+jasagent-app/src/test/java/dev/jasagent/app/OtelJaegerExportTest.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/cluster/ClusterAccessFilter.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/jaeger/JaegerPaths.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/jaeger/JaegerProxyFilter.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/jaeger/JaegerUpstream.java
+jasagent-gateway/src/main/resources/application.properties
+jasagent-gateway/src/test/java/dev/jasagent/gateway/JaegerProxyTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/jaeger/JaegerPathsTest.java
+jasagent-web/frontend/src/router.spec.js
+jasagent-web/frontend/src/views/ConsoleView.spec.js
+jasagent-web/frontend/src/views/ConsoleView.vue
+jasagent-web/src/test/java/dev/jasagent/web/upstream/JaegerConsoleLinkTest.java
+requirements/025-otel-jaeger-mvp/tdd.md
+requirements/025-otel-jaeger-mvp/tests/025-otel-jaeger-mvp.sh
+requirements/025-otel-jaeger-mvp/tests/T-001
+requirements/025-otel-jaeger-mvp/tests/T-002
+requirements/025-otel-jaeger-mvp/tests/T-003
+requirements/025-otel-jaeger-mvp/tests/T-004
+requirements/025-otel-jaeger-mvp/tests/T-005
+requirements/025-otel-jaeger-mvp/tests/T-006
+requirements/025-otel-jaeger-mvp/tests/T-007
+requirements/025-otel-jaeger-mvp/tests/T-008
+requirements/025-otel-jaeger-mvp/tests/app-tests.sh
+requirements/025-otel-jaeger-mvp/tests/gateway-tests.sh
+requirements/025-otel-jaeger-mvp/tests/lib.sh
+requirements/025-otel-jaeger-mvp/tests/web-tests.sh
+scripts/test-025-otel-jaeger-mvp.sh
+2026-11-24T10:59:54+0800	T-008	改动只在 app、gateway、web、本轮脚本、变更记录和 ATDD	88	通过
+2026-11-24T10:59:54+0800	T-008	端点缺省为空，控制台上游未改，JDBC 地址不含 password=	123	通过
+2026-11-24T10:59:54+0800	T-008	验收脚本注释	180	通过
+java-comments-ok
+2026-11-24T10:59:55+0800	T-008	本轮新增或改动的 Java 实现注释	243	通过
+2026-11-24T10:59:55+0800	T-008	合同测试脚本可执行且有说明注释	276	通过
+2026-11-24T10:59:55+0800	T-008	自动测试文件存在	306	通过
+2026-11-24T10:59:55+0800	T-008	仓库新增行密文检查	372	无
+2026-11-24T10:59:55+0800	T-008	验收日志没有口令原文	450	通过

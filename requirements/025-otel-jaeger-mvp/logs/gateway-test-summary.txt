@@ -1,0 +1,9 @@
+PASS anonymousJaegerRedirectsToLogin
+PASS userCannotOpenJaeger
+PASS adminIsProxiedWithoutSessionOrRewrittenHost
+PASS prefixCannotFallThroughToTheConsole
+PASS prefixCoversEncodingsAndStopsAtTheBoundary
+PASS upstreamComesOnlyFromConfiguration
+PASS proxyKeepsUpstreamCookiesAndPrefix
+PASS loginSessionIsVisibleToAnotherReplica
+PASS gateway-tests
