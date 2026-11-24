@@ -1,5 +1,22 @@
 # 024-k8s-durable-ha 状态
 
+## 2026-11-25（Asia/Shanghai）
+
+- 日期：2026-11-25（Asia/Shanghai）
+- 开评结论：024 已正式关闭。今天的新评在 025 完成后展开，见 [`requirements/025-otel-jaeger-mvp/status.md`](https://github.com/xuhang113/JaSAgent/blob/master/requirements/025-otel-jaeger-mvp/status.md)。本日评审块是网关（`jasagent-gateway`），不在本目录重开 024。
+
+### 完成与关闭情况
+
+`024-k8s-durable-ha`（K8s 持久化与网关多副本）已正式关闭。实现、ATDD（T-001 至 T-006 通过）和第 7、8、10、11、12 条的集群实测此前已合入；官方探测于 2026-11-22 13:28:05 为 `PROBE PASSED`，I-001 至 I-016 于 13:28:47 全部通过。
+
+规格第 9 条（Funnel 公网路径，以及 Hang 本人在集群外或手机走一遍登录、控制台 EventSource，并补上 019 的 `/admin/cluster` 和未登录拦截）并未实测完成。2026-11-24 20:55:24（Asia/Shanghai），Hang 在 JaSAgent 群里（seq 707）说「需要我确认的部分直接通过，不要等我确认」。领队于 20:57（seq 716–717）据此宣布 024 整块正式关闭：依据是明确放弃集群外走查，不是 Funnel 路径已经恢复或测过。公网入口不能写成可用；当时云电脑上 `tailscaled` 不在，宿主机 Ingress NodePort 30080 因缺少 `xt_statistic` 仍不通。这些事实仍在，只是不再挡住关闭和下一轮开评。
+
+昨晚宣布后尚未把结论写入 Git。本次开评（2026-11-25 约 07:20 Asia/Shanghai）核实时 master 仍为 [`078ad78`](https://github.com/xuhang113/JaSAgent/commit/078ad7899db4ab7644c9001104fbd1b33570ee00)（合入 025 部署 [PR #18](https://github.com/xuhang113/JaSAgent/pull/18)），本提交补记关闭结论。025 已整块完成且测试通过，今天开评网关，详情见 025 的 `status.md`。
+
+### 今天有没有开评
+
+本目录不再开 024 的后续评审。今天开评网关，记录见 025 的 `status.md`。
+
 ## 2026-11-24（Asia/Shanghai）
 
 - 日期：2026-11-24（Asia/Shanghai）
