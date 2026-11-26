@@ -1,5 +1,6 @@
 package dev.jasagent.gateway.route;
 
+import dev.jasagent.gateway.media.AttachmentPaths;
 import org.springframework.http.HttpMethod;
 
 import java.util.regex.Pattern;
@@ -67,7 +68,8 @@ public final class GatewayPaths {
 
     /**
      * 这个请求是否由网关自己处理，不转发给 agent。
-     * 包括健康检查、登录、退出、首页跳转、控制台、当前用户和集群。
+     * 包括健康检查、登录、退出、首页跳转、控制台、当前用户、集群，以及会话附件前缀。
+     * 附件路径先按 {@link AttachmentPaths} 规范化，编码、大小写、多余斜杠和点段都不能再转给 agent。
      * 控制台虽然留在这条规则里，页面正文来自 jasagent-web 上游，不来自网关内嵌文件。
      *
      * @param method 请求方法
@@ -76,6 +78,9 @@ public final class GatewayPaths {
      */
     public static boolean local(HttpMethod method, String path) {
         if (path == null || path.isBlank()) {
+            return true;
+        }
+        if (AttachmentPaths.intercepts(path)) {
             return true;
         }
         if ("/admin".equals(path) || path.startsWith("/admin/")) {
