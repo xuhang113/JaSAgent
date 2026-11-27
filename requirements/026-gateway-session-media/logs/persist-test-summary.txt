@@ -1,0 +1,4 @@
+PASS displayNameDropsDirectories
+PASS bytesStayInJasagentAndFollowTheSessionTenant
+PASS ownershipStaysInMysqlAndFollowsTheUserTenant
+PASS persist-tests

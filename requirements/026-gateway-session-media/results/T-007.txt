@@ -1,0 +1,1 @@
+T-007	通过	`/admin/cluster` 和 `/admin/jaeger` 不能作为跨租户取附件的旁路。附件路径规范化后不能绕过前缀，也不能落到默认的 agent 转发。	88	logs/T-007.log

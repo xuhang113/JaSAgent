@@ -1,0 +1,1 @@
+T-006	通过	下载和播放仍携带登录 Cookie，令牌不出现在查询参数里，不提供公开直链。下载响应带 `X-Content-Type-Options: nosniff`，且不改写 `JASAGENT_SESSION`。	103	logs/T-006.log

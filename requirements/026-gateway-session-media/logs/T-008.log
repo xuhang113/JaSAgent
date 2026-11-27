@@ -1,0 +1,53 @@
+2026-11-27T15:56:17+0800	T-008	deploy/k8s、otel、trace、sidecar 和 agentpass 未改	21	通过
+changelog/2026-11-26-gateway-session-media.md
+jasagent-gateway/src/main/java/dev/jasagent/gateway/auth/GatewaySessionFilter.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/config/GatewayConfiguration.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/media/AttachmentBody.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/media/AttachmentFilter.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/media/AttachmentMedia.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/media/AttachmentPaths.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/media/AttachmentUploadAdvice.java
+jasagent-gateway/src/main/java/dev/jasagent/gateway/route/GatewayPaths.java
+jasagent-gateway/src/main/resources/application.properties
+jasagent-gateway/src/test/java/dev/jasagent/gateway/SessionMediaGatewayTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/SessionMediaReplicaTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/media/AttachmentBodyTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/media/AttachmentFilterTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/media/AttachmentMediaTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/media/AttachmentPathsTest.java
+jasagent-gateway/src/test/java/dev/jasagent/gateway/media/AttachmentSamples.java
+jasagent-gateway/src/test/java/dev/jasagent/it/SessionMediaAgentsConfiguration.java
+jasagent-persist/src/main/java/dev/jasagent/persist/MysqlSchemas.java
+jasagent-persist/src/main/java/dev/jasagent/persist/SessionAttachmentLedger.java
+jasagent-persist/src/main/java/dev/jasagent/persist/SessionLedger.java
+jasagent-persist/src/test/java/dev/jasagent/persist/SessionAttachmentLedgerTest.java
+jasagent-web/frontend/src/sessionMedia.js
+jasagent-web/frontend/src/sessionMedia.spec.js
+jasagent-web/frontend/src/styles.css
+jasagent-web/frontend/src/views/ConsoleMedia.spec.js
+jasagent-web/frontend/src/views/ConsoleView.vue
+requirements/026-gateway-session-media/tdd.md
+requirements/026-gateway-session-media/tests/026-gateway-session-media.sh
+requirements/026-gateway-session-media/tests/T-001
+requirements/026-gateway-session-media/tests/T-002
+requirements/026-gateway-session-media/tests/T-003
+requirements/026-gateway-session-media/tests/T-004
+requirements/026-gateway-session-media/tests/T-005
+requirements/026-gateway-session-media/tests/T-006
+requirements/026-gateway-session-media/tests/T-007
+requirements/026-gateway-session-media/tests/T-008
+requirements/026-gateway-session-media/tests/gateway-tests.sh
+requirements/026-gateway-session-media/tests/lib.sh
+requirements/026-gateway-session-media/tests/persist-tests.sh
+requirements/026-gateway-session-media/tests/web-tests.sh
+scripts/test-026-gateway-session-media.sh
+2026-11-27T15:56:17+0800	T-008	改动只在 gateway、web、必要 persist/app 接线、本轮脚本、变更记录和 ATDD	88	通过
+2026-11-27T15:56:17+0800	T-008	019 转发和入口口径、025 Jaeger 上游缺省、JDBC 不含 password=、无历史主机名	147	通过
+2026-11-27T15:56:17+0800	T-008	验收脚本注释	209	通过
+java-comments-ok
+2026-11-27T15:56:18+0800	T-008	本轮新增或改动的 Java 实现注释	276	通过
+2026-11-27T15:56:18+0800	T-008	合同测试脚本可执行且有说明注释	311	通过
+2026-11-27T15:56:18+0800	T-008	自动测试文件存在	342	通过
+2026-11-27T15:56:18+0800	T-008	019 会话和 025 Jaeger 拦截约定仍被自动测试覆盖	450	通过
+2026-11-27T15:56:18+0800	T-008	仓库新增行密文检查	515	无
+2026-11-27T15:56:18+0800	T-008	验收日志没有口令原文	600	通过
