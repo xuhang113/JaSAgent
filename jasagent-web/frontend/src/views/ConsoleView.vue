@@ -132,12 +132,37 @@
       <div class="messages">
         <div
           class="thread"
-          :class="{ 'is-empty': !activeSessionId || messages.length === 0 }"
+          :class="{ 'is-empty': !activeSessionId || (messages.length === 0 && attachments.length === 0) }"
           :key="activeSessionId || 'none'"
           :data-thread="activeSessionId || 'none'"
         >
           <p v-if="!activeSessionId" class="empty-thread">从左侧选择一个会话。</p>
-          <p v-else-if="messages.length === 0" class="empty-thread">在下面输入，开始这一会话。</p>
+          <p v-else-if="messages.length === 0 && attachments.length === 0" class="empty-thread">在下面输入，开始这一会话。</p>
+          <template v-for="item in attachments" :key="item.attachmentId">
+            <figure
+              v-if="mediaKind(item.mediaType)"
+              class="session-media-item"
+              data-session-media
+              :data-kind="mediaKind(item.mediaType)"
+            >
+              <img
+                v-if="mediaKind(item.mediaType) === 'image'"
+                :src="attachmentUrl(activeSessionId, item.attachmentId)"
+                :alt="item.name || '图片'"
+              />
+              <audio
+                v-else-if="mediaKind(item.mediaType) === 'audio'"
+                controls
+                :src="attachmentUrl(activeSessionId, item.attachmentId)"
+              ></audio>
+              <video
+                v-else-if="mediaKind(item.mediaType) === 'video'"
+                controls
+                playsinline
+                :src="attachmentUrl(activeSessionId, item.attachmentId)"
+              ></video>
+            </figure>
+          </template>
           <article v-for="(message, index) in visibleMessages" :key="message.executionId || index" class="turn">
             <div class="bubble user">
               <RoleIcon role="user" />
@@ -169,6 +194,17 @@
             </button>
           </div>
           <el-input v-model="draft" type="textarea" :rows="2" placeholder="输入 / 选择 skill" @keydown.enter.exact.prevent="sendMessage" />
+          <div class="media-upload-row">
+            <button type="button" class="media-upload" data-media-upload @click="chooseMedia">上传图片、语音或视频</button>
+            <input
+              ref="mediaInput"
+              type="file"
+              class="media-file"
+              data-media-file
+              :accept="MEDIA_ACCEPT"
+              @change="onMediaChosen"
+            />
+          </div>
           <div class="row composer-actions">
             <el-select
               v-model="sessionModel"
@@ -374,6 +410,7 @@ import { ElMessage } from 'element-plus'
 import RoleIcon from '../components/RoleIcon.vue'
 import { api } from '../api'
 import { consoleModels, readRoutedAgent } from '../gateway'
+import { MEDIA_ACCEPT, attachmentCollection, attachmentUrl, mediaKind } from '../sessionMedia'
 
 /** 右栏页签：任务、Trace、工具、上下文、日志。id 用来切换面板，label 是按钮文字。 */
 const railTabs = [
@@ -448,6 +485,10 @@ const sessionModel = ref('deepseek|deepseek-flash')
 const noteText = ref('')
 /** 当前会话的用户消息。每一项对应一轮。 */
 const messages = ref([])
+/** 当前会话的附件。只含编号、类型和展示名，正文仍由网关按登录 Cookie 提供。 */
+const attachments = ref([])
+/** 隐藏的文件选择框，用来挑图片、语音或视频。 */
+const mediaInput = ref(null)
 /** 当前执行的详情：状态、工具、通行证、评估。 */
 const detail = ref({})
 /** 当前会话的上下文预算、规则和 skill。 */
@@ -1452,6 +1493,7 @@ async function commitRename(item) {
  */
 async function switchSession(sessionId) {
   activeSessionId.value = sessionId
+  attachments.value = []
   focusedExecutionId.value = ''
   railTab.value = 'tasks'
   agentListOpen.value = false
@@ -1474,6 +1516,7 @@ async function switchSession(sessionId) {
   }
   await loadTurnTimelines()
   await loadContext()
+  await loadAttachments(sessionId)
 }
 
 /**
@@ -1488,6 +1531,7 @@ async function removeSession(sessionId) {
     activeTitle.value = ''
     sessionModel.value = defaultModelKey()
     messages.value = []
+    attachments.value = []
     agents.value = []
     corrections.value = []
     timeline.value = []
@@ -1512,6 +1556,77 @@ function insertSkill(skill) {
     const lead = all.startsWith('/') ? '' : all[0]
     return lead + '/skill:' + skill.name + ' '
   })
+}
+
+/**
+ * 列出这场会话的附件。接口没有返回数组时当成没有附件，避免把会话文档误当成媒体。
+ *
+ * @param sessionId 会话编号
+ */
+async function loadAttachments(sessionId) {
+  if (!sessionId) {
+    attachments.value = []
+    return
+  }
+  try {
+    const listed = await api(attachmentCollection(sessionId))
+    attachments.value = Array.isArray(listed) ? listed : []
+  } catch {
+    attachments.value = []
+  }
+}
+
+/** 打开文件选择框。还没选会话时，选中文件后再创建会话。 */
+function chooseMedia() {
+  if (mediaInput.value) {
+    mediaInput.value.click()
+  }
+}
+
+/**
+ * 把选中的文件交给网关。请求带登录 Cookie，不在地址上放令牌。
+ * 失败时只提示错误码，不把响应原文展示出来。
+ *
+ * @param event 文件框的 change 事件
+ */
+async function onMediaChosen(event) {
+  const file = event.target.files && event.target.files[0]
+  event.target.value = ''
+  if (!file) {
+    return
+  }
+  if (!activeSessionId.value) {
+    await createSession()
+  }
+  const sessionId = activeSessionId.value
+  if (!sessionId) {
+    return
+  }
+  const body = new FormData()
+  body.append('file', file, file.name)
+  try {
+    const response = await fetch(attachmentCollection(sessionId), {
+      method: 'POST',
+      body,
+      credentials: 'same-origin'
+    })
+    const text = await response.text()
+    let data = null
+    if (text) {
+      try {
+        data = JSON.parse(text)
+      } catch {
+        data = null
+      }
+    }
+    if (!response.ok) {
+      ElMessage.error(data && data.errorCode ? data.errorCode : '上传失败')
+      return
+    }
+    await loadAttachments(sessionId)
+  } catch {
+    ElMessage.error('上传失败')
+  }
 }
 
 /** 发送输入框里的文字，并订阅这一轮的 SSE。空白输入不发送。 */

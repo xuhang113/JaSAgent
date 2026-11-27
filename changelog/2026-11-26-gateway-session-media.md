@@ -1,0 +1,6 @@
+# 网关会话附件
+
+- 日期：2026-11-26（Asia/Shanghai）
+- 做了什么：网关自己处理 `/api/sessions/{sessionId}/attachments` 及其子路径，上传、下载、列表和删除都不再进入默认的 agent 转发。路径先规范化，点段、多余斜杠、编码和大小写不能绕过。登录仍用 MySQL 里的会话。未登录返回 401，`errorCode` 为 `AUTH`。附件同时绑定租户、会话和所有者；不是所有者返回 403，且不带附件正文。admin 的集群页和 Jaeger 入口不能拿来读别人的附件。类型以服务端看到的文件头为准，不看扩展名，也不只看客户端 `Content-Type`。图片限 10 MiB，语音限 20 MiB，视频限 50 MiB；类型或大小不合规时整请求拒绝，元数据和正文都不落库。元数据和正文写在已有库 `jasagent` 的 `session_attachment`，对象路径由服务端生成，以租户和会话为前缀。控制台 IM 壳可以在自己的会话里上传图片、语音和视频，并用登录 Cookie 展示或播放。下载响应带 `X-Content-Type-Options: nosniff`，查询串里的令牌不算登录，也不改写 `JASAGENT_SESSION`。第 9 到第 12 条是部署阶段，本轮不改 deploy/k8s，也不改官方拉起和探测脚本。
+- 涉及模块：jasagent-gateway、jasagent-web、jasagent-persist。本轮不改 jasagent-app、jasagent-otel、jasagent-trace、jasagent-sidecar、jasagent-agentpass、deploy/k8s、scripts/k8s/probe-egress.sh、scripts/k8s/prepare-cluster.sh、scripts/up-stack.sh。
+- 怎么验证：`bash scripts/test-026-gateway-session-media.sh`。脚本核对差异只在上述三个模块、本变更记录和脚本自身，并跑实现侧自动测试。对应规格第 1 到第 8 条：未登录上传和下载返回 401 AUTH；租户隔离含并发，非所有者和猜测附件编号都拿不到正文；类型和大小按允许名单执行，SVG、HTML、XML 和宽泛视频被拒绝，超限不落库；已登录用户经网关用登录 Cookie 上传一份允许的图片、语音和视频，并取回相同字节，IM 壳用图片、语音和视频元素展示；两个进程共用已有 MySQL，从一个进程上传后，另一个没收到上传的进程能取回同一份字节；下载带 Cookie 和 nosniff，查询串没有令牌，也不改写登录 Cookie；`/admin/cluster` 和 `/admin/jaeger` 不是附件旁路，规范化后的附件路径不会落到 agent。第 9 到第 12 条留给部署。本记录不改 deploy/k8s，也不代替 ATDD。

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-002"
+result_text='租户隔离要有并发覆盖：已登录的非所有者按 020 已有约定被拒绝，且不能靠猜测附件 ID 读到内容；租户 A 不能读、改、删租户 B 的附件。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  "${HERE}/persist-tests.sh"
+  "${HERE}/gateway-tests.sh"
+  atdd_require_pass persist "bytesStayInJasagentAndFollowTheSessionTenant"
+  atdd_require_pass gateway "tenantsCannotReadEachOthersAttachments"
+  atdd_require_pass gateway "twoProcessesShareMysqlBytes"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "非所有者被拒绝，猜附件 ID 读不到内容，并发跨租户也是 403" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

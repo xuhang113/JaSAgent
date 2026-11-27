@@ -1,0 +1,10 @@
+PASS jaegerEntryIsAnAdminAnchorOutsideTheRouter
+PASS frontend:只给出网关路径，不带查询串或主机名
+PASS frontend:只把名单里的类型画成图片、语音或视频
+PASS frontend:用网关路径展示图片并播放语音、视频
+PASS frontend:上传走登录 Cookie，地址上没有令牌
+PASS frontend:页面和样式不写历史入口
+PASS frontend:没有把 Jaeger 注册成页面路由
+PASS frontend:admin 能看到指向 Jaeger 的普通链接
+PASS frontend:普通用户看不到 Jaeger 入口
+PASS web-tests

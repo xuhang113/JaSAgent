@@ -288,8 +288,8 @@ public final class SessionLedger {
     }
 
     /**
-     * 把一个用户在旧租户下的聊天会话、工作区和工作执行改到他自己的租户。
-     * 只改归属列，不复制一份账本。旧租户和新租户相同、或任一键空白时什么都不做。
+     * 把一个用户在旧租户下的聊天会话、工作区、工作执行和会话附件改到他自己的租户。
+     * 只改归属列，不复制一份账本，也不另建附件库。旧租户和新租户相同、或任一键空白时什么都不做。
      * 副作用：更新已有行，并清掉内存缓存。
      *
      * @param fromTenant 迁出的租户，历史数据是 local
@@ -307,6 +307,7 @@ public final class SessionLedger {
             moveRows(connection, "UPDATE agent_session SET tenant_id = ? WHERE tenant_id = ? AND user_id = ?", toTenant, fromTenant, userId);
             moveRows(connection, "UPDATE agent_workspace SET tenant_id = ? WHERE tenant_id = ? AND user_id = ?", toTenant, fromTenant, userId);
             moveRows(connection, "UPDATE execution SET tenant_id = ? WHERE tenant_id = ? AND user_id = ?", toTenant, fromTenant, userId);
+            moveRows(connection, "UPDATE session_attachment SET tenant_id = ? WHERE tenant_id = ? AND user_id = ?", toTenant, fromTenant, userId);
         } catch (SQLException ex) {
             throw new AgentException(ErrorCode.PERSIST, "会话归属无法对齐", null, null);
         }

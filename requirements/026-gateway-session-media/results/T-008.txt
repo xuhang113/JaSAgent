@@ -1,0 +1,1 @@
+T-008	通过	实现只改 `jasagent-gateway`、`jasagent-web` 及必要的 persist/app 接线，不修改 `deploy/k8s`，不改 sidecar、agentpass 和 otel 的产品约定，不把附件转给 sidecar/agent。本轮改到的模块有注释，有自动测试，并且有可执行的测试脚本。口令、令牌、凭证和密钥不出现在仓库、说明、日志或 span 里。019 的 Cookie、受信任转发头和相对跳转约定，以及 025 的 `/admin/jaeger` 拦截约定，保持不变。	636	logs/T-008.log

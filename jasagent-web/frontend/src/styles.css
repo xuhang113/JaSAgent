@@ -1299,6 +1299,41 @@ h3 {
   }
 }
 
+.console-layout .media-upload-row {
+  display: flex;
+  align-items: center;
+  margin: 0 0 8px;
+}
+
+.console-layout .media-upload {
+  font: inherit;
+  font-size: 12px;
+  color: #1b1b18;
+  background: #fff;
+  border: 1px solid #c8c8c3;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.console-layout .media-file {
+  display: none;
+}
+
+.console-layout .session-media-item {
+  margin: 0;
+}
+
+.console-layout .session-media-item img,
+.console-layout .session-media-item video {
+  display: block;
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.console-layout .session-media-item audio {
+  width: 100%;
+}
+
 /* llgraph-buttons */
 .console-layout .el-button {
   height: auto;

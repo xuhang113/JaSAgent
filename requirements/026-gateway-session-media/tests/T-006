@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$HERE/lib.sh"
+name="T-006"
+result_text='下载和播放仍携带登录 Cookie，令牌不出现在查询参数里，不提供公开直链。下载响应带 `X-Content-Type-Options: nosniff`，且不改写 `JASAGENT_SESSION`。'
+atdd_begin "$name" "$result_text"
+set +e
+(
+  set -euo pipefail
+
+  "${HERE}/gateway-tests.sh"
+  "${HERE}/web-tests.sh"
+  atdd_require_pass gateway "allowedImageAudioAndVideoRoundTrip"
+  atdd_require_pass web "frontend:只给出网关路径，不带查询串或主机名"
+  atdd_require_pass web "frontend:上传走登录 Cookie，地址上没有令牌"
+  atdd_require_pass web "frontend:页面和样式不写历史入口"
+  atdd_checkpoint "${ATDD_NAME}" "${ATDD_START_MS}" "下载走登录 Cookie，无公开直链，响应有 nosniff 且不改写会话" "通过" >> "${ATDD_LOG}"
+
+  exit 0
+) >> "$ATDD_LOG" 2>&1
+code=$?
+set -e
+atdd_finish "$code"
+exit "$code"

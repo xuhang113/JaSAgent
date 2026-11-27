@@ -4,6 +4,7 @@ import dev.jasagent.api.auth.AuthService;
 import dev.jasagent.api.auth.Session;
 import dev.jasagent.auth.AccountDirectory;
 import dev.jasagent.auth.AccountProfile;
+import dev.jasagent.gateway.media.AttachmentPaths;
 import dev.jasagent.gateway.route.GatewayPaths;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -60,7 +61,8 @@ public class GatewaySessionFilter extends OncePerRequestFilter implements Ordere
 
     /**
      * 放行健康检查、登录、注册、退出、登录页、注册页和登录页静态资源。
-     * 必须有会话的 /api 没有会话时返回 401，errorCode 为 AUTH。
+     * 必须有会话的 /api，以及规范化后仍落在附件前缀上的路径，没有会话时返回 401，errorCode 为 AUTH。
+     * 大小写或编码不同的附件路径也按接口拒绝，不改去登录页。
      * 必须有会话的页面没有会话时转到 /admin/login，不返回控制台业务正文。
      * Location 保持相对路径，不调用会拼出绝对地址的 sendRedirect。
      *
@@ -81,7 +83,7 @@ public class GatewaySessionFilter extends OncePerRequestFilter implements Ordere
         }
         Session session = authenticate(request);
         if (session == null) {
-            if (path.startsWith("/api/")) {
+            if (requiresApiAuth(path)) {
                 response.setStatus(401);
                 response.setContentType("application/json");
                 response.setCharacterEncoding(StandardCharsets.UTF_8.name());
@@ -96,7 +98,7 @@ public class GatewaySessionFilter extends OncePerRequestFilter implements Ordere
             try {
                 profile = accounts.profile(session.login());
             } catch (RuntimeException ex) {
-                if (path.startsWith("/api/")) {
+                if (requiresApiAuth(path)) {
                     response.setStatus(401);
                     response.setContentType("application/json");
                     response.setCharacterEncoding(StandardCharsets.UTF_8.name());
@@ -120,6 +122,17 @@ public class GatewaySessionFilter extends OncePerRequestFilter implements Ordere
     @Override
     public int getOrder() {
         return ORDER;
+    }
+
+    /**
+     * 这条路径没有会话时要按接口回 401，而不是转到登录页。
+     * 普通 {@code /api/} 保持原样。附件前缀再按规范化结果判断，避免大小写或编码绕过。
+     *
+     * @param path 请求路径
+     * @return 应按 AUTH 拒绝时为真
+     */
+    private static boolean requiresApiAuth(String path) {
+        return path != null && (path.startsWith("/api/") || AttachmentPaths.intercepts(path));
     }
 
     /**

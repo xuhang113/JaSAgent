@@ -20,6 +20,7 @@ import dev.jasagent.gateway.store.MysqlAffinityStore;
 import dev.jasagent.gateway.store.UragPassword;
 import dev.jasagent.gateway.token.InternalToken;
 import dev.jasagent.persist.ExecutionDatabase;
+import dev.jasagent.persist.SessionAttachmentLedger;
 import dev.jasagent.persist.SessionLedger;
 import dev.jasagent.trace.lineage.RequestLineage;
 import org.springframework.beans.factory.annotation.Value;
@@ -72,6 +73,29 @@ public class GatewayConfiguration {
         environment.put("JASAGENT_JDBC_USER", username);
         environment.put("JASAGENT_JDBC_PASSWORD", UragPassword.read(Path.of(passwordFile)));
         return SessionLedger.open(ExecutionDatabase.open(Path.of(home), environment));
+    }
+
+    /**
+     * 打开和会话账本同一套 JDBC 的附件账本。正文和元数据都在已有 jasagent 库，不另建库，也不放进本进程。
+     * 口令只从仓库外文件读入内存，不写进地址或这个对象的说明。
+     *
+     * @param url JDBC 地址，不能包含 password=
+     * @param username 数据库账号
+     * @param passwordFile 仓库外的口令文件
+     * @param home 工作区根，只在地址不是 MySQL 时用来放 H2
+     * @return 已建表的附件账本
+     */
+    @Bean
+    public SessionAttachmentLedger sessionAttachmentLedger(
+            @Value("${" + MysqlAffinityStore.URL_PROPERTY + "}") String url,
+            @Value("${" + MysqlAffinityStore.USER_PROPERTY + "}") String username,
+            @Value("${" + MysqlAffinityStore.PASSWORD_FILE_PROPERTY + "}") String passwordFile,
+            @Value("${jasagent.home:${user.home}}") String home) {
+        Map<String, String> environment = new LinkedHashMap<>();
+        environment.put("JASAGENT_JDBC_URL", url);
+        environment.put("JASAGENT_JDBC_USER", username);
+        environment.put("JASAGENT_JDBC_PASSWORD", UragPassword.read(Path.of(passwordFile)));
+        return SessionAttachmentLedger.open(ExecutionDatabase.open(Path.of(home), environment));
     }
 
     /**
