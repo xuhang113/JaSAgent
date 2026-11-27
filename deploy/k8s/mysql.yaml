@@ -3,7 +3,9 @@
 # 新数据目录由 MYSQL_DATABASE 创建。已有数据目录时，scripts/up-stack.sh 再执行 CREATE DATABASE IF NOT EXISTS。
 # 这是栈里已有的那一个 MySQL，不另建外部数据库，也不另建库。
 # 账号表 jasagent_account、登录会话表 jasagent_login_session、聊天会话表 agent_session、
-# 粘性表 jasagent_gateway_affinity，以及 023 的证与流水，都写在库 jasagent。
+# 粘性表 jasagent_gateway_affinity、023 的证与流水，以及 026 的附件表 session_attachment，
+# 都写在库 jasagent，不另建库。两个就绪网关副本通过这条已有 MySQL 读写同一份附件。
+# 附件内容最大 50 MiB（视频上限），因此显式打开 max_allowed_packet=100M，避免默认包长挡住合法正文。
 # 数据目录改成 PersistentVolumeClaim jasagent-mysql-data（k3s 默认 StorageClass local-path）。
 # 切到这份卷之前，scripts/up-stack.sh 会先把现有 emptyDir 上的 jasagent 库拷过来，
 # 不能直接用空卷滚动掉当前 MySQL Pod。迁完之后，删掉或重建该 Pod，同一库里的数据都还在。
@@ -58,6 +60,8 @@ spec:
             - --collation-server=utf8mb4_0900_ai_ci
             - --innodb-buffer-pool-size=134217728
             - --max-connections=40
+            # 026 允许的视频正文是 50 MiB。100M 覆盖 LONGBLOB 写入时的协议开销，仍是同一实例，不另建库。
+            - --max-allowed-packet=104857600
           ports:
             - name: mysql
               containerPort: 3306
