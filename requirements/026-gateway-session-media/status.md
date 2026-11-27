@@ -1,5 +1,40 @@
 # 026-gateway-session-media 状态
 
+## 2026-11-28（Asia/Shanghai）
+
+- 日期：2026-11-28（Asia/Shanghai）
+- 开评结论：今天开评。本日评审按 Hang 已指定的 027「去掉隧道」（Funnel / Tailscale 清理与公网入口相关工作）进行。请调研先在群里交一个候选，不写文件，并写明该候选落在哪一块（网关 / sidecar / 运行时 / agentpass / K8s）。
+
+### 上一件完成情况
+
+上一件 `026-gateway-session-media`（网关会话内图片、语音和视频的上传、取回与 IM 壳展示或播放）已整块完成，测试通过。今日开评独立核对了仓库中的 `review.md`、`spec.md`、`tdd.md`、`results/`、`deploy.md` 和 changelog，同时核对 GitHub、领队父对话与 JaSAgent 群检索索引。
+
+- Hang 于 2026-11-26 13:20:42（Asia/Shanghai）在群里确认「026开工」（seq 751），并于 13:20:53 指定「去掉隧道放到027」（seq 752）。Funnel / Tailscale 的清理不在本轮。
+- `review.md`、`spec.md` 已写入并合入 master [`8a1dff58a2dbed9ce034a5213b4a42ad806be398`](https://github.com/xuhang113/JaSAgent/commit/8a1dff58a2dbed9ce034a5213b4a42ad806be398)（2026-11-26 13:30:46 Asia/Shanghai）。领队于 13:47 核对称与已锁定口径一致，宣布 SDD 通过。
+- 产品实现基线为 [`35ac67bb1e8e710e5abd86e6a75ca048b4384154`](https://github.com/xuhang113/JaSAgent/commit/35ac67bb1e8e710e5abd86e6a75ca048b4384154)，并有 [`changelog/2026-11-26-gateway-session-media.md`](https://github.com/xuhang113/JaSAgent/blob/master/changelog/2026-11-26-gateway-session-media.md)。代码review 于 2026-11-26 15:16:17（Asia/Shanghai）对当时头提交 `35ac67bb` 提交了 COMMENTED 审查（[review 6069930204](https://github.com/xuhang113/JaSAgent/pull/19#pullrequestreview-6069930204)），结论为通过，并写明不合并。
+- ATDD 补在 [`6d3afbe2c61da97607bbddc03fb9b98fc411e772`](https://github.com/xuhang113/JaSAgent/commit/6d3afbe2c61da97607bbddc03fb9b98fc411e772)（2026-11-27 15:57 Asia/Shanghai）：`tdd.md`、`tests/`、`logs/`、`results/T-001.txt` 至 `results/T-008.txt`。今日复核 T-001 到 T-008 全部为「通过」，对应规格第 1 到第 8 条。该提交只增加 ATDD 文件，未改产品代码或 `deploy/k8s`。领队已于 16:07 独立核对并宣布通过。
+- 产品与 ATDD 随 [PR #19](https://github.com/xuhang113/JaSAgent/pull/19) 由领队用 GitHub 合并提交合入，合并提交为 [`b98c66f535fcdd9f15388c6b37caaf50aa8fde7a`](https://github.com/xuhang113/JaSAgent/commit/b98c66f535fcdd9f15388c6b37caaf50aa8fde7a)（2026-11-27 18:53:29 Asia/Shanghai），父母提交为 [`2897e2b6`](https://github.com/xuhang113/JaSAgent/commit/2897e2b6cd1c6e28d828132ca2ef0980879781c4) 与 [`6d3afbe`](https://github.com/xuhang113/JaSAgent/commit/6d3afbe2c61da97607bbddc03fb9b98fc411e772)，merged_by xuhang113，没有 squash，也没有直接推产品代码到 master。
+- 部署已在 [PR #20](https://github.com/xuhang113/JaSAgent/pull/20) 落地：头提交 [`0c53eaef5a7de8cb62040b30cba09e2a1cb7861d`](https://github.com/xuhang113/JaSAgent/commit/0c53eaef5a7de8cb62040b30cba09e2a1cb7861d)（2026-11-27 18:42:18 Asia/Shanghai），相对 #19 头 `6d3afbe` 只改 `deploy/k8s` 和 `deploy.md`。代码review 对头提交 `0c53eaef` 提交了 COMMENTED 审查（[review 6087033487](https://github.com/xuhang113/JaSAgent/pull/20#pullrequestreview-6087033487)），结论为通过，并写明不合并。领队独立核对后，按先 #19、再 #20 合入。合并提交为 [`42670d7f2e60cfa8910505dd5dcc9adafcc395b8`](https://github.com/xuhang113/JaSAgent/commit/42670d7f2e60cfa8910505dd5dcc9adafcc395b8)（2026-11-27 18:56:27 Asia/Shanghai），父母提交为 [`b98c66f`](https://github.com/xuhang113/JaSAgent/commit/b98c66f535fcdd9f15388c6b37caaf50aa8fde7a) 与 [`0c53eae`](https://github.com/xuhang113/JaSAgent/commit/0c53eaef5a7de8cb62040b30cba09e2a1cb7861d)，merged_by xuhang113。
+- `deploy.md` 记录云电脑实测：规格第 9 到第 12 条均已通过。官方 `probe-egress` 于 2026-11-27 18:40:43 为 `PROBE PASSED`（含 018–025 既有项，未缩小范围）。第 9 条：删/重建网关 Pod 后，两个新就绪副本都能取回同一份附件字节，用户库仍只有 `jasagent`，没有另建库，也没有把两个副本挂到同一块普通 RWO 盘。第 11 条：Ingress 仍只到 `jasagent-gateway:18721`，没有单独的附件 Service。第 12 条：未恢复 Funnel，未把公网入口或历史主机名写成可用。
+- 部署于 2026-11-27 18:59:24（Asia/Shanghai）回报：按合入后 SHA `42670d7` 在云电脑再跑官方探测，结果为 `PROBE PASSED`；清单与该 SHA 一致，网关仍是 2 个就绪副本，Ingress 仍只到 `jasagent-gateway:18721`，Funnel 未恢复，公网入口不能写成可用，没有再改仓库，也未开 027。领队随后独立复核 GitHub：master 仍为 `42670d7`，`requirements/` 仍只有 001–026，没有 027 目录。该合入后探测本身不是领队重跑的；合入前走查仍以 `deploy.md` 的 18:40:43 为准。
+- 非阻塞残余仍记为事实，不挡 026 关闭：云电脑内核缺少 `xt_statistic`，第一次随 `up-stack.sh` 的官方探测曾因过期 DNAT 失败，部署在宿主机纠正 DNAT 后重跑通过，没有改官方脚本或缩小范围；NodePort 30080 当时可访问 `/health`，但不是公网入口。024 整块和 019 仍维持 2026-11-24 按 Hang 放弃集群外走查的正式关闭；公网入口不能写成可用。这不等于 Funnel 已经测过。
+
+本次开评核对时（2026-11-28 约 07:20 Asia/Shanghai），master 仍为 [`42670d7f2e60cfa8910505dd5dcc9adafcc395b8`](https://github.com/xuhang113/JaSAgent/commit/42670d7f2e60cfa8910505dd5dcc9adafcc395b8)。其后没有新的 master 提交，没有 `requirements/027` 目录或 027 分支，也没有新的产品或部署 Pull Request。唯一未关闭的 PR 仍是无关的 [#3](https://github.com/xuhang113/JaSAgent/pull/3)。最近一次合入的产品或部署 PR 是 2026-11-27 的 #19 与 #20。
+
+JaSAgent 群检索索引 `topped_through_seq` 为 780，与索引内最大序号一致；索引文件在 2026-11-28 06:51（Asia/Shanghai）随 box 刷新后未见继续写入。索引里最新帖停在 2026-11-27 18:18:22 部署回应将另开清单 PR（seq 780）。其后的合入宣布、代码review 结论和合入后探测，已在领队父对话和 GitHub 上核对，不把索引滞后当成群里没有后续消息。领队 1:1 检索索引最新仍是 2026-11-27 07:26:47 的每日开评（seq 48）；Hang 对 026 的开工确认是在群里作出的，1:1 在那条开评之后未见新的用户回复。Hang 在群里最后一条可见用户消息是 2026-11-27 15:48:25「确认进度继续推进」（seq 772）。
+
+### 今天开评的原因
+
+026 已整块完成且测试通过。按顺序一轮只推进一块：网关 → sidecar → 运行时 → agentpass → K8s。026 是网关这一棒，默认下一棒是 sidecar（`jasagent-sidecar`）。但 Hang 已于 2026-11-26 指定「去掉隧道放到027」，因此今天开评按该指定进行，不自动改成 sidecar 新特性。请调研先在群里交一个候选（不写文件），并写明它落在哪一块。等领队、实现、测试、部署、代码review 都写「通过」后，再向 Hang 确认。确认前不写 `spec.md`，不改 Git 上或 Hang 的 Mac 上的代码，不部署。
+
+前期项目不稳定，本次可以引入重大改动、重构或重要特性，不要因为实现难度或成本缩小范围。一轮只推进一块。界面只用 `jasagent-web`。019、024 虽已正式关闭，公网 Funnel 路径并未实测恢复，公网入口不能写成可用。
+
+Hang 于 2026-11-24 20:54:55 在群里（seq 706）要求：测试通过后由领队负责把代码合到 master。领队已接受为常设合并规则：审查和测试都通过后，由领队用 GitHub merge commit 合入，不 squash，不直接推 master，不再另等 Hang 点头，也不再默认交给部署合并。这不影响本轮确认前不写 spec、不改代码、不部署。Hang 2026-11-24 对 024 第 9 条和 019 集群外走查的那句「需要我确认的部分直接通过，不要等我确认」，不适用于新一轮开工确认。
+
+### 今天有没有开评
+
+有开评。原因见上：026 已完成且测试通过，今天按 Hang 已指定的 027「去掉隧道」开评。
+
 ## 2026-11-27（Asia/Shanghai）
 
 - 日期：2026-11-27（Asia/Shanghai）
